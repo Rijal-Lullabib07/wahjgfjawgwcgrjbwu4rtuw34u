@@ -1,0 +1,194 @@
+import { useEffect, useRef, useState } from 'react';
+import type { CycleInfo } from '../../lib/cycle';
+import { FOTOS_PER_SIKLUS } from '../../lib/cycle';
+import { useCamera } from './useCamera';
+import { useGeolocation } from './useGeolocation';
+import { applyWatermark } from './watermark';
+
+interface Props {
+  cycle: CycleInfo;
+  sentCount: number;
+  queueCount: number;
+  onCaptureDone: (fotos: Array<{ blob: Blob; lat: number | null; lng: number | null; ts: Date }>) => Promise<void>;
+}
+
+/**
+ * Layar capture: live preview getUserMedia, tombol shutter besar (thumb-friendly),
+ * GPS live, indikator "Tersimpan lokal" vs "Terkirim", dan hitungan 2 foto/siklus.
+ */
+export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureDone }: Props) {
+  const camera = useCamera();
+  const geo = useGeolocation();
+  const [shots, setShots] = useState<Array<{ url: string; ts: Date; blob: Blob }>>([]);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const flashRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void camera.start();
+    return () => camera.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const taken = shots.length;
+  const remaining = Math.max(0, FOTOS_PER_SIKLUS - taken);
+
+  const takePhoto = async () => {
+    if (!camera.videoRef.current || !camera.ready || saving) return;
+    if (taken >= FOTOS_PER_SIKLUS) return;
+
+    // efek flash
+    const flash = flashRef.current;
+    if (flash) {
+      flash.style.opacity = '0.85';
+      setTimeout(() => (flash.style.opacity = '0'), 120);
+    }
+
+    setSaving(true);
+    try {
+      const ts = new Date();
+      const { blob } = await applyWatermark(camera.videoRef.current, {
+        lat: geo.lat,
+        lng: geo.lng,
+        timestamp: ts,
+        label: 'SIPLAP · Siklus ' + cycle.siklusKe,
+      });
+      setShots((s) => [...s, { url: URL.createObjectURL(blob), ts, blob }]);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitAll = async () => {
+    if (shots.length === 0 || saving) return;
+    setSaving(true);
+    try {
+      const fotos = shots.map((s) => ({
+        blob: s.blob,
+        lat: geo.lat,
+        lng: geo.lng,
+        ts: s.ts,
+      }));
+      await onCaptureDone(fotos);
+      shots.forEach((s) => URL.revokeObjectURL(s.url));
+      setShots([]);
+      setSavedMsg('Laporan masuk antrian — ' + (queueCount > 0 ? 'sebagian tersimpan lokal' : 'terkirim'));
+      setTimeout(() => setSavedMsg(null), 4000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="px-4 py-4">
+      {/* Status siklus */}
+      <div className="card mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-slate-400">Siklus berjalan</div>
+            <div className="font-semibold">{cycle.label}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-slate-400">Foto terkirim</div>
+            <div className="font-semibold">
+              {sentCount}/{FOTOS_PER_SIKLUS}
+            </div>
+          </div>
+        </div>
+        {sentCount >= FOTOS_PER_SIKLUS && (
+          <p className="mt-2 text-xs text-emerald-400">✅ Laporan siklus ini sudah lengkap</p>
+        )}
+      </div>
+
+      {/* Live preview kamera */}
+      <div className="relative overflow-hidden rounded-2xl border border-navy-700 bg-black">
+        <video
+          ref={camera.videoRef}
+          playsInline
+          muted
+          autoPlay
+          className="aspect-[3/4] w-full object-cover"
+        />
+        <div ref={flashRef} className="pointer-events-none absolute inset-0 bg-white opacity-0 transition-opacity duration-100" />
+
+        {camera.error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+            <span className="text-4xl">📷</span>
+            <p className="text-sm text-red-300">{camera.error}</p>
+            <button className="btn-secondary" onClick={() => void camera.start()}>
+              Coba lagi
+            </button>
+          </div>
+        )}
+
+        {!camera.ready && !camera.error && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="animate-pulse text-sm text-slate-400">Menyalakan kamera…</span>
+          </div>
+        )}
+
+        {/* GPS badge */}
+        <div className="absolute left-3 top-3 rounded-lg bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
+          {geo.error
+            ? '⚠️ GPS: ' + geo.error
+            : geo.lat != null
+              ? '📍 ' + geo.lat.toFixed(5) + ', ' + (geo.lng ?? 0).toFixed(5)
+              : '📍 Mencari GPS…'}
+        </div>
+
+        {/* Tombol ganti kamera */}
+        {camera.ready && (
+          <button
+            onClick={camera.switchCamera}
+            className="absolute right-3 top-3 rounded-lg bg-black/60 px-2.5 py-1 text-sm text-white"
+            aria-label="Ganti kamera"
+          >
+            🔄
+          </button>
+        )}
+      </div>
+
+      {/* Shutter besar — thumb-friendly */}
+      <div className="mt-5 flex items-center justify-center gap-6">
+        <button
+          onClick={() => void takePhoto()}
+          disabled={!camera.ready || saving || taken >= FOTOS_PER_SIKLUS}
+          className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-gold-400 bg-navy-800 text-3xl shadow-lg transition active:scale-95 disabled:opacity-30"
+          aria-label="Ambil foto"
+        >
+          📸
+        </button>
+      </div>
+
+      {/* Hasil jepretan */}
+      {shots.length > 0 && (
+        <div className="mt-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            {shots.map((s, i) => (
+              <div key={i} className="relative overflow-hidden rounded-xl border border-navy-600">
+                <img src={s.url} alt={'Foto ' + (i + 1)} className="aspect-square w-full object-cover" />
+                <span className="absolute left-2 top-2 badge bg-black/60 text-white">#{i + 1}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => void submitAll()} disabled={saving} className="btn-primary w-full py-4">
+            {saving ? 'Menyimpan…' : 'Kirim Laporan (' + shots.length + ' foto)'}
+          </button>
+        </div>
+      )}
+
+      {savedMsg && (
+        <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          {savedMsg}
+        </div>
+      )}
+
+      <p className="mt-4 text-center text-xs text-slate-500">
+        {remaining > 0
+          ? 'Ambil ' + remaining + ' foto lagi untuk melengkapi siklus ini.'
+          : 'Semua foto siklus ini sudah diambil — tekan Kirim.'}
+        {queueCount > 0 && ' · ' + queueCount + ' laporan menunggu sinkron'}
+      </p>
+    </div>
+  );
+}

@@ -1,0 +1,88 @@
+// Tipe data sesuai skema DB (supabase/migrations/0001_init.sql)
+export type Role = 'admin' | 'pimpinan' | 'regu';
+
+export interface Regu {
+  id: string;
+  nama_regu: string;
+  kode_login: string;
+  status_aktif: boolean;
+  created_at?: string;
+}
+
+export interface AdminUser {
+  id: string;
+  nama: string;
+  email: string;
+  role: 'admin' | 'pimpinan';
+  created_at?: string;
+}
+
+export type SyncStatus = 'pending' | 'synced' | 'failed';
+
+export interface Laporan {
+  id: string;
+  regu_id: string;
+  timestamp_kirim: string;
+  siklus_ke: number;
+  latitude: number | null;
+  longitude: number | null;
+  status_sync: SyncStatus;
+  catatan?: string | null;
+  created_at?: string;
+  // join
+  regu?: Regu;
+  fotos?: LaporanFoto[];
+}
+
+export interface LaporanFoto {
+  id: string;
+  laporan_id: string;
+  storage_path: string;
+  watermark_lat: number | null;
+  watermark_lng: number | null;
+  watermark_timestamp: string;
+  urutan_foto: 1 | 2;
+  created_at?: string;
+}
+
+export interface PushSubscriptionRow {
+  id: string;
+  regu_id: string | null;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at?: string;
+}
+
+/** Entri antrian laporan di IndexedDB sebelum tersinkron ke Supabase */
+export interface QueuedLaporan {
+  localId: string;
+  reguId: string;
+  siklusKe: number;
+  timestampKirim: string;
+  latitude: number | null;
+  longitude: number | null;
+  catatan?: string;
+  fotos: Array<{
+    blobKey: string; // kunci blob di object store fotos
+    urutan: 1 | 2;
+    watermarkLat: number | null;
+    watermarkLng: number | null;
+    watermarkTimestamp: string;
+  }>;
+  status: 'pending' | 'syncing' | 'failed';
+  attempts: number;
+  lastError?: string;
+}
+
+export interface SessionUser {
+  role: 'admin' | 'pimpinan' | 'regu';
+  nama: string;
+  // untuk regu
+  reguId?: string;
+  namaRegu?: string;
+  kodeLogin?: string;
+  // untuk admin
+  email?: string;
+}

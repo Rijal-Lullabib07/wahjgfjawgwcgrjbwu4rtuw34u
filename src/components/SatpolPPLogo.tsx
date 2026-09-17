@@ -1,0 +1,90 @@
+/**
+ * Logo Satpol PP Kabupaten Purwakarta — digambar ulang sebagai SVG vektor.
+ * Elemen perisai: dinding benteng hijau dengan gerbang kuning, pita merah
+ * "WIBAWA KARTA RAHARJA", terasering sawah, atap joglo, dan padi-kapas di bawah.
+ * Mengikuti warna asli: hijau benteng, emas/ kuning, merah, putih, hitam.
+ */
+export default function SatpolPPLogo({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 100 116"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      role="img"
+      aria-label="Logo Satpol PP Kabupaten Purwakarta"
+    >
+      {/* Perisai: putih tepi luar, hijau bagian dalam */}
+      <path
+        d="M50 2 L94 12 V58 C94 84 76 102 50 114 C24 102 6 84 6 58 V12 Z"
+        fill="#ffffff"
+      />
+      <path
+        d="M50 6 L90 15 V58 C90 81.5 74 98.5 50 109.5 C26 98.5 10 81.5 10 58 V15 Z"
+        fill="#2e7d32"
+      />
+
+      {/* Bintang emas kecil di puncak perisai */}
+      <path
+        d="M50 12 l2.2 4.6 5 .7 -3.6 3.5 .9 5 -4.5-2.4 -4.5 2.4 .9-5 -3.6-3.5 5-.7 Z"
+        fill="#f5b942"
+      />
+
+      {/* Dinding benteng: deretan crenellation di kiri-kanan atas */}
+      <g fill="#1b5e20">
+        <rect x="14" y="26" width="72" height="6" />
+        <rect x="14" y="24" width="6" height="4" />
+        <rect x="24" y="24" width="6" height="4" />
+        <rect x="70" y="24" width="6" height="4" />
+        <rect x="80" y="24" width="6" height="4" />
+        {/* Gerbang benteng kuning di tengah */}
+        <rect x="38" y="32" width="24" height="18" rx="2" fill="#f5b942" />
+        <rect x="44" y="38" width="12" height="12" rx="6" fill="#1b5e20" />
+      </g>
+
+      {/* Pita merah motto */}
+      <g>
+        <rect x="10" y="52" width="80" height="10" rx="3" fill="#d32f2f" />
+        <text
+          x="50"
+          y="59.6"
+          textAnchor="middle"
+          fontSize="6"
+          fontWeight="700"
+          fill="#ffffff"
+          letterSpacing="0.5"
+        >
+          WIBAWA KARTA RAHARJA
+        </text>
+      </g>
+
+      {/* Terasering sawah + atap joglo */}
+      <g>
+        <path d="M16 66 h68 v4 h-68 Z" fill="#66bb6a" />
+        <path d="M16 70 h68 v4 h-68 Z" fill="#43a047" />
+        <path d="M16 74 h68 v4 h-68 Z" fill="#2e7d32" />
+        {/* Atap joglo hitam */}
+        <path d="M32 78 h36 l6 8 h-48 Z" fill="#212121" />
+        {/* Tiang & badan bangunan */}
+        <rect x="36" y="86" width="28" height="8" fill="#f5f5f5" />
+        <rect x="36" y="86" width="28" height="2" fill="#d32f2f" />
+        <rect x="40" y="90" width="3" height="4" fill="#212121" />
+        <rect x="48.5" y="90" width="3" height="4" fill="#212121" />
+        <rect x="57" y="90" width="3" height="4" fill="#212121" />
+      </g>
+
+      {/* Padi (kiri) & kapas (kanan) */}
+      <g stroke="#f5b942" strokeWidth="1.6" fill="none" strokeLinecap="round">
+        <path d="M22 108 C20 100 22 94 26 90" />
+        <path d="M78 108 C80 100 78 94 74 90" />
+      </g>
+      <g fill="#f5b942">
+        <ellipse cx="24.5" cy="92" rx="2.4" ry="1.4" transform="rotate(-40 24.5 92)" />
+        <ellipse cx="22.5" cy="97" rx="2.4" ry="1.4" transform="rotate(-30 22.5 97)" />
+        <ellipse cx="21.5" cy="102" rx="2.4" ry="1.4" transform="rotate(-20 21.5 102)" />
+        <ellipse cx="75.5" cy="92" rx="2.4" ry="1.4" transform="rotate(40 75.5 92)" />
+        <ellipse cx="77.5" cy="97" rx="2.4" ry="1.4" transform="rotate(30 77.5 97)" />
+        <ellipse cx="78.5" cy="102" rx="2.4" ry="1.4" transform="rotate(20 78.5 102)" />
+      </g>
+    </svg>
+  );
+}
