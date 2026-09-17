@@ -29,21 +29,24 @@ waktu. Admin memantau secara real-time dan menarik rekap laporan (PDF/Excel).
    (tabel, index, storage bucket, RLS, realtime — idempoten, aman diulang).
 4. **SQL Editor** → jalankan `supabase/migrations/0002_seed.sql`
    (15 akun regu `REGU01`–`REGU15` + 1 admin, password default tercantum di file — ganti!).
-5. Cek login: `REGU01` / `siplap2026`, admin `admin@satpolpp.go.id` / `admin2026`.
-6. **Push notification**:
+5. **SQL Editor** → jalankan `supabase/migrations/0003_reminder_logs.sql`.
+6. Cek login: `REGU01` / `siplap2026`, admin `admin@satpolpp.go.id` / `admin2026`.
+7. **Push notification**:
    ```bash
    npx web-push generate-vapid-keys
    ```
    Isi `VITE_VAPID_PUBLIC_KEY` di `.env`. Simpan private key untuk langkah Edge Function.
-7. **Edge Functions**:
+8. **Edge Functions**:
    ```bash
    supabase functions deploy reminder-push
    supabase functions deploy archive-photos
    supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:admin@satpolpp.go.id
    ```
-8. **pg_cron** (opsional, untuk reminder otomatis): aktifkan ekstensi `pg_cron` + `pg_net`
-   di Dashboard → Database → Extensions, lalu uncomment blok 7 di `0001_init.sql`
-   (ganti `<PROJECT_REF>` & `<SERVICE_ROLE_KEY>`).
+9. **Reminder otomatis (setup admin satu kali)**: aktifkan ekstensi `pg_cron` + `pg_net`
+   di Dashboard → Database → Extensions, lalu jalankan blok cron dari `0001_init.sql`
+   setelah mengganti `<PROJECT_REF>` dan `<SERVICE_ROLE_KEY>`. Setelah aktif, scheduler
+   memanggil Edge Function tiap 5 menit. Edge Function hanya mengirim saat 15 menit terakhir
+   siklus dan mencatat log agar setiap regu menerima maksimal satu reminder per siklus.
 
 ## Menjalankan
 

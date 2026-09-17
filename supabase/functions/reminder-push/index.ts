@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
   const now = new Date();
   const { siklusKe, end } = currentCycle(now);
   const minutesLeft = (end.getTime() - now.getTime()) / 60000;
+  const cycleDate = new Date(end.getTime() - CYCLE_HOURS * 3600_000).toISOString().slice(0, 10);
 
   // MODE TES: body {"test":true} → kirim ke SEMUA subscription sekarang juga,
   // tanpa menunggu window 15 menit. Untuk uji end-to-end manual.
@@ -78,6 +79,19 @@ Deno.serve(async (req) => {
     // sudah lapor lengkap? (asumsi 1 laporan = 1 siklus penuh)
     if ((count ?? 0) > 0) continue;
 
+    // Scheduler berjalan tiap 5 menit, tetapi satu regu cukup menerima satu
+    // reminder per siklus. Mode tes sengaja melewati log ini.
+    if (!testMode) {
+      const { data: reminderLog } = await admin
+        .from('reminder_logs')
+        .select('sent_at')
+        .eq('regu_id', regu.id)
+        .eq('tanggal_siklus', cycleDate)
+        .eq('siklus_ke', siklusKe)
+        .maybeSingle();
+      if (reminderLog) continue;
+    }
+
     const { data: subs } = await admin
       .from('push_subscriptions').select('endpoint, p256dh, auth').eq('regu_id', regu.id);
 
@@ -111,6 +125,13 @@ Deno.serve(async (req) => {
           await admin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
         }
       }
+    }
+    if (!testMode && sent > 0) {
+      await admin.from('reminder_logs').upsert({
+        regu_id: regu.id,
+        tanggal_siklus: cycleDate,
+        siklus_ke: siklusKe,
+      });
     }
     results.push({ regu: regu.nama_regu, sent });
   }
