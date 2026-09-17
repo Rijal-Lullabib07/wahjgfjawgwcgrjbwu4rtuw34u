@@ -44,8 +44,18 @@ Deno.serve(async (req) => {
   const { siklusKe, end } = currentCycle(now);
   const minutesLeft = (end.getTime() - now.getTime()) / 60000;
 
-  // Hanya kirim di window reminder (15 menit terakhir siklus)
-  if (minutesLeft > REMINDER_BEFORE_MIN || minutesLeft <= 0) {
+  // MODE TES: body {"test":true} → kirim ke SEMUA subscription sekarang juga,
+  // tanpa menunggu window 15 menit. Untuk uji end-to-end manual.
+  let testMode = false;
+  try {
+    const body = (await req.json()) as { test?: boolean };
+    testMode = body?.test === true;
+  } catch {
+    /* body kosong → normal */
+  }
+
+  // Hanya kirim di window reminder (15 menit terakhir siklus), kecuali mode tes
+  if (!testMode && (minutesLeft > REMINDER_BEFORE_MIN || minutesLeft <= 0)) {
     return new Response(JSON.stringify({ skipped: true, minutesLeft }), { status: 200 });
   }
 
@@ -72,8 +82,10 @@ Deno.serve(async (req) => {
       .from('push_subscriptions').select('endpoint, p256dh, auth').eq('regu_id', regu.id);
 
     const payload = JSON.stringify({
-      title: '⏰ Pengingat SIPLAP',
-      body: `Regu ${regu.nama_regu}: ${Math.ceil(minutesLeft)} menit lagi batas siklus ${siklusKe} berakhir. Segera kirim laporan!`,
+      title: testMode ? '🧪 Tes Notifikasi SIPLAP' : '⏰ Pengingat SIPLAP',
+      body: testMode
+        ? `Berhasil! Notifikasi sampai ke device ini (${regu.nama_regu}).`
+        : `Regu ${regu.nama_regu}: ${Math.ceil(minutesLeft)} menit lagi batas siklus ${siklusKe} berakhir. Segera kirim laporan!`,
       url: '/',
     });
 
