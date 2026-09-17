@@ -8,6 +8,8 @@ export interface WatermarkInfo {
   lng: number | null;
   timestamp: Date;
   label: string; // nama regu / siklus
+  place?: string | null; // nama tempat hasil reverse geocoding (opsional)
+  accuracy?: number | null;
 }
 
 export async function applyWatermark(
@@ -29,11 +31,13 @@ export async function applyWatermark(
   const lh = fs * 1.35;
 
   // Panel semi-transparan di bawah kiri
+  const coord = `📍 ${info.lat != null ? info.lat.toFixed(6) : '—'}, ${info.lng != null ? info.lng.toFixed(6) : '—'}${info.accuracy != null ? ` (±${Math.round(info.accuracy)}m)` : ''}`;
   const lines = [
-    `📍 ${info.lat != null ? info.lat.toFixed(6) : '—'}, ${info.lng != null ? info.lng.toFixed(6) : '—'}`,
+    info.place ? `📌 ${info.place}` : null,
+    coord,
     `🕒 ${info.timestamp.toLocaleString('id-ID', { hour12: false })}`,
     `${info.label}`,
-  ];
+  ].filter((l): l is string => l != null);
   const boxH = lines.length * lh + pad * 1.4;
   const maxLineW = Math.max(
     ...lines.map((l) => {

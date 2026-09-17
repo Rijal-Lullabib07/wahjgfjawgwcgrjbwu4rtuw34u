@@ -165,9 +165,7 @@ export default function ReguApp({ session, onLogout }: Props) {
           </button>
         </div>
         <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="badge bg-navy-700 text-navy-100">
-            {cycle.label}
-          </span>
+          <span className="badge bg-navy-700 text-navy-100">{cycle.label}</span>
           <span
             className={
               cycle.minutesLeft <= 15
@@ -224,7 +222,9 @@ export default function ReguApp({ session, onLogout }: Props) {
           aria-current={screen === "capture" ? "page" : undefined}
           className={
             "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
-            (screen === "capture" ? "text-gold-400" : "text-slate-400 hover:text-white")
+            (screen === "capture"
+              ? "text-gold-400"
+              : "text-slate-400 hover:text-white")
           }
         >
           <span className="text-xl leading-none">📷</span>
@@ -235,7 +235,9 @@ export default function ReguApp({ session, onLogout }: Props) {
           aria-current={screen === "queue" ? "page" : undefined}
           className={
             "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
-            (screen === "queue" ? "text-gold-400" : "text-slate-400 hover:text-white")
+            (screen === "queue"
+              ? "text-gold-400"
+              : "text-slate-400 hover:text-white")
           }
         >
           <span className="text-xl leading-none">📦</span>

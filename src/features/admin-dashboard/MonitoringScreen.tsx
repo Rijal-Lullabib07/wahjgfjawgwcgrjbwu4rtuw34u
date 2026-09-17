@@ -10,9 +10,43 @@ import {
 import {
   getCurrentCycle,
   formatWaktu,
-  formatKoordinat,
   FOTOS_PER_SIKLUS,
 } from "../../lib/cycle";
+import {
+  reverseGeocode,
+  cachedPlace,
+  formatPlace,
+  type PlaceInfo,
+} from "../../lib/geo";
+
+/** Badge lokasi: nama tempat (reverse geocoding), fallback koordinat. */
+function PlaceBadge({ lat, lng }: { lat: number | null; lng: number | null }) {
+  const [place, setPlace] = useState<PlaceInfo | null>(() =>
+    cachedPlace(lat, lng),
+  );
+
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+    const cached = cachedPlace(lat, lng);
+    if (cached) {
+      setPlace(cached);
+      return;
+    }
+    let active = true;
+    void reverseGeocode(lat, lng).then((p) => {
+      if (active && p) setPlace(p);
+    });
+    return () => {
+      active = false;
+    };
+  }, [lat, lng]);
+
+  return (
+    <span className="badge bg-navy-700 text-navy-100">
+      📍 {formatPlace(place, lat, lng)}
+    </span>
+  );
+}
 
 /** URL foto langsung dari Supabase Storage (public bucket). */
 function FotoThumb({ path }: { path: string }) {
@@ -260,9 +294,7 @@ export default function MonitoringScreen() {
                     <div className="text-sm font-semibold">
                       Siklus {l.siklus_ke} · {formatWaktu(l.timestamp_kirim)}
                     </div>
-                    <span className="badge bg-navy-700 text-navy-100">
-                      {formatKoordinat(l.latitude, l.longitude)}
-                    </span>
+                    <PlaceBadge lat={l.latitude} lng={l.longitude} />
                   </div>
                   {l.catatan && (
                     <p className="mb-2 text-xs text-slate-300">
@@ -275,7 +307,7 @@ export default function MonitoringScreen() {
                         <FotoThumb path={f.storage_path} />
                         <div className="mt-1 text-[10px] text-slate-500">
                           Foto {f.urutan_foto} · 📍{" "}
-                          {formatKoordinat(f.watermark_lat, f.watermark_lng)}
+                          {formatPlace(cachedPlace(f.watermark_lat, f.watermark_lng), f.watermark_lat, f.watermark_lng)}
                         </div>
                       </div>
                     ))}
@@ -313,7 +345,7 @@ export default function MonitoringScreen() {
                   Siklus {l.siklus_ke} · {formatWaktu(l.timestamp_kirim)}
                 </div>
                 <div className="text-[11px] text-slate-500">
-                  {formatKoordinat(f.watermark_lat, f.watermark_lng)}
+                  {formatPlace(cachedPlace(f.watermark_lat, f.watermark_lng), f.watermark_lat, f.watermark_lng)}
                 </div>
               </button>
             )),
