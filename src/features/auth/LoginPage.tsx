@@ -241,10 +241,22 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
             </form>
           </div>
 
-          <p className="mt-6 text-center text-xs text-slate-500">
-            Satu smartphone = satu sesi login persisten. Regu wajib memasang aplikasi ke
-            homescreen agar pengingat &amp; sinkronisasi latar belakang berjalan optimal.
-          </p>
+          <div className="mt-6 rounded-2xl border border-navy-600/60 bg-navy-800/50 px-4 py-3">
+            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
+              <span aria-hidden>📱</span>
+              <span>
+                <b className="font-semibold text-white">Satu smartphone = satu akun.</b> Sesi
+                login tersimpan permanen di perangkat ini.
+              </span>
+            </p>
+            <p className="mt-2 flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
+              <span aria-hidden>📲</span>
+              <span>
+                <b className="font-semibold text-white">Regu wajib pasang ke homescreen</b> agar
+                pengingat siklus &amp; kirim laporan otomatis saat online berjalan optimal.
+              </span>
+            </p>
+          </div>
         </div>
       </div>
     </div>
