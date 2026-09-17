@@ -15,6 +15,7 @@ interface Props {
 /**
  * Layar capture: live preview getUserMedia, tombol shutter besar (thumb-friendly),
  * GPS live, indikator "Tersimpan lokal" vs "Terkirim", dan hitungan 2 foto/siklus.
+ * Kuota ketat: 2 foto per siklus per regu = terkirim + di antrian + di layar ini.
  */
 export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureDone }: Props) {
   const camera = useCamera();
@@ -24,18 +25,22 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const flashRef = useRef<HTMLDivElement>(null);
 
+  // Total foto yang sudah "dipakai" regu ini pada siklus berjalan:
+  // terkirim ke server + masih menunggu di antrian offline + jepretan di layar.
+  const used = sentCount + queueCount + shots.length;
+  const quotaLeft = Math.max(0, FOTOS_PER_SIKLUS - used);
+
   useEffect(() => {
     void camera.start();
     return () => camera.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const taken = shots.length;
-  const remaining = Math.max(0, FOTOS_PER_SIKLUS - taken);
+  const remaining = Math.max(0, quotaLeft);
 
   const takePhoto = async () => {
     if (!camera.videoRef.current || !camera.ready || saving) return;
-    if (taken >= FOTOS_PER_SIKLUS) return;
+    if (quotaLeft <= 0) return;
 
     // efek flash
     const flash = flashRef.current;
@@ -95,8 +100,15 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
             </div>
           </div>
         </div>
-        {sentCount >= FOTOS_PER_SIKLUS && (
-          <p className="mt-2 text-xs text-emerald-400">✅ Laporan siklus ini sudah lengkap</p>
+        {used >= FOTOS_PER_SIKLUS && (
+          <p className="mt-2 text-xs text-emerald-400">
+            ✅ Kuota siklus ini sudah habis ({FOTOS_PER_SIKLUS}/{FOTOS_PER_SIKLUS} foto)
+          </p>
+        )}
+        {queueCount > 0 && sentCount < FOTOS_PER_SIKLUS && (
+          <p className="mt-2 text-xs text-amber-300">
+            ⏳ {queueCount} foto menunggu sinkron — dihitung dalam kuota.
+          </p>
         )}
       </div>
 
@@ -122,8 +134,11 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
         )}
 
         {!camera.ready && !camera.error && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <span className="animate-pulse text-sm text-slate-400">Menyalakan kamera…</span>
+            <button className="btn-secondary px-4 py-2 text-xs" onClick={() => void camera.start()}>
+              Nyalakan ulang
+            </button>
           </div>
         )}
 
@@ -148,16 +163,21 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
         )}
       </div>
 
-      {/* Shutter besar — thumb-friendly */}
-      <div className="mt-5 flex items-center justify-center gap-6">
+      {/* Shutter besar — thumb-friendly, terkunci saat kuota habis */}
+      <div className="mt-5 flex flex-col items-center gap-2">
         <button
           onClick={() => void takePhoto()}
-          disabled={!camera.ready || saving || taken >= FOTOS_PER_SIKLUS}
+          disabled={!camera.ready || saving || quotaLeft <= 0}
           className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-gold-400 bg-navy-800 text-3xl shadow-lg transition active:scale-95 disabled:opacity-30"
           aria-label="Ambil foto"
         >
           📸
         </button>
+        {quotaLeft <= 0 && (
+          <p className="text-xs font-semibold text-amber-300">
+            🔒 Maksimal {FOTOS_PER_SIKLUS} foto per siklus — kirim dulu / tunggu siklus berikutnya.
+          </p>
+        )}
       </div>
 
       {/* Hasil jepretan */}
@@ -185,8 +205,8 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
 
       <p className="mt-4 text-center text-xs text-slate-500">
         {remaining > 0
-          ? 'Ambil ' + remaining + ' foto lagi untuk melengkapi siklus ini.'
-          : 'Semua foto siklus ini sudah diambil — tekan Kirim.'}
+          ? 'Sisa kuota ' + remaining + ' foto untuk siklus ini.'
+          : 'Kuota siklus ini sudah habis — tunggu siklus berikutnya.'}
         {queueCount > 0 && ' · ' + queueCount + ' laporan menunggu sinkron'}
       </p>
     </div>

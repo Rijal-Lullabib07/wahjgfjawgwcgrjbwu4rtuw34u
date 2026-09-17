@@ -174,7 +174,7 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     </label>
                     <input
                       className="input uppercase"
-                      placeholder="REGU01"
+                      placeholder="Contoh: REGU01"
                       value={kode}
                       onChange={(e) => setKode(e.target.value)}
                       autoCapitalize="characters"
@@ -188,9 +188,11 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                       className="input"
                       type="password"
                       inputMode="numeric"
-                      placeholder="PIN regu"
+                      pattern="[0-9]*"
+                      maxLength={8}
+                      placeholder="PIN regu (angka saja)"
                       value={pin}
-                      onChange={(e) => setPin(e.target.value)}
+                      onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
                       autoComplete="current-password"
                       required
                     />
@@ -203,7 +205,7 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     <input
                       className="input"
                       type="email"
-                      placeholder="nama@satpolpp.go.id"
+                      placeholder="Email resmi Anda"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoComplete="username"

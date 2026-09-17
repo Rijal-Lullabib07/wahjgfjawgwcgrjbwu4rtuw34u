@@ -23,7 +23,12 @@ async function loadReguState(
   setSentCount: (n: number) => void,
 ) {
   const q = await queueGetAll();
-  setQueueCount(q.filter((i) => i.reguId === reguId).length);
+  // Hanya entri siklus berjalan yang dihitung ke kuota (foto di antrian offline)
+  setQueueCount(
+    q
+      .filter((i) => i.reguId === reguId && i.siklusKe === cycle.siklusKe)
+      .reduce((acc, i) => acc + i.fotos.length, 0),
+  );
   try {
     const rows = await fetchLaporan({ reguId, from: cycle.start, to: cycle.end, limit: 50 });
     setSentCount(rows.reduce((acc, r) => acc + (r.fotos?.length ?? 0), 0));
