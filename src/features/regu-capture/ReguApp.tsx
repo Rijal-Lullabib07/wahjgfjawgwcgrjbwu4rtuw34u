@@ -1,20 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { QueuedLaporan, SessionUser } from '../../types';
-import { getCurrentCycle, type CycleInfo } from '../../lib/cycle';
-import { fetchLaporan, subscribeLaporan } from '../../lib/supabase/api';
-import { blobPut, queuePut, queueGetAll } from '../../lib/offline-sync/db';
-import { syncPendingLaporan, requestBackgroundSync } from '../../lib/offline-sync/syncManager';
-import { subscribePush, testLocalNotification } from '../../lib/push/subscribe';
-import CaptureScreen from './CaptureScreen';
-import QueueList from './QueueList';
-import SatpolPPLogo from '../../components/SatpolPPLogo';
+import { useCallback, useEffect, useState } from "react";
+import type { QueuedLaporan, SessionUser } from "../../types";
+import { getCurrentCycle, type CycleInfo } from "../../lib/cycle";
+import { fetchLaporan, subscribeLaporan } from "../../lib/supabase/api";
+import { blobPut, queuePut, queueGetAll } from "../../lib/offline-sync/db";
+import {
+  syncPendingLaporan,
+  requestBackgroundSync,
+} from "../../lib/offline-sync/syncManager";
+import { subscribePush, testLocalNotification } from "../../lib/push/subscribe";
+import CaptureScreen from "./CaptureScreen";
+import QueueList from "./QueueList";
+import SatpolPPLogo from "../../components/SatpolPPLogo";
 
 interface Props {
   session: SessionUser;
   onLogout: () => void;
 }
 
-type Screen = 'capture' | 'queue';
+type Screen = "capture" | "queue";
 
 async function loadReguState(
   reguId: string | undefined,
@@ -30,7 +33,12 @@ async function loadReguState(
       .reduce((acc, i) => acc + i.fotos.length, 0),
   );
   try {
-    const rows = await fetchLaporan({ reguId, from: cycle.start, to: cycle.end, limit: 50 });
+    const rows = await fetchLaporan({
+      reguId,
+      from: cycle.start,
+      to: cycle.end,
+      limit: 50,
+    });
     setSentCount(rows.reduce((acc, r) => acc + (r.fotos?.length ?? 0), 0));
   } catch {
     /* offline: keep last value */
@@ -38,11 +46,13 @@ async function loadReguState(
 }
 
 export default function ReguApp({ session, onLogout }: Props) {
-  const [screen, setScreen] = useState<Screen>('capture');
+  const [screen, setScreen] = useState<Screen>("capture");
   const [cycle, setCycle] = useState<CycleInfo>(() => getCurrentCycle());
   const [sentCount, setSentCount] = useState(0);
   const [queueCount, setQueueCount] = useState(0);
-  const [pushState, setPushState] = useState<'unknown' | 'on' | 'off'>('unknown');
+  const [pushState, setPushState] = useState<"unknown" | "on" | "off">(
+    "unknown",
+  );
   const [pushMsg, setPushMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,10 +83,10 @@ export default function ReguApp({ session, onLogout }: Props) {
 
   // Cek status izin notifikasi awal
   useEffect(() => {
-    if ('Notification' in window) {
-      setPushState(Notification.permission === 'granted' ? 'on' : 'off');
+    if ("Notification" in window) {
+      setPushState(Notification.permission === "granted" ? "on" : "off");
     } else {
-      setPushState('off');
+      setPushState("off");
     }
   }, []);
 
@@ -85,33 +95,44 @@ export default function ReguApp({ session, onLogout }: Props) {
     try {
       await subscribePush(session.reguId ?? null);
       await testLocalNotification();
-      setPushState('on');
-      setPushMsg('✅ Notifikasi aktif — pengingat siklus akan dikirim ke device ini.');
+      setPushState("on");
+      setPushMsg(
+        "✅ Notifikasi aktif — pengingat siklus akan dikirim ke device ini.",
+      );
     } catch (err) {
-      setPushMsg(err instanceof Error ? err.message : 'Gagal mengaktifkan notifikasi');
+      setPushMsg(
+        err instanceof Error ? err.message : "Gagal mengaktifkan notifikasi",
+      );
     }
     setTimeout(() => setPushMsg(null), 6000);
   };
 
   const handleCaptureDone = useCallback(
-    async (fotos: Array<{ blob: Blob; lat: number | null; lng: number | null; ts: Date }>) => {
+    async (
+      fotos: Array<{
+        blob: Blob;
+        lat: number | null;
+        lng: number | null;
+        ts: Date;
+      }>,
+    ) => {
       const localId = crypto.randomUUID();
       const entry: QueuedLaporan = {
         localId,
-        reguId: session.reguId || '',
+        reguId: session.reguId || "",
         siklusKe: cycle.siklusKe,
         timestampKirim: new Date().toISOString(),
         latitude: fotos[0]?.lat ?? null,
         longitude: fotos[0]?.lng ?? null,
-        catatan: '',
+        catatan: "",
         fotos: fotos.map((f, i) => ({
-          blobKey: localId + ':' + (i + 1),
+          blobKey: localId + ":" + (i + 1),
           urutan: (i + 1) as 1 | 2,
           watermarkLat: f.lat,
           watermarkLng: f.lng,
           watermarkTimestamp: f.ts.toISOString(),
         })),
-        status: 'pending',
+        status: "pending",
         attempts: 0,
       };
       for (let i = 0; i < entry.fotos.length; i++) {
@@ -144,50 +165,81 @@ export default function ReguApp({ session, onLogout }: Props) {
           </button>
         </div>
         <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="badge bg-navy-700 text-navy-100">Siklus {cycle.siklusKe} · {cycle.label}</span>
-          <span className={cycle.minutesLeft <= 15 ? 'font-semibold text-gold-400' : 'text-slate-400'}>
-            <span className="mono">{String(cycle.minutesLeft).padStart(2, '0')}m</span> tersisa
+          <span className="badge bg-navy-700 text-navy-100">
+            {cycle.label}
+          </span>
+          <span
+            className={
+              cycle.minutesLeft <= 15
+                ? "font-semibold text-gold-400"
+                : "text-slate-400"
+            }
+          >
+            <span className="mono">
+              {String(cycle.minutesLeft).padStart(2, "0")}m
+            </span>{" "}
+            tersisa
           </span>
         </div>
       </header>
 
       <main className="safe-bottom flex-1 pb-24">
-        {screen === 'capture' ? (
-          <CaptureScreen cycle={cycle} sentCount={sentCount} queueCount={queueCount} onCaptureDone={handleCaptureDone} />
+        {screen === "capture" ? (
+          <CaptureScreen
+            cycle={cycle}
+            sentCount={sentCount}
+            queueCount={queueCount}
+            onCaptureDone={handleCaptureDone}
+          />
         ) : (
           <QueueList onQueueChanged={loadState} />
         )}
       </main>
 
       {/* Banner aktivasi push (muncul bila belum aktif) */}
-      {pushState === 'off' && (
+      {pushState === "off" && (
         <div className="fixed inset-x-0 bottom-16 z-10 px-4">
           <div className="mx-auto max-w-md rounded-xl border border-gold-400/40 bg-navy-800 p-3 shadow-lg">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-slate-200">
                 🔔 Aktifkan notifikasi pengingat siklus
               </span>
-              <button onClick={() => void handleEnablePush()} className="btn-primary px-3 py-1.5 text-xs">
+              <button
+                onClick={() => void handleEnablePush()}
+                className="btn-primary px-3 py-1.5 text-xs"
+              >
                 Aktifkan
               </button>
             </div>
-            {pushMsg && <p className="mt-2 text-[11px] text-slate-400">{pushMsg}</p>}
+            {pushMsg && (
+              <p className="mt-2 text-[11px] text-slate-400">{pushMsg}</p>
+            )}
           </div>
         </div>
       )}
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 border-t border-navy-700/70 bg-navy-900/95 backdrop-blur">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 border-t border-navy-700/70 bg-navy-950/95 shadow-[0_-12px_32px_rgba(2,12,25,0.35)] backdrop-blur-xl">
         <button
-          onClick={() => setScreen('capture')}
-          className={'py-4 text-sm font-semibold ' + (screen === 'capture' ? 'text-gold-400' : 'text-slate-400')}
+          onClick={() => setScreen("capture")}
+          aria-current={screen === "capture" ? "page" : undefined}
+          className={
+            "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
+            (screen === "capture" ? "text-gold-400" : "text-slate-400 hover:text-white")
+          }
         >
-          📷 Kamera
+          <span className="text-xl leading-none">📷</span>
+          <span>Kamera</span>
         </button>
         <button
-          onClick={() => setScreen('queue')}
-          className={'py-4 text-sm font-semibold ' + (screen === 'queue' ? 'text-gold-400' : 'text-slate-400')}
+          onClick={() => setScreen("queue")}
+          aria-current={screen === "queue" ? "page" : undefined}
+          className={
+            "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
+            (screen === "queue" ? "text-gold-400" : "text-slate-400 hover:text-white")
+          }
         >
-          📦 Antrian{queueCount > 0 ? ' (' + queueCount + ')' : ''}
+          <span className="text-xl leading-none">📦</span>
+          <span>Antrian{queueCount > 0 ? " (" + queueCount + ")" : ""}</span>
         </button>
       </nav>
     </div>

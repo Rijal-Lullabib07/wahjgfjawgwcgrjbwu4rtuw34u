@@ -84,18 +84,26 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
     }
   };
 
+  const removeShot = (index: number) => {
+    setShots((current) => {
+      const shot = current[index];
+      if (shot) URL.revokeObjectURL(shot.url);
+      return current.filter((_, shotIndex) => shotIndex !== index);
+    });
+  };
+
   return (
-    <div className="px-4 py-4">
+    <div className="mx-auto w-full max-w-xl px-4 py-4 sm:px-6">
       {/* Status siklus */}
-      <div className="card mb-4">
+      <div className="card mb-4 border-sky-400/20 bg-navy-800/75">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs text-slate-400">Siklus berjalan</div>
-            <div className="font-semibold">{cycle.label}</div>
+            <div className="eyebrow">Siklus berjalan</div>
+            <div className="mt-1 font-semibold text-white">{cycle.label}</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-slate-400">Foto terkirim</div>
-            <div className="font-semibold">
+            <div className="mono text-lg font-semibold text-white">
               {sentCount}/{FOTOS_PER_SIKLUS}
             </div>
           </div>
@@ -113,13 +121,13 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
       </div>
 
       {/* Live preview kamera */}
-      <div className="relative overflow-hidden rounded-2xl border border-navy-700 bg-black">
+      <div className="camera-frame relative overflow-hidden rounded-[1.5rem] border border-navy-500/70 bg-black shadow-2xl shadow-black/30">
         <video
           ref={camera.videoRef}
           playsInline
           muted
           autoPlay
-          className="aspect-[3/4] w-full object-cover"
+          className="aspect-[4/5] max-h-[62dvh] w-full object-cover"
         />
         <div ref={flashRef} className="pointer-events-none absolute inset-0 bg-white opacity-0 transition-opacity duration-100" />
 
@@ -143,7 +151,7 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
         )}
 
         {/* GPS badge */}
-        <div className="absolute left-3 top-3 rounded-lg bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white">
+        <div className="absolute left-3 top-3 max-w-[75%] rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur">
           {geo.error
             ? '⚠️ GPS: ' + geo.error
             : geo.lat != null
@@ -155,7 +163,7 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
         {camera.ready && (
           <button
             onClick={camera.switchCamera}
-            className="absolute right-3 top-3 rounded-lg bg-black/60 px-2.5 py-1 text-sm text-white"
+            className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/60 text-lg text-white backdrop-blur transition hover:bg-black/80 active:scale-90"
             aria-label="Ganti kamera"
           >
             🔄
@@ -164,15 +172,16 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
       </div>
 
       {/* Shutter besar — thumb-friendly, terkunci saat kuota habis */}
-      <div className="mt-5 flex flex-col items-center gap-2">
+      <div className="mt-5 flex flex-col items-center gap-2 pb-1">
         <button
           onClick={() => void takePhoto()}
           disabled={!camera.ready || saving || quotaLeft <= 0}
-          className="flex h-20 w-20 items-center justify-center rounded-full border-4 border-gold-400 bg-navy-800 text-3xl shadow-lg transition active:scale-95 disabled:opacity-30"
+          className="shutter-button flex h-[4.75rem] w-[4.75rem] items-center justify-center rounded-full border-4 border-gold-400 bg-navy-800 text-3xl shadow-[0_0_0_7px_rgba(245,185,66,0.12),0_12px_30px_rgba(0,0,0,0.3)] transition hover:bg-navy-700 active:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
           aria-label="Ambil foto"
         >
-          📸
+          <span aria-hidden="true">📸</span>
         </button>
+        <span className="text-xs font-medium text-slate-400">Ambil foto {shots.length + 1} dari {FOTOS_PER_SIKLUS}</span>
         {quotaLeft <= 0 && (
           <p className="text-xs font-semibold text-amber-300">
             🔒 Maksimal {FOTOS_PER_SIKLUS} foto per siklus — kirim dulu / tunggu siklus berikutnya.
@@ -185,9 +194,17 @@ export default function CaptureScreen({ cycle, sentCount, queueCount, onCaptureD
         <div className="mt-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             {shots.map((s, i) => (
-              <div key={i} className="relative overflow-hidden rounded-xl border border-navy-600">
+              <div key={i} className="group relative overflow-hidden rounded-xl border border-navy-600">
                 <img src={s.url} alt={'Foto ' + (i + 1)} className="aspect-square w-full object-cover" />
                 <span className="absolute left-2 top-2 badge bg-black/60 text-white">#{i + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => removeShot(i)}
+                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500/90 text-sm text-white shadow-lg transition hover:bg-red-400 active:scale-90"
+                  aria-label={'Hapus foto ' + (i + 1)}
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
