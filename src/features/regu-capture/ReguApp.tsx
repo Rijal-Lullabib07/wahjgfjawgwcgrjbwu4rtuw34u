@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { QueuedLaporan, SessionUser } from "../../types";
 import { getCurrentCycle, type CycleInfo } from "../../lib/cycle";
 import { fetchLaporan, subscribeLaporan } from "../../lib/supabase/api";
@@ -7,7 +7,8 @@ import {
   syncPendingLaporan,
   requestBackgroundSync,
 } from "../../lib/offline-sync/syncManager";
-import { subscribePush, testLocalNotification } from "../../lib/push/subscribe";
+import { startLocalReminder } from "../../lib/push/localReminder";
+import { enablePush, syncPushSubscription } from "../../lib/push/subscribe";
 import CaptureScreen from "./CaptureScreen";
 import QueueList from "./QueueList";
 import SatpolPPLogo from "../../components/SatpolPPLogo";
@@ -54,6 +55,7 @@ export default function ReguApp({ session, onLogout }: Props) {
     "unknown",
   );
   const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const reminderRef = useRef<{ stop: () => void } | null>(null);
 
   useEffect(() => {
     const t = setInterval(() => setCycle(getCurrentCycle()), 15000);
@@ -81,28 +83,81 @@ export default function ReguApp({ session, onLogout }: Props) {
     };
   }, [loadState]);
 
-  // Cek status izin notifikasi awal
+  // Izin sudah granted sebelumnya? → segarkan subscription server + jalankan
+  // reminder lokal (cadangan)
   useEffect(() => {
-    if ("Notification" in window) {
-      setPushState(Notification.permission === "granted" ? "on" : "off");
-    } else {
+    if (!("Notification" in window) || Notification.permission !== "granted") {
       setPushState("off");
+      return;
     }
-  }, []);
+    setPushState("on");
+    reminderRef.current = startLocalReminder(session.reguId);
+    // Pastikan endpoint device ini menunjuk ke regu yang sedang login — device
+    // bisa dipakai bergantian, dan browser bisa merotasi kunci subscription.
+    void syncPushSubscription(session.reguId);
+    return () => reminderRef.current?.stop();
+  }, [session.reguId]);
 
+  // Minta izin + aktifkan notifikasi.
+  // Server push (VAPID) = jalur utama (jalan walau app ditutup);
+  // reminder lokal tetap dinyalakan sebagai lapis cadangan.
   const handleEnablePush = async () => {
     setPushMsg(null);
     try {
-      await subscribePush(session.reguId ?? null);
-      await testLocalNotification();
+      if (!("Notification" in window)) {
+        throw new Error(
+          "Browser tidak mendukung notifikasi. iOS minimal versi 16.4 dan app harus terpasang di Home Screen.",
+        );
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        throw new Error(
+          permission === "denied"
+            ? "Izin notifikasi pernah DITOLAK — iOS tidak menanyakan ulang. Hapus app dari Home Screen, Add to Home Screen ulang, lalu ketuk Izinkan."
+            : "Izin notifikasi ditolak. Aktifkan di pengaturan browser.",
+        );
+      }
+      reminderRef.current?.stop();
+      reminderRef.current = startLocalReminder(session.reguId);
       setPushState("on");
-      setPushMsg(
-        "✅ Notifikasi aktif — pengingat siklus akan dikirim ke device ini.",
-      );
+
+      // Daftarkan device ke server push supaya reminder tetap sampai saat app
+      // tertutup / HP di kantong.
+      try {
+        await enablePush(session.reguId);
+        setPushMsg("✅ Notifikasi aktif — pengingat masuk walau app ditutup.");
+      } catch (pushErr) {
+        setPushMsg(
+          "⚠️ Pengingat lokal aktif, tapi server push belum: " +
+            (pushErr instanceof Error ? pushErr.message : "pendaftaran gagal"),
+        );
+      }
+      // Notifikasi tes langsung supaya user yakin jalan
+      try {
+        const reg = await navigator.serviceWorker?.ready;
+        if (reg) {
+          await reg.showNotification("SIPLAP aktif ✅", {
+            body: "Pengingat siklus akan masuk otomatis di 15 menit terakhir.",
+            icon: "/icons/icon-192.png",
+          });
+        } else {
+          new Notification("SIPLAP aktif ✅", {
+            body: "Pengingat siklus akan masuk otomatis di 15 menit terakhir.",
+            icon: "/icons/icon-192.png",
+          });
+        }
+      } catch {
+        /* notifikasi tes gagal → tidak masalah, reminder tetap jalan */
+      }
+      setPushMsg(null); // sukses → banner off, tak perlu pesan tambahan
     } catch (err) {
+      // Pesan error ditampilkan lebih lama (20 dtk) karena berisi langkah
+      // perbaikan yang perlu dibaca user, mis. cara reset izin di iOS.
       setPushMsg(
         err instanceof Error ? err.message : "Gagal mengaktifkan notifikasi",
       );
+      setTimeout(() => setPushMsg(null), 20000);
+      return;
     }
     setTimeout(() => setPushMsg(null), 6000);
   };
@@ -200,7 +255,8 @@ export default function ReguApp({ session, onLogout }: Props) {
           <div className="mx-auto max-w-md rounded-xl border border-gold-400/40 bg-navy-800 p-3 shadow-lg">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-slate-200">
-                🔔 Aktifkan notifikasi pengingat siklus
+                🔔 Aktifkan notifikasi pengingat siklus (tetap masuk walau app
+                ditutup)
               </span>
               <button
                 onClick={() => void handleEnablePush()}

@@ -54,7 +54,7 @@ async function syncFromSW(): Promise<void> {
 
 self.addEventListener('push', (event) => {
   const pushEvent = event as ExtendableEvent & { data?: { json: () => unknown; text: () => string } | null };
-  let data: { title?: string; body?: string; url?: string } = {};
+  let data: { title?: string; body?: string; url?: string; tag?: string } = {};
   try {
     const raw = pushEvent.data as { json?: () => unknown; text?: () => string } | null;
     data = raw && typeof raw.json === 'function' ? (raw.json() as typeof data) : {};
@@ -66,6 +66,9 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
+    // Tag sama dengan reminder lokal (localReminder.ts) → keduanya saling
+    // MENGGANTIKAN, bukan menumpuk jadi dua notifikasi untuk hal yang sama.
+    tag: data.tag ?? 'siplap-reminder',
     data: { url: data.url ?? '/' },
   };
   pushEvent.waitUntil(

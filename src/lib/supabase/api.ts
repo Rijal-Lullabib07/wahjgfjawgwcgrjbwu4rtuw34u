@@ -153,26 +153,6 @@ export function fotoUrl(storagePath: string): string {
   return data.publicUrl;
 }
 
-// ---------- Push subscription ----------
-
-/** Simpan/perbarui subscription push device ini ke tabel push_subscriptions. */
-export async function savePushSubscription(sub: PushSubscription, reguId: string | null): Promise<void> {
-  const client = requireClient();
-  const json = sub.toJSON();
-  const keys = (json.keys ?? {}) as { p256dh: string; auth: string };
-  const { error } = await client.from('push_subscriptions').upsert(
-    {
-      endpoint: json.endpoint,
-      p256dh: keys.p256dh,
-      auth: keys.auth,
-      regu_id: reguId,
-      user_agent: navigator.userAgent,
-    },
-    { onConflict: 'endpoint' },
-  );
-  if (error) throw error;
-}
-
 // ---------- Realtime ----------
 
 /** Subscribe perubahan tabel laporan & laporan_foto via Supabase Realtime. */
