@@ -9,6 +9,7 @@ import {
 } from "../../lib/offline-sync/syncManager";
 import { startLocalReminder } from "../../lib/push/localReminder";
 import { enablePush, syncPushSubscription } from "../../lib/push/subscribe";
+import { isIOS } from "../../lib/session";
 import CaptureScreen from "./CaptureScreen";
 import QueueList from "./QueueList";
 import SatpolPPLogo from "../../components/SatpolPPLogo";
@@ -106,32 +107,25 @@ export default function ReguApp({ session, onLogout }: Props) {
     try {
       if (!("Notification" in window)) {
         throw new Error(
-          "Browser tidak mendukung notifikasi. iOS minimal versi 16.4 dan app harus terpasang di Home Screen.",
+          "Browser ini tidak mendukung notifikasi. Gunakan Chrome Android atau pasang SIPLAP ke Home Screen di iPhone.",
         );
       }
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
+      if (Notification.permission === "denied") {
         throw new Error(
-          permission === "denied"
-            ? "Izin notifikasi pernah DITOLAK — iOS tidak menanyakan ulang. Hapus app dari Home Screen, Add to Home Screen ulang, lalu ketuk Izinkan."
-            : "Izin notifikasi ditolak. Aktifkan di pengaturan browser.",
+          isIOS()
+            ? "Izin notifikasi pernah DITOLAK. Hapus SIPLAP dari Home Screen, pasang ulang, lalu pilih Izinkan."
+            : "Izin notifikasi diblokir di Android. Buka info aplikasi/browser → Izin → Notifikasi, izinkan SIPLAP, lalu muat ulang halaman.",
         );
       }
-      reminderRef.current?.stop();
-      reminderRef.current = startLocalReminder(session.reguId);
-      setPushState("on");
 
       // Daftarkan device ke server push supaya reminder tetap sampai saat app
       // tertutup / HP di kantong.
-      try {
-        await enablePush(session.reguId);
-        setPushMsg("✅ Notifikasi aktif — pengingat masuk walau app ditutup.");
-      } catch (pushErr) {
-        setPushMsg(
-          "⚠️ Pengingat lokal aktif, tapi server push belum: " +
-            (pushErr instanceof Error ? pushErr.message : "pendaftaran gagal"),
-        );
-      }
+      await enablePush(session.reguId);
+      reminderRef.current?.stop();
+      reminderRef.current = startLocalReminder(session.reguId);
+      setPushState("on");
+      setPushMsg("✅ Notifikasi aktif — pengingat masuk walau app ditutup.");
+
       // Notifikasi tes langsung supaya user yakin jalan
       try {
         const reg = await navigator.serviceWorker?.ready;
@@ -147,19 +141,17 @@ export default function ReguApp({ session, onLogout }: Props) {
           });
         }
       } catch {
-        /* notifikasi tes gagal → tidak masalah, reminder tetap jalan */
+        /* server push sudah terdaftar; notifikasi tes tidak memblokir aktivasi */
       }
-      setPushMsg(null); // sukses → banner off, tak perlu pesan tambahan
+      setTimeout(() => setPushMsg(null), 6000);
     } catch (err) {
-      // Pesan error ditampilkan lebih lama (20 dtk) karena berisi langkah
-      // perbaikan yang perlu dibaca user, mis. cara reset izin di iOS.
+      setPushState(Notification.permission === "granted" ? "on" : "off");
       setPushMsg(
         err instanceof Error ? err.message : "Gagal mengaktifkan notifikasi",
       );
       setTimeout(() => setPushMsg(null), 20000);
       return;
     }
-    setTimeout(() => setPushMsg(null), 6000);
   };
 
   const handleCaptureDone = useCallback(
