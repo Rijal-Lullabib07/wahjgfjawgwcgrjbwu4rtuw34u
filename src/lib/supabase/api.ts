@@ -1,5 +1,5 @@
-import type { Laporan, QueuedLaporan, Regu, SessionUser } from '../../types';
-import { supabase } from './client';
+import type { Laporan, QueuedLaporan, Regu, SessionUser } from "../../types";
+import { supabase } from "./client";
 
 /**
  * Adapter data — SEMUA lewat Supabase (Postgres + Auth + Storage + Realtime).
@@ -10,7 +10,7 @@ import { supabase } from './client';
 function requireClient() {
   if (!supabase) {
     throw new Error(
-      'Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di file .env, lalu restart dev server.',
+      "Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di file .env, lalu restart dev server.",
     );
   }
   return supabase;
@@ -18,22 +18,28 @@ function requireClient() {
 
 // ---------- Auth ----------
 
-export async function loginRegu(kodeLogin: string, pin: string): Promise<SessionUser> {
+export async function loginRegu(
+  kodeLogin: string,
+  pin: string,
+): Promise<SessionUser> {
   const client = requireClient();
   // Login regu: email sintetis kode_login@regu.siplap.id + PIN sebagai password.
   const email = `${kodeLogin.toLowerCase()}@regu.siplap.id`;
-  const { error } = await client.auth.signInWithPassword({ email, password: pin });
+  const { error } = await client.auth.signInWithPassword({
+    email,
+    password: pin,
+  });
   if (error) throw new Error(error.message);
 
   const { data: regu, error: reguErr } = await client
-    .from('regu')
-    .select('*')
-    .eq('kode_login', kodeLogin.toUpperCase())
+    .from("regu")
+    .select("*")
+    .eq("kode_login", kodeLogin.toUpperCase())
     .single();
-  if (reguErr || !regu) throw new Error('Data regu tidak ditemukan');
+  if (reguErr || !regu) throw new Error("Data regu tidak ditemukan");
 
   return {
-    role: 'regu',
+    role: "regu",
     nama: regu.nama_regu,
     reguId: regu.id,
     namaRegu: regu.nama_regu,
@@ -41,17 +47,20 @@ export async function loginRegu(kodeLogin: string, pin: string): Promise<Session
   };
 }
 
-export async function loginAdmin(email: string, password: string): Promise<SessionUser> {
+export async function loginAdmin(
+  email: string,
+  password: string,
+): Promise<SessionUser> {
   const client = requireClient();
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw new Error(error.message);
 
   const { data: admin, error: adminErr } = await client
-    .from('admin_users')
-    .select('*')
-    .eq('email', email.toLowerCase())
+    .from("admin_users")
+    .select("*")
+    .eq("email", email.toLowerCase())
     .single();
-  if (adminErr || !admin) throw new Error('Bukan akun admin yang valid');
+  if (adminErr || !admin) throw new Error("Bukan akun admin yang valid");
 
   return { role: admin.role, nama: admin.nama, email: admin.email };
 }
@@ -65,7 +74,10 @@ export async function logout(): Promise<void> {
 
 export async function fetchReguList(): Promise<Regu[]> {
   const client = requireClient();
-  const { data, error } = await client.from('regu').select('*').order('nama_regu');
+  const { data, error } = await client
+    .from("regu")
+    .select("*")
+    .order("nama_regu");
   if (error) throw error;
   return data ?? [];
 }
@@ -80,13 +92,14 @@ export async function fetchLaporan(filter: {
 }): Promise<Laporan[]> {
   const client = requireClient();
   let query = client
-    .from('laporan')
-    .select('*, regu:regu_id(*), fotos:laporan_foto(*)')
-    .order('timestamp_kirim', { ascending: false })
+    .from("laporan")
+    .select("*, regu:regu_id(*), fotos:laporan_foto(*)")
+    .order("timestamp_kirim", { ascending: false })
     .limit(filter.limit ?? 500);
-  if (filter.reguId) query = query.eq('regu_id', filter.reguId);
-  if (filter.from) query = query.gte('timestamp_kirim', filter.from.toISOString());
-  if (filter.to) query = query.lte('timestamp_kirim', filter.to.toISOString());
+  if (filter.reguId) query = query.eq("regu_id", filter.reguId);
+  if (filter.from)
+    query = query.gte("timestamp_kirim", filter.from.toISOString());
+  if (filter.to) query = query.lte("timestamp_kirim", filter.to.toISOString());
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Laporan[];
@@ -102,8 +115,8 @@ async function uploadFoto(
   const client = requireClient();
   const path = `${reguId}/${laporanId}/foto-${urutan}.jpg`;
   const { error } = await client.storage
-    .from('laporan-foto')
-    .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    .from("laporan-foto")
+    .upload(path, blob, { contentType: "image/jpeg", upsert: true });
   if (error) throw error;
   return path;
 }
@@ -112,28 +125,42 @@ async function uploadFoto(
  * Kirim laporan lengkap: insert row laporan, upload foto ke Storage,
  * insert metadata laporan_foto. Mengembalikan id laporan.
  */
-export async function submitLaporan(q: QueuedLaporan, blobs: Blob[]): Promise<string> {
+export async function submitLaporan(
+  q: QueuedLaporan,
+  blobs: Blob[],
+): Promise<string> {
   const client = requireClient();
 
   const { data: laporan, error } = await client
-    .from('laporan')
+    .from("laporan")
     .insert({
       regu_id: q.reguId,
       timestamp_kirim: q.timestampKirim,
       siklus_ke: q.siklusKe,
       latitude: q.latitude,
       longitude: q.longitude,
-      status_sync: 'synced',
+      status_sync: "synced",
       catatan: q.catatan ?? null,
     })
-    .select('id')
+    .select("id")
     .single();
-  if (error) throw error;
+  if (error) {
+    throw new Error(`Gagal membuat laporan: ${error.message}`);
+  }
 
   for (let i = 0; i < q.fotos.length; i++) {
     const f = q.fotos[i];
-    const path = await uploadFoto(q.reguId, laporan.id, f.urutan, blobs[i]);
-    const { error: fotoErr } = await client.from('laporan_foto').insert({
+    let path: string;
+    try {
+      path = await uploadFoto(q.reguId, laporan.id, f.urutan, blobs[i]);
+    } catch (uploadError) {
+      const message =
+        uploadError instanceof Error
+          ? uploadError.message
+          : String(uploadError);
+      throw new Error(`Gagal upload foto ${f.urutan} ke Storage: ${message}`);
+    }
+    const { error: fotoErr } = await client.from("laporan_foto").insert({
       laporan_id: laporan.id,
       storage_path: path,
       watermark_lat: f.watermarkLat,
@@ -141,7 +168,11 @@ export async function submitLaporan(q: QueuedLaporan, blobs: Blob[]): Promise<st
       watermark_timestamp: f.watermarkTimestamp,
       urutan_foto: f.urutan,
     });
-    if (fotoErr) throw fotoErr;
+    if (fotoErr) {
+      throw new Error(
+        `Gagal menyimpan metadata foto ${f.urutan}: ${fotoErr.message}`,
+      );
+    }
   }
   return laporan.id;
 }
@@ -149,7 +180,9 @@ export async function submitLaporan(q: QueuedLaporan, blobs: Blob[]): Promise<st
 /** URL publik foto dari Storage. */
 export function fotoUrl(storagePath: string): string {
   const client = requireClient();
-  const { data } = client.storage.from('laporan-foto').getPublicUrl(storagePath);
+  const { data } = client.storage
+    .from("laporan-foto")
+    .getPublicUrl(storagePath);
   return data.publicUrl;
 }
 
@@ -159,15 +192,15 @@ export function fotoUrl(storagePath: string): string {
 export function subscribeLaporan(cb: () => void): () => void {
   const client = requireClient();
   const channel = client
-    .channel('laporan-changes')
+    .channel("laporan-changes")
     .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'laporan' },
+      "postgres_changes",
+      { event: "*", schema: "public", table: "laporan" },
       () => cb(),
     )
     .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'laporan_foto' },
+      "postgres_changes",
+      { event: "*", schema: "public", table: "laporan_foto" },
       () => cb(),
     )
     .subscribe();

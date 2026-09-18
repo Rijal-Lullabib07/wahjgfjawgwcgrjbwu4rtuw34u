@@ -81,12 +81,29 @@ self.addEventListener('notificationclick', (event) => {
     notification: Notification & { data?: { url?: string } };
   };
   notifEvent.notification.close();
+  const rawUrl = notifEvent.notification.data?.url ?? '/';
+  let targetUrl = self.location.origin + '/';
+  try {
+    const parsed = new URL(rawUrl, self.location.origin);
+    // Notifications must stay inside this PWA's origin and scope.
+    targetUrl = parsed.origin === self.location.origin ? parsed.href : targetUrl;
+  } catch {
+    // Keep the app root as a safe fallback for malformed notification data.
+  }
+
   notifEvent.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const client of list) {
-        if ('focus' in client) return client.focus();
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (list) => {
+      const client = list.find((item) => 'focus' in item);
+      if (client) {
+        // Android often keeps the PWA window alive in the background. Focusing
+        // without navigating leaves the user on a stale screen.
+        if ('navigate' in client) {
+          await client.navigate(targetUrl).catch(() => undefined);
+        }
+        await client.focus();
+        return;
       }
-      return self.clients.openWindow(notifEvent.notification.data?.url ?? '/');
+      await self.clients.openWindow(targetUrl);
     }),
   );
 });
