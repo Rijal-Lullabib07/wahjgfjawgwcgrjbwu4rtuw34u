@@ -1,5 +1,5 @@
 /**
- * Web Push (VAPID) — pendaftaran perangkat regu ke server.
+ * Web Push (VAPID) — pendaftaran perangkat regu di Android & iOS.
  *
  * ALUR:
  *   1. Minta izin notifikasi (harus dipicu klik user).
@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase/client';
 import { hasVapidKey, urlBase64ToUint8Array, vapidPublicKey } from './vapid';
+import { getPlatform } from '../session';
 
 function requireClient(): SupabaseClient {
   if (!supabase) {
@@ -44,11 +45,67 @@ export function notificationPermission(): NotificationPermission | 'unsupported'
   return Notification.permission;
 }
 
-async function getRegistration(): Promise<ServiceWorkerRegistration> {
-  const reg = await navigator.serviceWorker?.ready;
+/**
+ * Kode penyebab push tidak tersedia — dipakai modal setup untuk menampilkan
+ * panduan yang TEPAT sesuai platform (Android ≠ iOS).
+ */
+export type PushBlocker =
+  | 'insecure-context'   // bukan HTTPS / bukan localhost
+  | 'no-service-worker'  // browser tidak mendukung SW sama sekali
+  | 'no-push'            // ada SW tapi PushManager tidak ada (mis. WebView/EFW)
+  | 'no-notification'    // Notification API tidak ada (mis. Firefox Android lama)
+  | null;                // null = didukung
+
+/** Deteksi penyebab push tidak jalan di browser ini. */
+export function getPushBlocker(): PushBlocker {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return 'no-service-worker';
+  }
+  if (window.isSecureContext !== true) return 'insecure-context';
+  if (!('serviceWorker' in navigator)) return 'no-service-worker';
+  if (!('Notification' in window)) return 'no-notification';
+  if (!('PushManager' in window)) return 'no-push';
+  return null;
+}
+
+/** Pesan ramah-user untuk tiap penyebab, disesuaikan platform. */
+export function describePushBlocker(blocker: Exclude<PushBlocker, null>): string {
+  const p = getPlatform();
+  switch (blocker) {
+    case 'insecure-context':
+      return 'Notifikasi butuh koneksi HTTPS. Buka app lewat alamat https:// (atau localhost untuk uji coba).';
+    case 'no-service-worker':
+      return p === 'android'
+        ? 'Browser ini tidak mendukung service worker. Gunakan Chrome atau Samsung Internet terbaru.'
+        : 'Browser ini tidak mendukung service worker.';
+    case 'no-notification':
+    case 'no-push':
+      // Android WebView (browser dalam-app Facebook/WhatsApp/dll) tidak punya
+      // PushManager → ini penyebab paling umum "tombol notifikasi tidak jalan".
+      return p === 'android'
+        ? 'Browser/WebView ini tidak mendukung Web Push. Jangan buka SIPLAP dari link WhatsApp/Facebook — buka Chrome langsung, atau lebih baik pasang SIPLAP ke Home Screen (lihat tombol Pasang App).'
+        : 'Browser ini tidak mendukung Web Push. Gunakan Safari iOS 16.4+ dengan app terpasang ke Home Screen.';
+  }
+}
+
+/**
+ * Ambil SW registration, dengan retry singkat.
+ * `navigator.serviceWorker.ready` saja bisa menggantung selamanya bila SW
+ * gagal terpasang (mis. update error) — user hanya melihat tombol " diam".
+ */
+async function getRegistration(timeoutMs = 8000): Promise<ServiceWorkerRegistration> {
+  if (!('serviceWorker' in navigator)) {
+    throw new Error(describePushBlocker('no-service-worker'));
+  }
+  const ready: Promise<ServiceWorkerRegistration | undefined> =
+    navigator.serviceWorker.ready.catch(() => undefined);
+  const reg = await Promise.race([
+    ready,
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), timeoutMs)),
+  ]);
   if (!reg) {
     throw new Error(
-      'Service worker belum aktif. Muat ulang halaman, lalu aktifkan notifikasi lagi.',
+      'Service worker belum aktif. Tutup semua tab SIPLAP, buka lagi, tunggu beberapa detik, lalu coba sekali lagi.',
     );
   }
   return reg;
@@ -126,10 +183,22 @@ async function getOrCreateSubscription(
     return existing;
   }
   if (existing) await existing.unsubscribe().catch(() => undefined);
-  return reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: key,
-  });
+  try {
+    return await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: key,
+    });
+  } catch (err) {
+    // Chrome Android menolak subscribe meski izin "granted" bila notifikasi
+    // app dimatikan di level OS, atau di WebView tanpa dukungan FCM.
+    const p = getPlatform();
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      p === 'android'
+        ? `Browser menolak registrasi push (${detail}). Cek Pengaturan Android → Aplikasi → Chrome/SIPLAP → Notifikasi dalam keadaan aktif, lalu coba lagi.`
+        : `Browser menolak registrasi push (${detail}). Pastikan izin notifikasi diaktifkan lalu coba lagi.`,
+    );
+  }
 }
 
 /**
@@ -137,11 +206,11 @@ async function getOrCreateSubscription(
  * Lempar Error dengan pesan siap-tampil bila gagal.
  */
 export async function enablePush(reguId: string | undefined): Promise<void> {
-  if (!pushSupported()) {
-    throw new Error(
-      'Browser ini tidak mendukung Web Push. Gunakan Chrome/Edge (Android/desktop), atau iOS 16.4+ dengan app sudah dipasang ke home screen.',
-    );
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    throw new Error(describePushBlocker('no-notification'));
   }
+  const blocker = getPushBlocker();
+  if (blocker) throw new Error(describePushBlocker(blocker));
   if (!hasVapidKey()) {
     throw new Error(
       'VITE_VAPID_PUBLIC_KEY belum diisi di .env. Tambahkan kuncinya lalu muat ulang app.',
@@ -150,8 +219,11 @@ export async function enablePush(reguId: string | undefined): Promise<void> {
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
+    const p = getPlatform();
     throw new Error(
-      'Izin notifikasi ditolak. Aktifkan lewat pengaturan situs/browser, lalu coba lagi.',
+      p === 'android'
+        ? 'Izin notifikasi ditolak. Sentuh ikon 🔒 di address bar Chrome → Izin → Notifikasi → Izinkan, lalu coba lagi.'
+        : 'Izin notifikasi ditolak. Buka Pengaturan Safari/SIPLAP → Notifikasi → Izinkan, lalu coba lagi.',
     );
   }
 
@@ -169,7 +241,7 @@ export async function enablePush(reguId: string | undefined): Promise<void> {
 export async function syncPushSubscription(
   reguId: string | undefined,
 ): Promise<boolean> {
-  if (!pushSupported() || !hasVapidKey()) return false;
+  if (getPushBlocker() || !hasVapidKey()) return false;
   if (notificationPermission() !== 'granted') return false;
   try {
     const reg = await getRegistration();

@@ -8,8 +8,13 @@ import {
   requestBackgroundSync,
 } from "../../lib/offline-sync/syncManager";
 import { startLocalReminder } from "../../lib/push/localReminder";
-import { enablePush, syncPushSubscription } from "../../lib/push/subscribe";
-import { isIOS } from "../../lib/session";
+import {
+  syncPushSubscription,
+  notificationPermission,
+  pushSupported,
+} from "../../lib/push/subscribe";
+import { getPlatform, isStandaloneNow } from "../../lib/session";
+import PushSetupModal from "./PushSetupModal";
 import CaptureScreen from "./CaptureScreen";
 import QueueList from "./QueueList";
 import SatpolPPLogo from "../../components/SatpolPPLogo";
@@ -55,7 +60,7 @@ export default function ReguApp({ session, onLogout }: Props) {
   const [pushState, setPushState] = useState<"unknown" | "on" | "off">(
     "unknown",
   );
-  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
   const reminderRef = useRef<{ stop: () => void } | null>(null);
 
   useEffect(() => {
@@ -84,75 +89,47 @@ export default function ReguApp({ session, onLogout }: Props) {
     };
   }, [loadState]);
 
-  // Izin sudah granted sebelumnya? → segarkan subscription server + jalankan
-  // reminder lokal (cadangan)
-  useEffect(() => {
-    if (!("Notification" in window) || Notification.permission !== "granted") {
+  /**
+   * Segarkan status notifikasi + reminder lokal.
+   * Dipanggil saat mount, saat ganti regu, dan setiap app kembali terlihat
+   * (user mungkin baru saja mengizinkan notifikasi lewat Pengaturan Android /
+   * Safari lalu kembali ke app).
+   */
+  const refreshPushStatus = useCallback(() => {
+    if (!pushSupported() || notificationPermission() !== "granted") {
       setPushState("off");
       return;
     }
     setPushState("on");
+    reminderRef.current?.stop();
     reminderRef.current = startLocalReminder(session.reguId);
     // Pastikan endpoint device ini menunjuk ke regu yang sedang login — device
     // bisa dipakai bergantian, dan browser bisa merotasi kunci subscription.
     void syncPushSubscription(session.reguId);
-    return () => reminderRef.current?.stop();
   }, [session.reguId]);
 
-  // Minta izin + aktifkan notifikasi.
-  // Server push (VAPID) = jalur utama (jalan walau app ditutup);
-  // reminder lokal tetap dinyalakan sebagai lapis cadangan.
-  const handleEnablePush = async () => {
-    setPushMsg(null);
-    try {
-      if (!("Notification" in window)) {
-        throw new Error(
-          "Browser ini tidak mendukung notifikasi. Gunakan Chrome Android atau pasang SIPLAP ke Home Screen di iPhone.",
-        );
-      }
-      if (Notification.permission === "denied") {
-        throw new Error(
-          isIOS()
-            ? "Izin notifikasi pernah DITOLAK. Hapus SIPLAP dari Home Screen, pasang ulang, lalu pilih Izinkan."
-            : "Izin notifikasi diblokir di Android. Buka info aplikasi/browser → Izin → Notifikasi, izinkan SIPLAP, lalu muat ulang halaman.",
-        );
-      }
+  useEffect(() => {
+    refreshPushStatus();
+    // Bersihkan reminder saat regu berganti / unmount (bug lama: reminder
+    // ganda karena handle baru menimpa ref tanpa stop() handle lama).
+    return () => reminderRef.current?.stop();
+  }, [refreshPushStatus]);
 
-      // Daftarkan device ke server push supaya reminder tetap sampai saat app
-      // tertutup / HP di kantong.
-      await enablePush(session.reguId);
-      reminderRef.current?.stop();
-      reminderRef.current = startLocalReminder(session.reguId);
-      setPushState("on");
-      setPushMsg("✅ Notifikasi aktif — pengingat masuk walau app ditutup.");
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshPushStatus();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshPushStatus]);
 
-      // Notifikasi tes langsung supaya user yakin jalan
-      try {
-        const reg = await navigator.serviceWorker?.ready;
-        if (reg) {
-          await reg.showNotification("SIPLAP aktif ✅", {
-            body: "Pengingat siklus akan masuk otomatis di 15 menit terakhir.",
-            icon: "/icons/icon-192.png",
-          });
-        } else {
-          new Notification("SIPLAP aktif ✅", {
-            body: "Pengingat siklus akan masuk otomatis di 15 menit terakhir.",
-            icon: "/icons/icon-192.png",
-          });
-        }
-      } catch {
-        /* server push sudah terdaftar; notifikasi tes tidak memblokir aktivasi */
-      }
-      setTimeout(() => setPushMsg(null), 6000);
-    } catch (err) {
-      setPushState(Notification.permission === "granted" ? "on" : "off");
-      setPushMsg(
-        err instanceof Error ? err.message : "Gagal mengaktifkan notifikasi",
-      );
-      setTimeout(() => setPushMsg(null), 20000);
-      return;
-    }
-  };
+  // Aktivasi notifikasi kini lewat modal interaktif (diagnosa + izin +
+  // panduan per-platform). Handler lama diganti onPushEnabled di bawah.
+  const onPushEnabled = useCallback(() => {
+    setPushState("on");
+    reminderRef.current?.stop();
+    reminderRef.current = startLocalReminder(session.reguId);
+  }, [session.reguId]);
 
   const handleCaptureDone = useCallback(
     async (
@@ -192,6 +169,9 @@ export default function ReguApp({ session, onLogout }: Props) {
     },
     [session.reguId, cycle.siklusKe, loadState],
   );
+
+  const platform = getPlatform();
+  const standalone = isStandaloneNow();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -251,18 +231,33 @@ export default function ReguApp({ session, onLogout }: Props) {
                 ditutup)
               </span>
               <button
-                onClick={() => void handleEnablePush()}
-                className="btn-primary px-3 py-1.5 text-xs"
+                onClick={() => setSetupOpen(true)}
+                className="btn-primary shrink-0 px-3 py-1.5 text-xs"
               >
                 Aktifkan
               </button>
             </div>
-            {pushMsg && (
-              <p className="mt-2 text-[11px] text-slate-400">{pushMsg}</p>
-            )}
+            {/* Petunjuk singkat sesuai platform — tidak lagi menebak iOS di Android */}
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+              {platform === "android"
+                ? standalone
+                  ? "Android · app terpasang — tinggal izinkan notifikasi."
+                  : "Android · Chrome / Samsung Internet direkomendasikan. Buka dari link chat (WebView) tidak mendukung push."
+                : platform === "ios"
+                  ? "iPhone · wajib dipasang ke Home Screen (Share → Add to Home Screen)."
+                  : "Desktop · izinkan notifikasi di address bar."}
+            </p>
           </div>
         </div>
       )}
+
+      {/* Modal setup interaktif: diagnosa, izin, pasang app, troubleshooting */}
+      <PushSetupModal
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        reguId={session.reguId}
+        onEnabled={onPushEnabled}
+      />
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 border-t border-navy-700/70 bg-navy-950/95 shadow-[0_-12px_32px_rgba(2,12,25,0.35)] backdrop-blur-xl">
         <button

@@ -61,7 +61,7 @@ self.addEventListener('push', (event) => {
   } catch {
     data = {};
   }
-  const opts: NotificationOptions & { vibrate?: number[] } = {
+  const opts: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
     body: data.body ?? 'Segera kirim laporan siklus Anda.',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
@@ -69,6 +69,9 @@ self.addEventListener('push', (event) => {
     // Tag sama dengan reminder lokal (localReminder.ts) → keduanya saling
     // MENGGANTIKAN, bukan menumpuk jadi dua notifikasi untuk hal yang sama.
     tag: data.tag ?? 'siplap-reminder',
+    // Android mengganti notifikasi bertag sama secara DIAM; renotify membuat
+    // pengingat berulang tetap berbunyi & bergetar.
+    renotify: true,
     data: { url: data.url ?? '/' },
   };
   pushEvent.waitUntil(

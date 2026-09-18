@@ -34,8 +34,11 @@ async function showLocalNotification(title: string, body: string): Promise<void>
         badge: '/icons/icon-192.png',
         vibrate: [200, 100, 200],
         tag: 'siplap-reminder', // dedupe: 1 notifikasi per waktu
+        // Android mengganti notifikasi bertag sama secara diam — renotify
+        // membuat pengingat berulang tetap berbunyi & bergetar.
+        renotify: true,
         data: { url: '/' },
-      } as NotificationOptions & { vibrate?: number[] });
+      } as NotificationOptions & { vibrate?: number[]; renotify?: boolean });
       return;
     }
   } catch {
