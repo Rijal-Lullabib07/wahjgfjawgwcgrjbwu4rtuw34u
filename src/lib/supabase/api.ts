@@ -36,7 +36,17 @@ function describeSupabaseError(error: unknown, fallback: string): Error {
     ].filter((part): part is string => Boolean(part));
     if (parts.length > 0) return new Error(parts.join(" · "));
   }
+
   return new Error(fallback);
+}
+
+function describeAuthError(error: { message?: string; status?: number }): Error {
+  if (error.status === 400) {
+    return new Error(
+      "Login ditolak. Periksa kode/username dan password. Password akun lama tidak berubah saat provisioning ulang.",
+    );
+  }
+  return new Error(error.message || "Login gagal. Coba lagi.");
 }
 
 // ---------- Auth ----------
@@ -53,7 +63,7 @@ export async function loginRegu(
     email,
     password: pin,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw describeAuthError(error);
 
   const { data: regu, error: reguErr } = await client
     .from("regu")
@@ -85,7 +95,7 @@ export async function loginAdmin(
         ? normalized
         : `${normalized}@monitor.siplap.id`;
   const { error } = await client.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
+  if (error) throw describeAuthError(error);
 
   const { data: admin, error: adminErr } = await client
     .from("admin_users")
