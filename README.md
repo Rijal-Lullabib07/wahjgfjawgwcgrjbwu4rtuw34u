@@ -206,3 +206,4 @@ supabase/functions             → Edge Functions (reminder-push, archive-photos
 - `service_role key` hanya di Edge Functions / pg_cron (server-side), tidak pernah di frontend.
 - Kamera hanya live capture; tidak ada jalur upload galeri.
 - Password regu tersimpan ter-hash (bcrypt) di Supabase Auth.
+# pelaporan-
