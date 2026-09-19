@@ -106,11 +106,24 @@ function VideoPreview({
   );
 }
 
-function StatusBadge({ count }: { count: number }) {
+function StatusBadge({
+  count,
+  videoCount,
+}: {
+  count: number;
+  videoCount: number;
+}) {
   if (count >= FOTOS_PER_SIKLUS) {
     return (
       <span className="badge bg-emerald-500/15 text-emerald-300">
         ✅ Lengkap
+      </span>
+    );
+  }
+  if (videoCount > 0) {
+    return (
+      <span className="badge bg-sky-500/15 text-sky-300">
+        🎥 Video terkirim
       </span>
     );
   }
@@ -173,16 +186,17 @@ export default function MonitoringScreen() {
   const statusPerRegu = useMemo(() => {
     const map = new Map<
       string,
-      { regu: Regu; count: number; lastAt: string | null }
+      { regu: Regu; count: number; videoCount: number; lastAt: string | null }
     >();
     for (const r of reguList) {
-      map.set(r.id, { regu: r, count: 0, lastAt: null });
+      map.set(r.id, { regu: r, count: 0, videoCount: 0, lastAt: null });
     }
     for (const l of laporanList) {
       const entry = map.get(l.regu_id);
       if (!entry) continue;
       if (l.siklus_ke === cycle.siklusKe) {
-        entry.count += l.fotos?.length ?? 2;
+        entry.count += l.fotos?.length ?? 0;
+        entry.videoCount += l.videos?.length ?? 0;
         const t = l.timestamp_kirim;
         if (!entry.lastAt || t > entry.lastAt) entry.lastAt = t;
       }
@@ -313,7 +327,7 @@ export default function MonitoringScreen() {
           </span>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {statusPerRegu.map(({ regu, count, lastAt }) => (
+          {statusPerRegu.map(({ regu, count, videoCount, lastAt }) => (
             <button
               key={regu.id}
               onClick={() =>
@@ -334,7 +348,7 @@ export default function MonitoringScreen() {
                     : "Belum ada laporan"}
                 </div>
               </div>
-              <StatusBadge count={count} />
+              <StatusBadge count={count} videoCount={videoCount} />
             </button>
           ))}
           {statusPerRegu.length === 0 && (
@@ -362,7 +376,10 @@ export default function MonitoringScreen() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <StatusBadge count={selected.count} />
+              <StatusBadge
+                count={selected.count}
+                videoCount={selected.videoCount}
+              />
               <button
                 onClick={() => setReguFilter("semua")}
                 className="rounded-lg px-2.5 py-1 text-xs text-slate-400 hover:text-white"

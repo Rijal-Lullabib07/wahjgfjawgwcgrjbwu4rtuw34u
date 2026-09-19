@@ -51,8 +51,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       injectRegister: "script-defer",
       manifest: {
-        name: "SIPLAP — Pelaporan Giat Polres",
-        short_name: "SIPLAP",
+        name: "SALAM PRESISI — Pelaporan Giat Polres",
+        short_name: "SALAM PRESISI",
         description: "Sistem Informasi Pelaporan Giat Lapangan Polres",
         lang: "id",
         theme_color: "#0f3d6e",
@@ -61,10 +61,19 @@ export default defineConfig({
         orientation: "portrait",
         start_url: "/",
         icons: [
-          { src: "/jawara-logo.png", sizes: "3038x1442", type: "image/png" },
           {
-            src: "/jawara-logo.png",
-            sizes: "3038x1442",
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/icons/icon-180.png",
+            sizes: "180x180",
+            type: "image/png",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
           },

@@ -172,20 +172,24 @@ browser, atau repository:
 ```powershell
 $env:SUPABASE_SERVICE_ROLE_KEY = "<SERVICE_ROLE_KEY>"
 $env:VITE_SUPABASE_URL = "https://<PROJECT_REF>.supabase.co"
+$env:JAWARA_MONITOR_PASSWORD = "<PASSWORD_PEMANTAU>"
+$env:JAWARA_REPORTER_PASSWORD = "<PASSWORD_PELAPOR>"
 npm run provision:jawara
 ```
 
-Script membuat password acak kuat yang berbeda untuk setiap akun baru dan menyimpan hasilnya hanya di
-`jawara-credentials-latest.csv` serta `pw.md`, yang sudah masuk `.gitignore`. Akun yang sudah
-ada tidak di-reset passwordnya saat script dijalankan ulang. Setelah kredensial
-dibagikan melalui kanal aman, hapus kedua file tersebut.
+Password provisioning wajib diberikan melalui environment lokal dan tidak boleh
+ditulis ke source code. Password tersebut hanya digunakan untuk akun baru;
+akun yang sudah ada tidak di-reset saat script dijalankan ulang. Hasil kredensial
+akun baru disimpan hanya di `jawara-credentials-latest.csv` serta `pw.md`, yang
+sudah masuk `.gitignore`. Setelah kredensial dibagikan melalui kanal aman, hapus
+kedua file tersebut.
 
 ## Akun
 
 | Role     | Kredensial                                           | Keterangan                         |
 | -------- | ---------------------------------------------------- | ---------------------------------- |
-| Pelapor  | Username JAWARA dari `jawara-credentials-latest.csv` | Password acak, wajib disimpan aman |
-| Pemantau | Username JAWARA dari `jawara-credentials-latest.csv` | Password acak, wajib disimpan aman |
+| Pelapor  | Username JAWARA dari `jawara-credentials-latest.csv` | Password provisioning pelapor, wajib disimpan aman |
+| Pemantau | Username JAWARA dari `jawara-credentials-latest.csv` | Password provisioning pemantau, wajib disimpan aman |
 
 ## Struktur
 

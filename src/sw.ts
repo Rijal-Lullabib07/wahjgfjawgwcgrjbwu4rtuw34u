@@ -63,8 +63,8 @@ self.addEventListener('push', (event) => {
   }
   const opts: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
     body: data.body ?? 'Segera kirim laporan siklus Anda.',
-    icon: '/jawara-logo.png',
-    badge: '/jawara-logo.png',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
     // Tag sama dengan reminder lokal (localReminder.ts) → keduanya saling
     // MENGGANTIKAN, bukan menumpuk jadi dua notifikasi untuk hal yang sama.

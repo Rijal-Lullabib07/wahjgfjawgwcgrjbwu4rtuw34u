@@ -41,6 +41,7 @@ export default function ReportScreen() {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState<string>("all"); // 'all' = gabungan
+  const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,14 +62,41 @@ export default function ReportScreen() {
       }),
   });
 
-  const totalFoto = laporan.reduce((a, l) => a + (l.fotos?.length ?? 0), 0);
+  const filteredLaporan = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("id-ID");
+    if (!query) return laporan;
+
+    return laporan.filter((l) => {
+      const searchable = [
+        l.regu ? reguDisplayName(l.regu) : l.regu_id,
+        l.catatan,
+        l.siklus_ke,
+        l.latitude,
+        l.longitude,
+        l.status_sync,
+        formatWaktu(l.timestamp_kirim),
+      ]
+        .filter((value) => value !== null && value !== undefined)
+        .join(" ")
+        .toLocaleLowerCase("id-ID");
+      return searchable.includes(query);
+    });
+  }, [laporan, search]);
+
+  const totalFoto = filteredLaporan.reduce(
+    (a, l) => a + (l.fotos?.length ?? 0),
+    0,
+  );
 
   const handleExport = async (kind: "pdf" | "excel") => {
     setBusy(true);
     setError(null);
     try {
-      if (kind === "pdf") await exportPdf(laporan, { range, reguList, reguId });
-      else await exportExcel(laporan, { range, reguList, reguId });
+      if (kind === "pdf") {
+        await exportPdf(filteredLaporan, { range, reguList, reguId });
+      } else {
+        await exportExcel(filteredLaporan, { range, reguList, reguId });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal membuat laporan");
     } finally {
@@ -160,13 +188,42 @@ export default function ReportScreen() {
             ))}
           </select>
         </div>
+
+        <div>
+          <label
+            htmlFor="report-search"
+            className="mb-2 block text-sm font-medium text-slate-300"
+          >
+            Cari laporan
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="report-search"
+              type="search"
+              className="input"
+              placeholder="Cari pelapor, keterangan, siklus, waktu, koordinat, atau status..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                type="button"
+                className="rounded-lg bg-navy-900 px-3 text-sm text-slate-300 hover:text-white"
+                onClick={() => setSearch("")}
+                aria-label="Hapus pencarian"
+              >
+                Hapus
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Ringkasan hasil */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="card">
           <div className="text-xs text-slate-400">Total laporan</div>
-          <div className="text-xl font-bold">{laporan.length}</div>
+          <div className="text-xl font-bold">{filteredLaporan.length}</div>
         </div>
         <div className="card">
           <div className="text-xs text-slate-400">Total foto</div>
@@ -203,14 +260,26 @@ export default function ReportScreen() {
           📊 Export Excel
         </button>
       </div>
+      {search.trim() && (
+        <p className="text-sm text-slate-400">
+          Menampilkan {filteredLaporan.length} dari {laporan.length} laporan
+          sesuai pencarian. Hasil export mengikuti pencarian ini.
+        </p>
+      )}
 
       {/* Pratinjau tabel (dipaginasi sederhana) */}
-      <PreviewTable laporan={laporan} />
+      <PreviewTable laporan={filteredLaporan} hasSearch={Boolean(search.trim())} />
     </div>
   );
 }
 
-function PreviewTable({ laporan }: { laporan: Laporan[] }) {
+function PreviewTable({
+  laporan,
+  hasSearch,
+}: {
+  laporan: Laporan[];
+  hasSearch: boolean;
+}) {
   const [page, setPage] = useState(0);
   const pageSize = 20;
   const pages = Math.max(1, Math.ceil(laporan.length / pageSize));
@@ -219,7 +288,9 @@ function PreviewTable({ laporan }: { laporan: Laporan[] }) {
   if (laporan.length === 0) {
     return (
       <div className="card text-sm text-slate-400">
-        Tidak ada laporan pada rentang & kategori ini.
+        {hasSearch
+          ? "Tidak ada laporan yang cocok dengan pencarian."
+          : "Tidak ada laporan pada rentang & kategori ini."}
       </div>
     );
   }
@@ -234,6 +305,7 @@ function PreviewTable({ laporan }: { laporan: Laporan[] }) {
             <th className="px-4 py-3">Siklus</th>
             <th className="px-4 py-3">Koordinat</th>
             <th className="px-4 py-3">Foto</th>
+            <th className="px-4 py-3">Video</th>
             <th className="px-4 py-3">Status</th>
           </tr>
         </thead>
@@ -256,6 +328,7 @@ function PreviewTable({ laporan }: { laporan: Laporan[] }) {
                 {formatKoordinat(l.latitude, l.longitude)}
               </td>
               <td className="px-4 py-2.5">{l.fotos?.length ?? 0}</td>
+              <td className="px-4 py-2.5">{l.videos?.length ?? 0}</td>
               <td className="px-4 py-2.5">
                 <span
                   className={

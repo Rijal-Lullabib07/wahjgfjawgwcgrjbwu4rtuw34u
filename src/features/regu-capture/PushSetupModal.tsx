@@ -28,8 +28,8 @@ async function showTestNotification(): Promise<void> {
     if (reg) {
       await reg.showNotification(TEST_TITLE, {
         body: TEST_BODY,
-        icon: '/jawara-logo.png',
-        badge: '/jawara-logo.png',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
         tag: 'siplap-test',
       });
       return;
@@ -37,7 +37,7 @@ async function showTestNotification(): Promise<void> {
   } catch {
     /* fallback di bawah */
   }
-  new Notification(TEST_TITLE, { body: TEST_BODY, icon: '/jawara-logo.png' });
+  new Notification(TEST_TITLE, { body: TEST_BODY, icon: '/icons/icon-192.png' });
 }
 
 /**

@@ -1,6 +1,6 @@
-// Generate PWA icons tanpa dependency eksternal (PNG writer + rasterizer sederhana).
-// Output: public/icons/icon-192.png, icon-512.png, favicon.svg
-// Desain: logo perisai Polres dengan bintang, garis pangkat, dan gerbang.
+// Ikon instalasi dibuat dari aset JAWARA transparan dan disimpan di public/icons.
+// Skrip ini tidak menimpa PNG karena aset tersebut sudah diproses dengan safe area
+// untuk ikon iOS/Android.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -231,7 +231,4 @@ const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 116
   <path d="M42 83 H47 V95 H42 Z M53 83 H58 V95 H53 Z" fill="#08213c"/>
 </svg>`;
 
-writeFileSync(join(outDir, "icon-192.png"), encodePng(192));
-writeFileSync(join(outDir, "icon-512.png"), encodePng(512));
-writeFileSync(join(outDir, "favicon.svg"), faviconSvg.trim() + "\n");
-console.log("Ikon PWA (logo Polres) dibuat di public/icons");
+console.log("Ikon PWA JAWARA tersedia di public/icons");

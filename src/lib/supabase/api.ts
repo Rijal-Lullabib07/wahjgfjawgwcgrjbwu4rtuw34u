@@ -228,7 +228,11 @@ export async function submitLaporan(
   }
   for (let i = 0; i < (q.videos ?? []).length; i++) {
     const video = q.videos[i];
-    const path = await uploadVideo(q.reguId, laporan.id, videoBlobs[i]);
+    const videoBlob = videoBlobs[i];
+    if (!videoBlob || videoBlob.size === 0) {
+      throw new Error("Data video tidak tersedia untuk dikirim.");
+    }
+    const path = await uploadVideo(q.reguId, laporan.id, videoBlob);
     const { error: videoErr } = await client.from("laporan_video").insert({
       laporan_id: laporan.id,
       storage_path: path,
@@ -292,6 +296,11 @@ export function subscribeLaporan(cb: () => void): () => void {
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "laporan_foto" },
+      () => cb(),
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "laporan_video" },
       () => cb(),
     )
     .subscribe();
