@@ -1,183 +1,200 @@
 -- =============================================================
--- SIPLAP — Migration 0002: Seed akun auth 15 regu + 1 admin
--- Jalankan di Supabase SQL Editor SETELAH 0001_init.sql sukses.
--- Idempoten: aman dijalankan ulang.
+-- JAWARA: master username seed for Polres Purwakarta
+-- Jalankan setelah 0001_init.sql.
 --
--- Login regu di aplikasi: Kode Regu = REGU01..REGU15, PIN = password di bawah.
--- Login admin: email + password di bawah.
---
--- ⚠️ GANTI PIN/password default sebelum dipakai produksi!
+-- File ini TIDAK membuat password atau auth.users.
+-- Jalankan npm run provision:jawara setelah seluruh migration selesai
+-- untuk membuat akun Auth dengan password acak kuat.
 -- =============================================================
 
--- 1) Data master regu --------------------------------------------
+-- Metadata akses dibuat di sini agar seed dapat dijalankan sebelum 0006.
+alter table public.regu
+  add column if not exists access_level text not null default 'pelapor-level-1',
+  add column if not exists unit_key text,
+  add column if not exists wilayah_key text;
 
-insert into public.regu (nama_regu, kode_login, status_aktif) values
-  ('Regu 1',  'REGU01', true),
-  ('Regu 2',  'REGU02', true),
-  ('Regu 3',  'REGU03', true),
-  ('Regu 4',  'REGU04', true),
-  ('Regu 5',  'REGU05', true),
-  ('Regu 6',  'REGU06', true),
-  ('Regu 7',  'REGU07', true),
-  ('Regu 8',  'REGU08', true),
-  ('Regu 9',  'REGU09', true),
-  ('Regu 10', 'REGU10', true),
-  ('Regu 11', 'REGU11', true),
-  ('Regu 12', 'REGU12', true),
-  ('Regu 13', 'REGU13', true),
-  ('Regu 14', 'REGU14', true),
-  ('Regu 15', 'REGU15', true)
-on conflict (kode_login) do update
-  set nama_regu = excluded.nama_regu,
-      status_aktif = true;
+alter table public.admin_users
+  add column if not exists username text,
+  add column if not exists access_level text not null default 'all',
+  add column if not exists scope_key text;
 
--- 2) User auth untuk tiap regu -----------------------------------
--- Email sintetis: kode_login@regu.siplap.id (dipakai RLS current_regu_id()).
--- Password/PIN awal: siplap2026 — WAJIB diganti.
---
--- Catatan: kita TIDAK memakai ON CONFLICT (email) karena unique constraint
--- kolom email di auth.users berbeda antar versi (error 42P10).
--- Pendekatan: cek dulu, lalu insert ATAU update.
+create unique index if not exists admin_users_username_key
+  on public.admin_users (lower(username))
+  where username is not null;
 
+-- Akun pelapor tingkat Polres: 342 akun.
 do $$
 declare
-  r record;
-  v_password text := 'siplap2026'; -- ⚠️ GANTI
-  v_crypt text;
-  v_email text;
-  v_id uuid;
+  item record;
+  nomor integer;
 begin
-  for r in
-    select kode_login from public.regu where kode_login like 'REGU%' order by kode_login
+  for item in
+    select * from (values
+      ('Satintelkam', 'intelkam', 30),
+      ('Satreskrim', 'reskrim', 73),
+      ('Satresnarkoba', 'narkoba', 35),
+      ('Satbinmas', 'binmas', 9),
+      ('Satsamapta', 'samapta', 44),
+      ('Pam Obvit Samapta', 'pamobvit', 24),
+      ('Satlantas', 'lantas', 96),
+      ('Satpolairud', 'polair', 7),
+      ('Sattahti', 'tahti', 10),
+      ('SPKT', 'spkt', 14)
+    ) as units(nama, unit_key, jumlah)
   loop
-    v_email := lower(r.kode_login) || '@regu.siplap.id';
-    v_crypt := crypt(v_password, gen_salt('bf'));
-
-    -- Cari user yang sudah ada
-    select id into v_id from auth.users where lower(email) = v_email limit 1;
-
-    if v_id is null then
-      insert into auth.users (
-        instance_id, id, aud, role, email, encrypted_password,
-        email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-        created_at, updated_at,
-        confirmation_token, recovery_token,
-        email_change_token_new, email_change
-      ) values (
-        '00000000-0000-0000-0000-000000000000',
-        gen_random_uuid(),
-        'authenticated',
-        'authenticated',
-        v_email,
-        v_crypt,
-        now(),
-        '{"provider":"email","providers":["email"]}'::jsonb,
-        jsonb_build_object('kode_regu', r.kode_login),
-        now(), now(), '', '', '', ''
+    for nomor in 1..item.jumlah loop
+      insert into public.regu (nama_regu, kode_login, status_aktif, access_level, unit_key, wilayah_key)
+      values (
+        item.nama || ' Pelapor ' || lpad(nomor::text, 2, '0'),
+        item.unit_key || '.pelapor' || lpad(nomor::text, 2, '0'),
+        true, 'pelapor-level-2', item.unit_key, null
       )
-      returning id into v_id;
-    else
-      update auth.users
-        set encrypted_password = v_crypt,
-            email_confirmed_at = coalesce(email_confirmed_at, now()),
-            updated_at = now()
-        where id = v_id;
-    end if;
-
-    -- Identity row (dibutuhkan GoTrue versi baru untuk login email+password)
-    if not exists (
-      select 1 from auth.identities
-      where provider = 'email' and user_id = v_id
-    ) then
-      insert into auth.identities (
-        provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-      ) values (
-        v_email, -- provider_id untuk provider 'email' = email user
-        v_id,
-        jsonb_build_object('sub', v_id::text, 'email', v_email, 'email_verified', true),
-        'email',
-        now(), now(), now()
-      );
-    end if;
+      on conflict (kode_login) do update set
+        nama_regu = excluded.nama_regu,
+        status_aktif = true,
+        access_level = excluded.access_level,
+        unit_key = excluded.unit_key,
+        wilayah_key = excluded.wilayah_key;
+    end loop;
   end loop;
 end $$;
 
--- 3) User auth admin ---------------------------------------------
-
+-- Akun pelapor tingkat Polsek: 289 akun.
 do $$
 declare
-  v_password text := 'admin2026'; -- ⚠️ GANTI
-  v_crypt text;
-  v_email text := 'admin@satpolpp.go.id';
-  v_id uuid;
+  item record;
+  nomor integer;
 begin
-  v_crypt := crypt(v_password, gen_salt('bf'));
-
-  select id into v_id from auth.users where lower(email) = v_email limit 1;
-
-  if v_id is null then
-    insert into auth.users (
-      instance_id, id, aud, role, email, encrypted_password,
-      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at,
-      confirmation_token, recovery_token,
-      email_change_token_new, email_change
-    ) values (
-      '00000000-0000-0000-0000-000000000000',
-      gen_random_uuid(),
-      'authenticated',
-      'authenticated',
-      v_email,
-      v_crypt,
-      now(),
-      '{"provider":"email","providers":["email"]}'::jsonb,
-      '{"role":"admin"}'::jsonb,
-      now(), now(), '', '', '', ''
-    )
-    returning id into v_id;
-  else
-    update auth.users
-      set encrypted_password = v_crypt,
-          email_confirmed_at = coalesce(email_confirmed_at, now()),
-          updated_at = now()
-      where id = v_id;
-  end if;
-
-  if not exists (
-    select 1 from auth.identities
-    where provider = 'email' and user_id = v_id
-  ) then
-    insert into auth.identities (
-      provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-    ) values (
-      v_email, -- provider_id untuk provider 'email' = email user
-      v_id,
-      jsonb_build_object('sub', v_id::text, 'email', v_email, 'email_verified', true),
-      'email',
-      now(), now(), now()
-    );
-  end if;
-
-  -- Tabel admin_users agar RLS is_admin() mengenalinya
-  insert into public.admin_users (nama, email, role)
-  values ('Administrator SIPLAP', v_email, 'admin')
-  on conflict (email) do nothing;
+  for item in
+    select * from (values
+      ('Purwakarta Kota', 'kota', 35),
+      ('Plered', 'plered', 25),
+      ('Jatiluhur', 'jatiluhur', 27),
+      ('Bungursari', 'bungursari', 27),
+      ('Campaka', 'campaka', 22),
+      ('Cibatu', 'cibatu', 23),
+      ('Pasawahan', 'pasawahan', 24),
+      ('Darangdan', 'darangdan', 16),
+      ('Wanayasa', 'wanayasa', 18),
+      ('Maniis', 'maniis', 14),
+      ('Sukatani', 'sukatani', 16),
+      ('Sukasari', 'sukasari', 16),
+      ('Kiarapedes', 'kiarapedes', 12),
+      ('Bojong', 'bojong', 14)
+    ) as units(nama, wilayah_key, jumlah)
+  loop
+    for nomor in 1..item.jumlah loop
+      insert into public.regu (nama_regu, kode_login, status_aktif, access_level, unit_key, wilayah_key)
+      values (
+        'Polsek ' || item.nama || ' Pelapor ' || lpad(nomor::text, 2, '0'),
+        item.wilayah_key || '.pelapor' || lpad(nomor::text, 2, '0'),
+        true, 'pelapor-level-1', null, item.wilayah_key
+      )
+      on conflict (kode_login) do update set
+        nama_regu = excluded.nama_regu,
+        status_aktif = true,
+        access_level = excluded.access_level,
+        unit_key = excluded.unit_key,
+        wilayah_key = excluded.wilayah_key;
+    end loop;
+  end loop;
 end $$;
 
--- 4) Sanity check -------------------------------------------------
+-- Pemantau all-access: Kapolres, Wakapolres, dan Admin Utama.
+insert into public.admin_users (nama, email, username, role, access_level, scope_key)
+values
+  ('Kapolres', 'polres.kapolres@monitor.siplap.id', 'polres.kapolres', 'admin', 'all', null),
+  ('Wakapolres', 'polres.wakapolres@monitor.siplap.id', 'polres.wakapolres', 'admin', 'all', null),
+  ('Admin Utama', 'admin@polres.go.id', 'polres.admin', 'admin', 'all', null)
+on conflict (email) do update set
+  nama = excluded.nama,
+  username = excluded.username,
+  role = excluded.role,
+  access_level = excluded.access_level,
+  scope_key = excluded.scope_key;
 
+-- Pemantau sesuai fungsi: 10 akun.
 do $$
 declare
-  n_regu int;
-  n_auth int;
+  item record;
 begin
-  select count(*) into n_regu from public.regu;
-  select count(*) into n_auth from auth.users where email like '%@regu.siplap.id';
-  if n_regu < 15 then
-    raise warning 'Perhatian: hanya % regu di tabel regu (harusnya 15)', n_regu;
+  for item in
+    select * from (values
+      ('KASAT INTEL', 'intelkam'),
+      ('KASAT RESKRIM', 'reskrim'),
+      ('KASATRESNARKOBA', 'narkoba'),
+      ('KASAT BINMAS', 'binmas'),
+      ('KASAT SAMAPTA', 'samapta'),
+      ('PAMOBVIT SAMAPTA', 'pamobvit'),
+      ('KASAT LANTAS', 'lantas'),
+      ('KASAT POLAIR', 'polair'),
+      ('KASAT TAHTI', 'tahti'),
+      ('SPKT', 'spkt')
+    ) as units(nama, unit_key)
+  loop
+    insert into public.admin_users (nama, email, username, role, access_level, scope_key)
+    values (
+      item.nama,
+      item.unit_key || '.kasat@monitor.siplap.id',
+      item.unit_key || '.kasat',
+      'pimpinan', 'fungsi', item.unit_key
+    )
+    on conflict (email) do update set
+      nama = excluded.nama,
+      username = excluded.username,
+      role = excluded.role,
+      access_level = excluded.access_level,
+      scope_key = excluded.scope_key;
+  end loop;
+end $$;
+
+-- Pemantau sesuai wilayah: 14 Kapolsek.
+do $$
+declare
+  item record;
+begin
+  for item in
+    select * from (values
+      ('Purwakarta Kota', 'kota'), ('Plered', 'plered'),
+      ('Jatiluhur', 'jatiluhur'), ('Bungursari', 'bungursari'),
+      ('Campaka', 'campaka'), ('Cibatu', 'cibatu'),
+      ('Pasawahan', 'pasawahan'), ('Darangdan', 'darangdan'),
+      ('Wanayasa', 'wanayasa'), ('Maniis', 'maniis'),
+      ('Sukatani', 'sukatani'), ('Sukasari', 'sukasari'),
+      ('Kiarapedes', 'kiarapedes'), ('Bojong', 'bojong')
+    ) as units(nama, wilayah_key)
+  loop
+    insert into public.admin_users (nama, email, username, role, access_level, scope_key)
+    values (
+      'KAPOLSEK ' || upper(item.nama),
+      item.wilayah_key || '.kapolsek@monitor.siplap.id',
+      item.wilayah_key || '.kapolsek',
+      'pimpinan', 'wilayah', item.wilayah_key
+    )
+    on conflict (email) do update set
+      nama = excluded.nama,
+      username = excluded.username,
+      role = excluded.role,
+      access_level = excluded.access_level,
+      scope_key = excluded.scope_key;
+  end loop;
+end $$;
+
+-- Sanity check: 631 pelapor dan 27 pemantau/admin.
+do $$
+declare
+  n_pelapor integer;
+  n_pemantau integer;
+begin
+  select count(*) into n_pelapor from public.regu
+    where kode_login like '%.pelapor%';
+  select count(*) into n_pemantau from public.admin_users
+    where username is not null;
+  if n_pelapor < 631 then
+    raise exception 'Seed JAWARA gagal: hanya % akun pelapor', n_pelapor;
   end if;
-  if n_auth < 15 then
-    raise warning 'Perhatian: hanya % user auth regu (harusnya 15)', n_auth;
+  if n_pemantau < 27 then
+    raise exception 'Seed JAWARA gagal: hanya % akun pemantau/admin', n_pemantau;
   end if;
-  raise notice 'Seed selesai: % regu, % user auth regu.', n_regu, n_auth;
+  raise notice 'Seed JAWARA selesai: % pelapor, % pemantau/admin.', n_pelapor, n_pemantau;
 end $$;

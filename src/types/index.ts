@@ -1,11 +1,13 @@
 // Tipe data sesuai skema DB (supabase/migrations/0001_init.sql)
-export type Role = 'admin' | 'pimpinan' | 'regu';
+export type Role = "admin" | "pimpinan" | "regu";
 
 export interface Regu {
   id: string;
   nama_regu: string;
   kode_login: string;
   status_aktif: boolean;
+  unit_key?: string | null;
+  wilayah_key?: string | null;
   created_at?: string;
 }
 
@@ -13,11 +15,11 @@ export interface AdminUser {
   id: string;
   nama: string;
   email: string;
-  role: 'admin' | 'pimpinan';
+  role: "admin" | "pimpinan";
   created_at?: string;
 }
 
-export type SyncStatus = 'pending' | 'synced' | 'failed';
+export type SyncStatus = "pending" | "synced" | "failed";
 
 export interface Laporan {
   id: string;
@@ -32,6 +34,7 @@ export interface Laporan {
   // join
   regu?: Regu;
   fotos?: LaporanFoto[];
+  videos?: LaporanVideo[];
 }
 
 export interface LaporanFoto {
@@ -41,7 +44,18 @@ export interface LaporanFoto {
   watermark_lat: number | null;
   watermark_lng: number | null;
   watermark_timestamp: string;
-  urutan_foto: 1 | 2;
+  urutan_foto: 1 | 2 | 3 | 4;
+  created_at?: string;
+}
+
+export interface LaporanVideo {
+  id: string;
+  laporan_id: string;
+  storage_path: string;
+  watermark_lat: number | null;
+  watermark_lng: number | null;
+  watermark_timestamp: string;
+  duration_seconds: number | null;
   created_at?: string;
 }
 
@@ -66,18 +80,25 @@ export interface QueuedLaporan {
   catatan?: string;
   fotos: Array<{
     blobKey: string; // kunci blob di object store fotos
-    urutan: 1 | 2;
+    urutan: 1 | 2 | 3 | 4;
     watermarkLat: number | null;
     watermarkLng: number | null;
     watermarkTimestamp: string;
   }>;
-  status: 'pending' | 'syncing' | 'failed';
+  videos: Array<{
+    blobKey: string;
+    watermarkLat: number | null;
+    watermarkLng: number | null;
+    watermarkTimestamp: string;
+    durationSeconds: number | null;
+  }>;
+  status: "pending" | "syncing" | "failed";
   attempts: number;
   lastError?: string;
 }
 
 export interface SessionUser {
-  role: 'admin' | 'pimpinan' | 'regu';
+  role: "admin" | "pimpinan" | "regu";
   nama: string;
   // untuk regu
   reguId?: string;

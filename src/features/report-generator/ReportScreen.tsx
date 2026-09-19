@@ -1,30 +1,36 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { Laporan } from '../../types';
-import { fetchLaporan, fetchReguList } from '../../lib/supabase/api';
-import { formatKoordinat, formatWaktu } from '../../lib/cycle';
-import { exportPdf } from './exportPdf';
-import { exportExcel } from './exportExcel';
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { Laporan } from "../../types";
+import { fetchLaporan, fetchReguList } from "../../lib/supabase/api";
+import { formatKoordinat, formatWaktu } from "../../lib/cycle";
+import { exportPdf } from "./exportPdf";
+import { exportExcel } from "./exportExcel";
+import { reguDisplayName } from "../../lib/regu";
 
-type Preset = 'harian' | 'mingguan' | 'bulanan' | 'custom';
+type Preset = "harian" | "mingguan" | "bulanan" | "custom";
 
-function presetRange(preset: Preset, custom?: { from: string; to: string }): { from: Date; to: Date } {
+function presetRange(
+  preset: Preset,
+  custom?: { from: string; to: string },
+): { from: Date; to: Date } {
   const now = new Date();
   const to = new Date(now);
   to.setHours(23, 59, 59, 999);
   const from = new Date(now);
-  if (preset === 'harian') {
+  if (preset === "harian") {
     from.setHours(0, 0, 0, 0);
-  } else if (preset === 'mingguan') {
+  } else if (preset === "mingguan") {
     from.setDate(from.getDate() - 6);
     from.setHours(0, 0, 0, 0);
-  } else if (preset === 'bulanan') {
+  } else if (preset === "bulanan") {
     from.setDate(from.getDate() - 29);
     from.setHours(0, 0, 0, 0);
   } else {
-    from.setTime(custom ? new Date(custom.from + 'T00:00:00').getTime() : from.getTime());
+    from.setTime(
+      custom ? new Date(custom.from + "T00:00:00").getTime() : from.getTime(),
+    );
     if (custom?.to) {
-      to.setTime(new Date(custom.to + 'T23:59:59').getTime());
+      to.setTime(new Date(custom.to + "T23:59:59").getTime());
     }
   }
   return { from, to };
@@ -32,36 +38,39 @@ function presetRange(preset: Preset, custom?: { from: string; to: string }): { f
 
 /** Generator laporan: filter rentang + kategori, export PDF/Excel. */
 export default function ReportScreen() {
-  const [preset, setPreset] = useState<Preset>('harian');
-  const [custom, setCustom] = useState({ from: '', to: '' });
-  const [reguId, setReguId] = useState<string>('all'); // 'all' = gabungan
+  const [preset, setPreset] = useState<Preset>("harian");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+  const [reguId, setReguId] = useState<string>("all"); // 'all' = gabungan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: reguList = [] } = useQuery({ queryKey: ['regu-list'], queryFn: fetchReguList });
+  const { data: reguList = [] } = useQuery({
+    queryKey: ["regu-list"],
+    queryFn: fetchReguList,
+  });
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
 
   const { data: laporan = [], isFetching } = useQuery({
-    queryKey: ['laporan-report', preset, custom, reguId],
+    queryKey: ["laporan-report", preset, custom, reguId],
     queryFn: () =>
       fetchLaporan({
         from: range.from,
         to: range.to,
-        reguId: reguId === 'all' ? undefined : reguId,
+        reguId: reguId === "all" ? undefined : reguId,
         limit: 2000,
       }),
   });
 
   const totalFoto = laporan.reduce((a, l) => a + (l.fotos?.length ?? 0), 0);
 
-  const handleExport = async (kind: 'pdf' | 'excel') => {
+  const handleExport = async (kind: "pdf" | "excel") => {
     setBusy(true);
     setError(null);
     try {
-      if (kind === 'pdf') await exportPdf(laporan, { range, reguList, reguId });
+      if (kind === "pdf") await exportPdf(laporan, { range, reguList, reguId });
       else await exportExcel(laporan, { range, reguList, reguId });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal membuat laporan');
+      setError(e instanceof Error ? e.message : "Gagal membuat laporan");
     } finally {
       setBusy(false);
     }
@@ -70,24 +79,32 @@ export default function ReportScreen() {
   return (
     <div className="space-y-5">
       <div className="card space-y-4">
+        <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-200">
+          Asal pelapor ditampilkan pada setiap nama. Data yang belum memiliki
+          mapping Polsek akan diberi tanda “Polsek belum ditentukan”.
+        </div>
         {/* Preset rentang waktu */}
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Rentang waktu</label>
+          <label className="mb-2 block text-sm font-medium text-slate-300">
+            Rentang waktu
+          </label>
           <div className="flex flex-wrap gap-2">
             {(
               [
-                ['harian', 'Harian'],
-                ['mingguan', '7 Hari'],
-                ['bulanan', '30 Hari'],
-                ['custom', 'Custom'],
+                ["harian", "Harian"],
+                ["mingguan", "7 Hari"],
+                ["bulanan", "30 Hari"],
+                ["custom", "Custom"],
               ] as Array<[Preset, string]>
             ).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setPreset(key)}
                 className={
-                  'rounded-lg px-3.5 py-2 text-sm font-semibold transition ' +
-                  (preset === key ? 'bg-gold-400 text-navy-900' : 'bg-navy-900 text-slate-300 hover:text-white')
+                  "rounded-lg px-3.5 py-2 text-sm font-semibold transition " +
+                  (preset === key
+                    ? "bg-gold-400 text-navy-900"
+                    : "bg-navy-900 text-slate-300 hover:text-white")
                 }
               >
                 {label}
@@ -96,7 +113,7 @@ export default function ReportScreen() {
           </div>
         </div>
 
-        {preset === 'custom' && (
+        {preset === "custom" && (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs text-slate-400">Dari</label>
@@ -104,16 +121,22 @@ export default function ReportScreen() {
                 type="date"
                 className="input"
                 value={custom.from}
-                onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
+                onChange={(e) =>
+                  setCustom((c) => ({ ...c, from: e.target.value }))
+                }
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-slate-400">Sampai</label>
+              <label className="mb-1 block text-xs text-slate-400">
+                Sampai
+              </label>
               <input
                 type="date"
                 className="input"
                 value={custom.to}
-                onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
+                onChange={(e) =>
+                  setCustom((c) => ({ ...c, to: e.target.value }))
+                }
               />
             </div>
           </div>
@@ -121,12 +144,18 @@ export default function ReportScreen() {
 
         {/* Kategori laporan */}
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Kategori</label>
-          <select className="input" value={reguId} onChange={(e) => setReguId(e.target.value)}>
-            <option value="all">Laporan Gabungan (semua regu)</option>
+          <label className="mb-2 block text-sm font-medium text-slate-300">
+            Kategori
+          </label>
+          <select
+            className="input"
+            value={reguId}
+            onChange={(e) => setReguId(e.target.value)}
+          >
+            <option value="all">Laporan Gabungan (semua pelapor)</option>
             {reguList.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.nama_regu}
+                {reguDisplayName(r)}
               </option>
             ))}
           </select>
@@ -146,7 +175,8 @@ export default function ReportScreen() {
         <div className="card col-span-2 sm:col-span-1">
           <div className="text-xs text-slate-400">Rentang</div>
           <div className="text-sm font-semibold">
-            {range.from.toLocaleDateString('id-ID')} — {range.to.toLocaleDateString('id-ID')}
+            {range.from.toLocaleDateString("id-ID")} —{" "}
+            {range.to.toLocaleDateString("id-ID")}
           </div>
         </div>
       </div>
@@ -158,10 +188,18 @@ export default function ReportScreen() {
       )}
 
       <div className="flex flex-wrap gap-3">
-        <button className="btn-primary flex-1" disabled={busy || isFetching} onClick={() => void handleExport('pdf')}>
-          {busy ? '⏳ Memproses…' : '📄 Export PDF'}
+        <button
+          className="btn-primary flex-1"
+          disabled={busy || isFetching}
+          onClick={() => void handleExport("pdf")}
+        >
+          {busy ? "⏳ Memproses…" : "📄 Export PDF"}
         </button>
-        <button className="btn-secondary flex-1" disabled={busy || isFetching} onClick={() => void handleExport('excel')}>
+        <button
+          className="btn-secondary flex-1"
+          disabled={busy || isFetching}
+          onClick={() => void handleExport("excel")}
+        >
           📊 Export Excel
         </button>
       </div>
@@ -192,7 +230,7 @@ function PreviewTable({ laporan }: { laporan: Laporan[] }) {
         <thead className="border-b border-navy-700 text-xs uppercase text-slate-400">
           <tr>
             <th className="px-4 py-3">Waktu</th>
-            <th className="px-4 py-3">Regu</th>
+            <th className="px-4 py-3">Pelapor</th>
             <th className="px-4 py-3">Siklus</th>
             <th className="px-4 py-3">Koordinat</th>
             <th className="px-4 py-3">Foto</th>
@@ -201,19 +239,30 @@ function PreviewTable({ laporan }: { laporan: Laporan[] }) {
         </thead>
         <tbody>
           {shown.map((l) => (
-            <tr key={l.id} className="border-b border-navy-800/60 hover:bg-navy-800/40">
-              <td className="px-4 py-2.5 whitespace-nowrap">{formatWaktu(l.timestamp_kirim)}</td>
-              <td className="px-4 py-2.5">{l.regu?.nama_regu ?? l.regu_id}</td>
+            <tr
+              key={l.id}
+              className="border-b border-navy-800/60 hover:bg-navy-800/40"
+            >
+              <td className="px-4 py-2.5 whitespace-nowrap">
+                {formatWaktu(l.timestamp_kirim)}
+              </td>
+              <td className="px-4 py-2.5">
+                {l.regu
+                  ? reguDisplayName(l.regu)
+                  : l.regu_id}
+              </td>
               <td className="px-4 py-2.5">{l.siklus_ke}</td>
-              <td className="px-4 py-2.5 text-xs">{formatKoordinat(l.latitude, l.longitude)}</td>
+              <td className="px-4 py-2.5 text-xs">
+                {formatKoordinat(l.latitude, l.longitude)}
+              </td>
               <td className="px-4 py-2.5">{l.fotos?.length ?? 0}</td>
               <td className="px-4 py-2.5">
                 <span
                   className={
-                    'badge ' +
-                    (l.status_sync === 'synced'
-                      ? 'bg-emerald-500/15 text-emerald-300'
-                      : 'bg-amber-500/15 text-amber-300')
+                    "badge " +
+                    (l.status_sync === "synced"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-amber-500/15 text-amber-300")
                   }
                 >
                   {l.status_sync}

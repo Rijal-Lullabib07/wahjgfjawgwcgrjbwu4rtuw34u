@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import SatpolPPLogo from '../../components/SatpolPPLogo';
+import { useState } from "react";
+import PolresLogo from "../../components/PolresLogo";
 
 interface Props {
   onLoginRegu: (kode: string, pin: string) => Promise<void>;
   onLoginAdmin: (email: string, password: string) => Promise<void>;
 }
 
-type Tab = 'regu' | 'admin';
+type Tab = "regu" | "admin";
 
 /** Ilustrasi hero: kartu laporan mengambang di atas gelombang, foto giat di layar. */
 function LoginHero() {
@@ -19,11 +19,15 @@ function LoginHero() {
       {/* Kartu utama: preview laporan */}
       <div className="anim-float relative mx-auto w-64 rotate-[-4deg] rounded-3xl border border-navy-600/70 bg-gradient-to-b from-navy-800 to-navy-900 p-4 shadow-2xl shadow-navy-950/80">
         {/* Header kartu */}
-        <div className="mb-3 flex items-center gap-2">
-          <SatpolPPLogo className="h-8 w-8" />
-          <div>
-            <div className="text-[11px] font-bold tracking-wide text-white">SIPLAP</div>
-            <div className="text-[9px] text-slate-400">Laporan Giat Regu 05</div>
+        <div className="mb-3 flex min-w-0 items-center gap-2">
+          <PolresLogo className="h-9 w-28 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold tracking-wide text-white">
+              SALAM PRESISI
+            </div>
+            <div className="text-[9px] text-slate-400">
+              Laporan Giat Pelapor 05
+            </div>
           </div>
           <span className="anim-pulse-dot ml-auto inline-block h-2 w-2 rounded-full bg-emerald-400" />
         </div>
@@ -46,28 +50,26 @@ function LoginHero() {
           </div>
           {/* Watermark GPS */}
           <div className="absolute inset-x-2 bottom-2 rounded-lg bg-black/55 px-2 py-1 font-mono text-[8px] leading-tight text-white">
-            📍 -6.91472, 107.38041 · 14:02 WIB · SIPLAP
+            📍 -6.91472, 107.38041 · 14:02 WIB · SALAM PRESISI
           </div>
         </div>
 
-        {/* Status foto */}
-        <div className="mt-3 flex items-center justify-between">
-          <span className="badge bg-emerald-500/15 text-[10px] text-emerald-300">✅ 2/2 foto</span>
-          <span className="text-[9px] text-slate-400">Siklus 6 · 14–16</span>
+        <div className="mt-3 text-right text-[9px] text-slate-400">
+          Pelaporan tersedia 24 jam
         </div>
       </div>
 
       {/* Kartu sekunder: statistik */}
       <div className="anim-float-soft absolute -left-2 top-10 w-36 rotate-[5deg] rounded-2xl border border-navy-600/70 bg-navy-800/95 p-3 shadow-xl backdrop-blur sm:-left-8">
-        <div className="text-[10px] text-slate-400">Regu lapor hari ini</div>
-        <div className="text-xl font-bold text-gold-400">13/15</div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy-700">
-          <div className="h-full w-[86%] rounded-full bg-gradient-to-r from-gold-500 to-gold-400" />
-        </div>
+        <div className="text-[10px] text-slate-400">Pelapor hari ini</div>
+        <div className="text-xl font-bold text-gold-400">24 jam</div>
       </div>
 
       {/* Kartu sekunder: push notification */}
-      <div className="anim-float-soft absolute -right-1 bottom-8 w-40 rotate-[-3deg] rounded-2xl border border-navy-600/70 bg-navy-800/95 p-3 shadow-xl backdrop-blur sm:-right-6" style={{ animationDelay: '1.2s' }}>
+      <div
+        className="anim-float-soft absolute -right-1 bottom-8 w-40 rotate-[-3deg] rounded-2xl border border-navy-600/70 bg-navy-800/95 p-3 shadow-xl backdrop-blur sm:-right-6"
+        style={{ animationDelay: "1.2s" }}
+      >
         <div className="flex items-center gap-1.5 text-[10px] font-semibold text-white">
           🔔 Pengingat
         </div>
@@ -78,7 +80,11 @@ function LoginHero() {
 
       {/* Gelombang bawah */}
       <div className="pointer-events-none absolute -bottom-2 left-0 h-10 w-[200%] overflow-hidden">
-        <svg viewBox="0 0 1200 40" preserveAspectRatio="none" className="wave-drift h-full w-full">
+        <svg
+          viewBox="0 0 1200 40"
+          preserveAspectRatio="none"
+          className="wave-drift h-full w-full"
+        >
           <path
             d="M0 20 Q 75 0 150 20 T 300 20 T 450 20 T 600 20 T 750 20 T 900 20 T 1050 20 T 1200 20 V40 H0 Z"
             fill="rgba(245,185,66,0.18)"
@@ -91,11 +97,11 @@ function LoginHero() {
 
 /** Halaman login dua kolom: kiri hero animatif, kanan form. Mobile: hero di atas. */
 export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
-  const [tab, setTab] = useState<Tab>('regu');
-  const [kode, setKode] = useState('');
-  const [pin, setPin] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [tab, setTab] = useState<Tab>("regu");
+  const [kode, setKode] = useState("");
+  const [pin, setPin] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -104,10 +110,10 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
     setError(null);
     setBusy(true);
     try {
-      if (tab === 'regu') await onLoginRegu(kode.trim(), pin);
+      if (tab === "regu") await onLoginRegu(kode.trim(), pin);
       else await onLoginAdmin(email.trim(), password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login gagal');
+      setError(err instanceof Error ? err.message : "Login gagal");
     } finally {
       setBusy(false);
     }
@@ -122,11 +128,13 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
       <div className="mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-10 px-4 py-10 lg:grid-cols-2 lg:gap-6 lg:py-0">
         {/* Kolom kiri: hero animatif */}
         <div className="anim-rise order-1 hidden lg:order-none lg:block">
-          <div className="mb-8 flex items-center gap-3">
-            <SatpolPPLogo className="h-14 w-14 drop-shadow-lg" />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white">SIPLAP</h1>
-              <p className="text-sm text-slate-400">
+          <div className="-mt-8 mb-8 flex items-center gap-4">
+            <PolresLogo className="h-24 w-80 shrink-0 drop-shadow-lg" />
+            <div className="min-w-0">
+              <h1 className="text-3xl font-extrabold tracking-tight text-white">
+                SALAM PRESISI
+              </h1>
+              <p className="max-w-sm text-sm leading-relaxed text-slate-400">
                 Sistem Informasi Pelaporan Giat Lapangan
               </p>
             </div>
@@ -138,17 +146,19 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
         <div className="anim-rise order-2 mx-auto w-full max-w-sm lg:order-none">
           {/* Logo versi mobile */}
           <div className="mb-8 text-center lg:hidden">
-            <SatpolPPLogo className="anim-float-soft mx-auto mb-3 h-20 w-20 drop-shadow-lg" />
-            <h1 className="text-2xl font-bold tracking-tight">SIPLAP</h1>
+            <PolresLogo className="anim-float-soft mx-auto mb-3 h-32 w-96 drop-shadow-lg" />
+            <h1 className="text-2xl font-extrabold tracking-tight">
+              SALAM PRESISI
+            </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Sistem Informasi Pelaporan Giat Lapangan Satpol PP
+              Sistem Informasi Pelaporan Giat Lapangan Polres
             </p>
           </div>
 
           <div className="card">
             {/* Tab switcher */}
             <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-navy-900 p-1">
-              {(['regu', 'admin'] as Tab[]).map((t) => (
+              {(["regu", "admin"] as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -157,24 +167,26 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     setError(null);
                   }}
                   className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    tab === t ? 'bg-gold-400 text-navy-900' : 'text-slate-400 hover:text-white'
+                    tab === t
+                      ? "bg-gold-400 text-navy-900"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  {t === 'regu' ? '👤 Regu' : '🛡️ Admin'}
+                  {t === "regu" ? "👤 Pelapor" : "🛡️ Pemantau"}
                 </button>
               ))}
             </div>
 
             <form onSubmit={submit} className="space-y-4">
-              {tab === 'regu' ? (
+              {tab === "regu" ? (
                 <>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-300">
-                      Kode Regu
+                      Kode Pelapor
                     </label>
                     <input
-                      className="input uppercase"
-                      placeholder="Contoh: REGU01"
+                      className="input"
+                      placeholder="Contoh: reskrim.banit03"
                       value={kode}
                       onChange={(e) => setKode(e.target.value)}
                       autoCapitalize="characters"
@@ -183,16 +195,16 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-300">PIN</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-300">
+                      Password
+                    </label>
                     <input
                       className="input"
                       type="password"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={8}
-                      placeholder="PIN regu (angka saja)"
+                      inputMode="text"
+                      placeholder="Password pelapor"
                       value={pin}
-                      onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
+                      onChange={(e) => setPin(e.target.value)}
                       autoComplete="current-password"
                       required
                     />
@@ -201,11 +213,13 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
               ) : (
                 <>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-300">Email</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-300">
+                      Username pemantau
+                    </label>
                     <input
                       className="input"
-                      type="email"
-                      placeholder="Email resmi Anda"
+                      type="text"
+                      placeholder="Contoh: reskrim.kasat"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoComplete="username"
@@ -235,8 +249,12 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                 </div>
               )}
 
-              <button type="submit" className="btn-primary w-full py-3.5" disabled={busy}>
-                {busy ? 'Memproses…' : 'Masuk'}
+              <button
+                type="submit"
+                className="btn-primary w-full py-3.5"
+                disabled={busy}
+              >
+                {busy ? "Memproses…" : "Masuk"}
               </button>
             </form>
           </div>
@@ -245,15 +263,20 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
               <span aria-hidden>📱</span>
               <span>
-                <b className="font-semibold text-white">Satu smartphone = satu akun.</b> Sesi
-                login tersimpan permanen di perangkat ini.
+                <b className="font-semibold text-white">
+                  Satu smartphone = satu akun.
+                </b>{" "}
+                Sesi login tersimpan permanen di perangkat ini.
               </span>
             </p>
             <p className="mt-2 flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
               <span aria-hidden>📲</span>
               <span>
-                <b className="font-semibold text-white">Regu wajib pasang ke homescreen</b> agar
-                pengingat siklus &amp; kirim laporan otomatis saat online berjalan optimal.
+                <b className="font-semibold text-white">
+                  Pelapor wajib pasang ke homescreen
+                </b>{" "}
+                agar pengingat siklus &amp; kirim laporan otomatis saat online
+                berjalan optimal.
               </span>
             </p>
           </div>

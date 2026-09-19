@@ -1,15 +1,16 @@
 import { useState } from "react";
 import type { SessionUser } from "../../types";
 import MonitoringScreen from "./MonitoringScreen";
+import OrganizationScreen from "./OrganizationScreen";
 import ReportScreen from "../report-generator/ReportScreen";
-import SatpolPPLogo from "../../components/SatpolPPLogo";
+import PolresLogo from "../../components/PolresLogo";
 
 interface Props {
   session: SessionUser;
   onLogout: () => void;
 }
 
-type Tab = "monitoring" | "laporan";
+type Tab = "monitoring" | "struktur" | "laporan";
 
 /** Dashboard Admin/Pimpinan: monitoring realtime + generator laporan. */
 export default function AdminApp({ session, onLogout }: Props) {
@@ -20,7 +21,7 @@ export default function AdminApp({ session, onLogout }: Props) {
       <header className="safe-top sticky top-0 z-10 border-b border-navy-700/70 bg-navy-950/90 px-4 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <SatpolPPLogo className="h-10 w-10" />
+            <PolresLogo className="h-10 w-32" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold tracking-tight text-white">
@@ -55,6 +56,9 @@ export default function AdminApp({ session, onLogout }: Props) {
           {(
             [
               ["monitoring", "📡 Monitoring"],
+              ...(session.role === "admin"
+                ? ([["struktur", "🏢 Struktur"]] as Array<[Tab, string]>)
+                : []),
               ["laporan", "📄 Laporan"],
             ] as Array<[Tab, string]>
           ).map(([key, label]) => (
@@ -75,7 +79,13 @@ export default function AdminApp({ session, onLogout }: Props) {
       </header>
 
       <main className="safe-bottom mx-auto w-full max-w-6xl flex-1 px-4 py-6">
-        {tab === "monitoring" ? <MonitoringScreen /> : <ReportScreen />}
+        {tab === "monitoring" ? (
+          <MonitoringScreen />
+        ) : tab === "struktur" && session.role === "admin" ? (
+          <OrganizationScreen />
+        ) : (
+          <ReportScreen />
+        )}
       </main>
     </div>
   );

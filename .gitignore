@@ -4,6 +4,8 @@ dev-dist/
 .env
 .env.local
 *.local
+jawara-credentials-*.csv
+pw.md
 .DS_Store
 supabase/.branches
 supabase/.temp

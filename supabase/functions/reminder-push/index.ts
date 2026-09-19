@@ -12,23 +12,34 @@
 // dalam WIB (anchor 04:00). Karena itu semua perhitungan waktu di sini dilakukan
 // dalam "ruang WIB" (digeser +7 jam) — jangan pakai setHours() apa adanya.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import webpush from 'https://esm.sh/web-push@3.6.7';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "https://esm.sh/web-push@3.6.7";
 
 // Harus sama dengan src/lib/cycle.ts
 const CYCLE_START_HOUR = 4; // siklus 1 mulai 04:00 WIB
 const CYCLE_HOURS = 2;
 const REMINDER_BEFORE_MIN = 15;
 const FOTOS_PER_SIKLUS = 2;
+const REMINDERS_ENABLED = false;
 
 // Harus sama dengan src/lib/push/localReminder.ts (tag notifikasi lokal)
-const NOTIF_TAG = 'siplap-reminder';
+const NOTIF_TAG = "siplap-reminder";
 
 const WIB_OFFSET_MS = 7 * 3600_000; // WIB = UTC+7
 
-interface ReguRow { id: string; nama_regu: string }
-interface SubRow { endpoint: string; p256dh: string; auth: string }
-interface LaporanRow { id: string; fotos: Array<{ id: string }> | null }
+interface ReguRow {
+  id: string;
+  nama_regu: string;
+}
+interface SubRow {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+interface LaporanRow {
+  id: string;
+  fotos: Array<{ id: string }> | null;
+}
 
 /**
  * Info siklus menurut jam WIB.
@@ -70,24 +81,32 @@ function currentCycle(now: Date) {
  *   3. kunci service yang dikirim pemanggil (jalan terakhir)
  */
 function resolveAdminKey(fallback: string): string {
-  const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (legacy !== '') return legacy;
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (legacy !== "") return legacy;
 
-  const secretKeys = Deno.env.get('SUPABASE_SECRET_KEYS') ?? '';
-  if (secretKeys !== '') {
+  const secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS") ?? "";
+  if (secretKeys !== "") {
     try {
-      const first = Object.values(JSON.parse(secretKeys) as Record<string, string>)[0];
+      const first = Object.values(
+        JSON.parse(secretKeys) as Record<string, string>,
+      )[0];
       if (first) return first;
     } catch {
       /* bukan JSON → lanjut ke bentuk berikutnya */
     }
   }
 
-  return Deno.env.get('SUPABASE_SECRET_KEY') ?? fallback;
+  return Deno.env.get("SUPABASE_SECRET_KEY") ?? fallback;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok');
+  if (req.method === "OPTIONS") return new Response("ok");
+  if (!REMINDERS_ENABLED) {
+    return new Response(
+      JSON.stringify({ disabled: true, reason: "Pelaporan tersedia 24 jam." }),
+      { status: 200 },
+    );
+  }
 
   // Proteksi: pemanggil wajib membawa kunci resmi. Tiga cara diterima:
   //   1. header `x-cron-secret: <CRON_SECRET>` → CARA UTAMA dari SQL/pg_cron.
@@ -96,19 +115,23 @@ Deno.serve(async (req) => {
   //   2. `Authorization: Bearer <CRON_SECRET>`  → variasi yang sama, lewat Authorization.
   //   3. `Authorization: Bearer <SERVICE_ROLE_KEY>` → cara lama, tetap didukung.
   // Kunci dibandingkan persis (bukan `includes`), supaya tidak ada lagi 401 misterius.
-  const cronHeader = (req.headers.get('x-cron-secret') ?? '').trim();
+  const cronHeader = (req.headers.get("x-cron-secret") ?? "").trim();
   const provided =
-    cronHeader !== '' ? cronHeader : (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
-  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  const viaCronSecret = cronSecret !== '' && provided === cronSecret;
-  const viaServiceKey = serviceKey !== '' && provided === serviceKey;
+    cronHeader !== ""
+      ? cronHeader
+      : (req.headers.get("Authorization") ?? "")
+          .replace(/^Bearer\s+/i, "")
+          .trim();
+  const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const viaCronSecret = cronSecret !== "" && provided === cronSecret;
+  const viaServiceKey = serviceKey !== "" && provided === serviceKey;
 
   if (!provided || (!viaCronSecret && !viaServiceKey)) {
     return new Response(
       JSON.stringify({
-        error: 'unauthorized',
-        detail: `Kunci tidak dikenali. Kirim header x-cron-secret <CRON_SECRET>. (CRON_SECRET di server ${cronSecret === '' ? 'BELUM diset' : 'sudah diset'})`,
+        error: "unauthorized",
+        detail: `Kunci tidak dikenali. Kirim header x-cron-secret <CRON_SECRET>. (CRON_SECRET di server ${cronSecret === "" ? "BELUM diset" : "sudah diset"})`,
       }),
       { status: 401 },
     );
@@ -117,18 +140,19 @@ Deno.serve(async (req) => {
   // Kunci untuk akses database: utamakan env service role. Kalau env kosong
   // (project yang memakai model API key baru), pakai kunci rahasia yang disediakan
   // platform, atau service key dari pemanggil sebagai jalan terakhir.
-  const adminKey = resolveAdminKey(viaServiceKey ? provided : '');
-  if (adminKey === '') {
+  const adminKey = resolveAdminKey(viaServiceKey ? provided : "");
+  if (adminKey === "") {
     return new Response(
       JSON.stringify({
-        error: 'misconfig',
-        detail: 'Tidak ada kunci service role di server dan pemanggil tidak mengirimkannya.',
+        error: "misconfig",
+        detail:
+          "Tidak ada kunci service role di server dan pemanggil tidak mengirimkannya.",
       }),
       { status: 500 },
     );
   }
 
-  const admin = createClient(Deno.env.get('SUPABASE_URL')!, adminKey, {
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
@@ -148,13 +172,20 @@ Deno.serve(async (req) => {
 
   // Hanya kirim di window reminder (15 menit terakhir siklus), kecuali mode tes
   if (!testMode && (minutesLeft > REMINDER_BEFORE_MIN || minutesLeft <= 0)) {
-    return new Response(JSON.stringify({ skipped: true, minutesLeft }), { status: 200 });
+    return new Response(JSON.stringify({ skipped: true, minutesLeft }), {
+      status: 200,
+    });
   }
 
   // Regu aktif yang belum melengkapi 2 foto di siklus ini
   const { data: reguList, error: reguErr } = await admin
-    .from('regu').select('id, nama_regu').eq('status_aktif', true);
-  if (reguErr) return new Response(JSON.stringify({ error: reguErr.message }), { status: 500 });
+    .from("regu")
+    .select("id, nama_regu")
+    .eq("status_aktif", true);
+  if (reguErr)
+    return new Response(JSON.stringify({ error: reguErr.message }), {
+      status: 500,
+    });
 
   const results: Array<{
     regu: string;
@@ -167,14 +198,16 @@ Deno.serve(async (req) => {
   for (const regu of (reguList ?? []) as ReguRow[]) {
     // Hitung foto (bukan sekadar "ada laporan"): 1 siklus butuh 2 foto.
     const { data: rows, error: laporanErr } = await admin
-      .from('laporan')
-      .select('id, fotos:laporan_foto(id)')
-      .eq('regu_id', regu.id)
-      .eq('siklus_ke', cycle.siklusKe)
-      .eq('status_sync', 'synced')
-      .gte('timestamp_kirim', cycle.start.toISOString());
+      .from("laporan")
+      .select("id, fotos:laporan_foto(id)")
+      .eq("regu_id", regu.id)
+      .eq("siklus_ke", cycle.siklusKe)
+      .eq("status_sync", "synced")
+      .gte("timestamp_kirim", cycle.start.toISOString());
     if (laporanErr) {
-      return new Response(JSON.stringify({ error: laporanErr.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: laporanErr.message }), {
+        status: 500,
+      });
     }
 
     const fotoTerkirim = ((rows ?? []) as LaporanRow[]).reduce(
@@ -187,55 +220,70 @@ Deno.serve(async (req) => {
     // reminder per siklus. Mode tes sengaja melewati log ini.
     if (!testMode) {
       const { data: reminderLog } = await admin
-        .from('reminder_logs')
-        .select('sent_at')
-        .eq('regu_id', regu.id)
-        .eq('tanggal_siklus', cycle.tanggalSiklus)
-        .eq('siklus_ke', cycle.siklusKe)
+        .from("reminder_logs")
+        .select("sent_at")
+        .eq("regu_id", regu.id)
+        .eq("tanggal_siklus", cycle.tanggalSiklus)
+        .eq("siklus_ke", cycle.siklusKe)
         .maybeSingle();
       if (reminderLog) continue;
     }
 
     const { data: subs } = await admin
-      .from('push_subscriptions').select('endpoint, p256dh, auth').eq('regu_id', regu.id);
+      .from("push_subscriptions")
+      .select("endpoint, p256dh, auth")
+      .eq("regu_id", regu.id);
 
     const payload = JSON.stringify({
-      title: testMode ? '🧪 Tes Notifikasi SIPLAP' : '⏰ Pengingat SIPLAP',
+      title: testMode ? "🧪 Tes Notifikasi SIPLAP" : "⏰ Pengingat SIPLAP",
       body: testMode
         ? `Berhasil! Notifikasi sampai ke device ini (${regu.nama_regu}).`
         : `Regu ${regu.nama_regu}: ${Math.ceil(minutesLeft)} menit lagi batas siklus ${cycle.siklusKe} berakhir. Segera kirim ${FOTOS_PER_SIKLUS} foto!`,
-      url: '/',
+      url: "/",
       tag: NOTIF_TAG,
     });
 
     let sent = 0;
-    let firstErr = '';
+    let firstErr = "";
     for (const sub of (subs ?? []) as SubRow[]) {
       try {
         await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          {
+            endpoint: sub.endpoint,
+            keys: { p256dh: sub.p256dh, auth: sub.auth },
+          },
           payload,
           {
             vapidDetails: {
-              subject: Deno.env.get('VAPID_SUBJECT') ?? 'mailto:admin@siplap.id',
-              publicKey: Deno.env.get('VAPID_PUBLIC_KEY')!,
-              privateKey: Deno.env.get('VAPID_PRIVATE_KEY')!,
+              subject:
+                Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@siplap.id",
+              publicKey: Deno.env.get("VAPID_PUBLIC_KEY")!,
+              privateKey: Deno.env.get("VAPID_PRIVATE_KEY")!,
             },
           },
         );
         sent++;
       } catch (err) {
         // Jangan telan errornya: laporkan supaya penyebabnya kelihatan.
-        const e = err as { statusCode?: number; body?: string; message?: string };
-        firstErr = firstErr || `${e.statusCode ?? ''} ${e.message ?? ''} ${e.body ?? ''}`.trim();
+        const e = err as {
+          statusCode?: number;
+          body?: string;
+          message?: string;
+        };
+        firstErr =
+          firstErr ||
+          `${e.statusCode ?? ""} ${e.message ?? ""} ${e.body ?? ""}`.trim();
         // Subscription expired (404/410) → hapus
         if (e.statusCode === 404 || e.statusCode === 410) {
-          await admin.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+          await admin
+            .from("push_subscriptions")
+            .delete()
+            .eq("endpoint", sub.endpoint);
         }
       }
     }
     if (!testMode && sent > 0) {
-      await admin.from('reminder_logs').upsert({
+      await admin.from("reminder_logs").upsert({
         regu_id: regu.id,
         tanggal_siklus: cycle.tanggalSiklus,
         siklus_ke: cycle.siklusKe,
@@ -256,12 +304,12 @@ Deno.serve(async (req) => {
       // 12 karakter awal kunci VAPID PUBLIK yang dipakai server. Kunci publik
       // bukan rahasia — ini untuk memastikan nilainya sama dengan
       // VITE_VAPID_PUBLIC_KEY di .env (kalau beda, push service menolak: 403).
-      vapidPub: (Deno.env.get('VAPID_PUBLIC_KEY') ?? '(kosong)').slice(0, 12),
+      vapidPub: (Deno.env.get("VAPID_PUBLIC_KEY") ?? "(kosong)").slice(0, 12),
       siklusKe: cycle.siklusKe,
       tanggalSiklus: cycle.tanggalSiklus,
       minutesLeft: Math.round(minutesLeft),
       results,
     }),
-    { headers: { 'Content-Type': 'application/json' } },
+    { headers: { "Content-Type": "application/json" } },
   );
 });

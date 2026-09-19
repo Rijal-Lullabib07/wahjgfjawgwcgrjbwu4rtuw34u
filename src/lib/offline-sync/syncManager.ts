@@ -1,11 +1,11 @@
-import { submitLaporan } from '../supabase/api';
+import { submitLaporan } from "../supabase/api";
 import {
   blobDelete,
   blobGet,
   queueDelete,
   queueGetAll,
   queueUpdate,
-} from './db';
+} from "./db";
 
 /**
  * Sync manager: mengirim antrian laporan ke Supabase saat koneksi tersedia.
@@ -15,7 +15,10 @@ import {
 
 let syncing = false;
 
-export async function syncPendingLaporan(): Promise<{ synced: number; failed: number }> {
+export async function syncPendingLaporan(): Promise<{
+  synced: number;
+  failed: number;
+}> {
   if (syncing) return { synced: 0, failed: 0 };
   syncing = true;
   let synced = 0;
@@ -23,24 +26,31 @@ export async function syncPendingLaporan(): Promise<{ synced: number; failed: nu
   try {
     const items = await queueGetAll();
     for (const item of items) {
-      if (item.status === 'syncing') continue;
+      if (item.status === "syncing") continue;
       try {
-        await queueUpdate(item.localId, { status: 'syncing' });
+        await queueUpdate(item.localId, { status: "syncing" });
         const blobs: Blob[] = [];
         for (const f of item.fotos) {
           const blob = await blobGet(f.blobKey);
-          if (!blob) throw new Error('Blob foto hilang dari IndexedDB');
+          if (!blob) throw new Error("Blob foto hilang dari IndexedDB");
           blobs.push(blob);
         }
-        await submitLaporan(item, blobs);
+        const videoBlobs: Blob[] = [];
+        for (const video of item.videos ?? []) {
+          const blob = await blobGet(video.blobKey);
+          if (!blob) throw new Error("Blob video hilang dari IndexedDB");
+          videoBlobs.push(blob);
+        }
+        await submitLaporan(item, blobs, videoBlobs);
         await queueDelete(item.localId);
         for (const f of item.fotos) await blobDelete(f.blobKey);
+        for (const video of item.videos ?? []) await blobDelete(video.blobKey);
         synced++;
       } catch (err) {
         failed++;
         const attempts = item.attempts + 1;
         await queueUpdate(item.localId, {
-          status: attempts >= 5 ? 'failed' : 'pending',
+          status: attempts >= 5 ? "failed" : "pending",
           attempts,
           lastError: err instanceof Error ? err.message : String(err),
         });
@@ -54,7 +64,7 @@ export async function syncPendingLaporan(): Promise<{ synced: number; failed: nu
 
 /** Minta SW melakukan background sync (Android/Chromium). */
 export async function requestBackgroundSync(): Promise<void> {
-  if (!('serviceWorker' in navigator)) return;
+  if (!("serviceWorker" in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.ready;
     const sync = (
@@ -62,7 +72,7 @@ export async function requestBackgroundSync(): Promise<void> {
         sync?: { register: (tag: string) => Promise<void> };
       }
     ).sync;
-    await sync?.register('siplap-sync');
+    await sync?.register("siplap-sync");
   } catch {
     // Browser tidak mendukung Background Sync — fallback: retry on foreground.
   }
@@ -73,6 +83,6 @@ export function installOnlineListener(): () => void {
   const onOnline = () => {
     void syncPendingLaporan();
   };
-  window.addEventListener('online', onOnline);
-  return () => window.removeEventListener('online', onOnline);
+  window.addEventListener("online", onOnline);
+  return () => window.removeEventListener("online", onOnline);
 }

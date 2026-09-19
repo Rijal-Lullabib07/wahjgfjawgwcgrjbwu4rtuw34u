@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { CycleInfo } from "../../lib/cycle";
-import { FOTOS_PER_SIKLUS } from "../../lib/cycle";
 import { useCamera } from "./useCamera";
 import { useGeolocation } from "./useGeolocation";
 import { applyWatermark } from "./watermark";
 
 interface Props {
   cycle: CycleInfo;
-  sentCount: number;
-  queueCount: number;
   onCaptureDone: (
     fotos: Array<{
       blob: Blob;
@@ -16,33 +13,37 @@ interface Props {
       lng: number | null;
       ts: Date;
     }>,
+    video: { blob: Blob; ts: Date; durationSeconds: number } | null,
+    catatan: string,
   ) => Promise<void>;
 }
 
 /**
  * Layar capture: live preview getUserMedia, tombol shutter besar (thumb-friendly),
- * GPS live, indikator "Tersimpan lokal" vs "Terkirim", dan hitungan 2 foto/siklus.
- * Kuota ketat: 2 foto per siklus per regu = terkirim + di antrian + di layar ini.
+ * GPS live, indikator "Tersimpan lokal" vs "Terkirim", dan foto opsional.
+ * Satu laporan dapat dikirim tanpa foto atau dengan maksimal dua foto.
  */
-export default function CaptureScreen({
-  cycle,
-  sentCount,
-  queueCount,
-  onCaptureDone,
-}: Props) {
+export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
   const camera = useCamera();
   const geo = useGeolocation();
   const [shots, setShots] = useState<
     Array<{ url: string; ts: Date; blob: Blob }>
   >([]);
+  const [videoShot, setVideoShot] = useState<{
+    url: string;
+    ts: Date;
+    blob: Blob;
+    durationSeconds: number;
+  } | null>(null);
+  const [mode, setMode] = useState<"foto" | "video">("foto");
+  const [recording, setRecording] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [catatan, setCatatan] = useState("");
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const flashRef = useRef<HTMLDivElement>(null);
-
-  // Total foto yang sudah "dipakai" regu ini pada siklus berjalan:
-  // terkirim ke server + masih menunggu di antrian offline + jepretan di layar.
-  const used = sentCount + queueCount + shots.length;
-  const quotaLeft = Math.max(0, FOTOS_PER_SIKLUS - used);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordStartRef = useRef(0);
 
   useEffect(() => {
     void camera.start();
@@ -50,11 +51,18 @@ export default function CaptureScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const remaining = Math.max(0, quotaLeft);
+  const changeMode = async (next: "foto" | "video") => {
+    if (next === "video" && videoShot) return;
+    setCaptureError(null);
+    setMode(next);
+    await camera.start(camera.facing, next === "video");
+  };
 
   const takePhoto = async () => {
     if (!camera.videoRef.current || !camera.ready || saving) return;
-    if (quotaLeft <= 0) return;
+    if (mode !== "foto" || shots.length >= 4) return;
+
+    if (mode !== "foto") return;
 
     // efek flash
     const flash = flashRef.current;
@@ -84,8 +92,89 @@ export default function CaptureScreen({
     }
   };
 
+  const recordVideo = () => {
+    setCaptureError(null);
+    if (!camera.videoRef.current || !camera.ready || saving) return;
+    if (recording || videoShot) return;
+    const stream = camera.videoRef.current.srcObject as MediaStream | null;
+    if (!stream) {
+      setCaptureError("Kamera belum siap. Tekan Coba lagi lalu pilih Video.");
+      return;
+    }
+    if (typeof MediaRecorder === "undefined") {
+      setCaptureError(
+        "Browser ini belum mendukung perekaman video. Gunakan Chrome atau Safari terbaru.",
+      );
+      return;
+    }
+    const mimeType = MediaRecorder.isTypeSupported(
+      "video/webm;codecs=vp8,opus",
+    )
+      ? "video/webm;codecs=vp8,opus"
+      : MediaRecorder.isTypeSupported("video/webm")
+        ? "video/webm"
+        : "";
+    const chunks: Blob[] = [];
+    let recorder: MediaRecorder;
+    try {
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error
+          ? `Perekaman video gagal: ${error.message}`
+          : "Perekaman video gagal dimulai.",
+      );
+      return;
+    }
+    recorderRef.current = recorder;
+    recordStartRef.current = Date.now();
+    setRecording(true);
+    recorder.ondataavailable = (event) => {
+      if (event.data.size) chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      if (chunks.length === 0) {
+        setCaptureError("Video kosong. Coba rekam kembali.");
+        recorderRef.current = null;
+        setRecording(false);
+        return;
+      }
+      const blob = new Blob(chunks, {
+        type: mimeType || chunks[0].type || "video/webm",
+      });
+      setVideoShot({
+        url: URL.createObjectURL(blob),
+        ts: new Date(recordStartRef.current),
+        blob,
+        durationSeconds: Math.max(
+          1,
+          Math.round((Date.now() - recordStartRef.current) / 1000),
+        ),
+      });
+      recorderRef.current = null;
+      setRecording(false);
+    };
+    recorder.onerror = () => {
+      setCaptureError("Perekaman video gagal. Periksa izin kamera lalu coba lagi.");
+      recorderRef.current = null;
+      setRecording(false);
+    };
+    recorder.start();
+    window.setTimeout(() => {
+      if (recorder.state === "recording") recorder.stop();
+    }, 60_000);
+  };
+
+  const toggleCapture = () => {
+    if (mode === "foto") void takePhoto();
+    else if (recording) recorderRef.current?.stop();
+    else recordVideo();
+  };
+
   const submitAll = async () => {
-    if (shots.length === 0 || saving) return;
+    if (saving) return;
     setSaving(true);
     try {
       const fotos = shots.map((s) => ({
@@ -94,12 +183,24 @@ export default function CaptureScreen({
         lng: geo.lng,
         ts: s.ts,
       }));
-      await onCaptureDone(fotos);
+      await onCaptureDone(
+        fotos,
+        videoShot
+          ? {
+              blob: videoShot.blob,
+              ts: videoShot.ts,
+              durationSeconds: videoShot.durationSeconds,
+            }
+          : null,
+        catatan.trim(),
+      );
       shots.forEach((s) => URL.revokeObjectURL(s.url));
+      if (videoShot) URL.revokeObjectURL(videoShot.url);
       setShots([]);
+      setVideoShot(null);
+      setCatatan("");
       setSavedMsg(
-        "Laporan masuk antrian — " +
-          (queueCount > 0 ? "sebagian tersimpan lokal" : "terkirim"),
+        "Laporan masuk antrian dan akan dikirim saat koneksi tersedia.",
       );
       setTimeout(() => setSavedMsg(null), 4000);
     } finally {
@@ -117,31 +218,46 @@ export default function CaptureScreen({
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-4 sm:px-6">
-      {/* Status siklus */}
+      {/* Status pelaporan */}
       <div className="card mb-4 border-sky-400/20 bg-navy-800/75">
         <div className="flex items-center justify-between">
           <div>
-            <div className="eyebrow">Siklus berjalan</div>
-            <div className="mt-1 font-semibold text-white">{cycle.label}</div>
+            <div className="eyebrow">Pelaporan terbuka</div>
+            <div className="mt-1 font-semibold text-white">
+              Bisa melapor kapan saja
+            </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-slate-400">Foto terkirim</div>
-            <div className="mono text-lg font-semibold text-white">
-              {sentCount}/{FOTOS_PER_SIKLUS}
+            <div className="text-xs text-slate-400">Waktu server</div>
+            <div className="mono text-sm font-semibold text-white">
+              {cycle.label}
             </div>
           </div>
         </div>
-        {used >= FOTOS_PER_SIKLUS && (
-          <p className="mt-2 text-xs text-emerald-400">
-            ✅ Kuota siklus ini sudah habis ({FOTOS_PER_SIKLUS}/
-            {FOTOS_PER_SIKLUS} foto)
-          </p>
-        )}
-        {queueCount > 0 && sentCount < FOTOS_PER_SIKLUS && (
-          <p className="mt-2 text-xs text-amber-300">
-            ⏳ {queueCount} foto menunggu sinkron — dihitung dalam kuota.
-          </p>
-        )}
+        <p className="mt-2 text-xs text-slate-400">
+          Media bersifat opsional. Maksimal 4 foto dan 1 video per laporan.
+        </p>
+      </div>
+
+      <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-navy-900 p-1">
+        <button
+          type="button"
+          onClick={() => void changeMode("foto")}
+          className={
+            mode === "foto" ? "btn-primary py-2" : "btn-secondary py-2"
+          }
+        >
+          📷 Foto ({shots.length}/4)
+        </button>
+        <button
+          type="button"
+          onClick={() => void changeMode("video")}
+          className={
+            mode === "video" ? "btn-primary py-2" : "btn-secondary py-2"
+          }
+        >
+          🎥 Video ({videoShot ? 1 : 0}/1)
+        </button>
       </div>
 
       {/* Live preview kamera */}
@@ -220,26 +336,62 @@ export default function CaptureScreen({
         )}
       </div>
 
-      {/* Shutter besar — thumb-friendly, terkunci saat kuota habis */}
+      {/* Shutter besar — mode foto atau video */}
       <div className="mt-5 flex flex-col items-center gap-2 pb-1">
         <button
-          onClick={() => void takePhoto()}
-          disabled={!camera.ready || saving || quotaLeft <= 0}
+          onClick={toggleCapture}
+          disabled={
+            !camera.ready ||
+            saving ||
+            (mode === "foto" ? shots.length >= 4 : Boolean(videoShot))
+          }
           className="shutter-button flex h-[4.75rem] w-[4.75rem] items-center justify-center rounded-full border-4 border-gold-400 bg-navy-800 text-3xl shadow-[0_0_0_7px_rgba(245,185,66,0.12),0_12px_30px_rgba(0,0,0,0.3)] transition hover:bg-navy-700 active:scale-90 disabled:cursor-not-allowed disabled:opacity-30"
-          aria-label="Ambil foto"
+          aria-label={
+            mode === "foto"
+              ? "Ambil foto"
+              : recording
+                ? "Hentikan video"
+                : "Rekam video"
+          }
         >
-          <span aria-hidden="true">📸</span>
+          <span aria-hidden="true">
+            {mode === "foto" ? "📸" : recording ? "⏹️" : "⏺️"}
+          </span>
         </button>
         <span className="text-xs font-medium text-slate-400">
-          Ambil foto {shots.length + 1} dari {FOTOS_PER_SIKLUS}
+          {mode === "foto"
+            ? `Ambil foto ${shots.length + 1} dari 4 (opsional)`
+            : recording
+              ? "Merekam video… ketuk untuk berhenti"
+              : videoShot
+                ? "Video sudah ditambahkan"
+                : "Rekam video maksimal 60 detik"}
         </span>
-        {quotaLeft <= 0 && (
+        {captureError && (
+          <p className="max-w-sm text-center text-xs font-semibold text-red-300">
+            {captureError}
+          </p>
+        )}
+        {shots.length >= 4 && (
           <p className="text-xs font-semibold text-amber-300">
-            🔒 Maksimal {FOTOS_PER_SIKLUS} foto per siklus — kirim dulu / tunggu
-            siklus berikutnya.
+            Maksimal 4 foto untuk satu laporan.
           </p>
         )}
       </div>
+
+      <label className="mt-5 block text-sm font-medium text-slate-300">
+        Perihal laporan
+        <textarea
+          className="input mt-1 min-h-24 resize-y"
+          value={catatan}
+          onChange={(event) => setCatatan(event.target.value)}
+          placeholder="Contoh: Patroli wilayah dan pengamanan kegiatan masyarakat"
+          required
+        />
+        <span className="mt-1 block text-xs font-normal text-slate-500">
+          Jelaskan singkat kegiatan, lokasi, atau kejadian yang dilaporkan.
+        </span>
+      </label>
 
       {/* Hasil jepretan */}
       {shots.length > 0 && (
@@ -271,14 +423,43 @@ export default function CaptureScreen({
           </div>
           <button
             onClick={() => void submitAll()}
-            disabled={saving}
+            disabled={saving || !catatan.trim()}
             className="btn-primary w-full py-4"
           >
             {saving
               ? "Menyimpan…"
-              : "Kirim Laporan (" + shots.length + " foto)"}
+              : `Kirim Laporan (${shots.length} foto${videoShot ? " + 1 video" : ""})`}
           </button>
         </div>
+      )}
+
+      {videoShot && (
+        <div className="mt-5 overflow-hidden rounded-xl border border-sky-500/50 bg-navy-900 p-2">
+          <video src={videoShot.url} controls className="w-full rounded-lg" />
+          <div className="flex justify-between px-1 pt-2 text-xs text-slate-400">
+            <span>Video · {videoShot.durationSeconds} detik</span>
+            <button
+              type="button"
+              onClick={() => {
+                URL.revokeObjectURL(videoShot.url);
+                setVideoShot(null);
+              }}
+              className="text-red-300"
+            >
+              Hapus
+            </button>
+          </div>
+        </div>
+      )}
+
+      {shots.length === 0 && !videoShot && (
+        <button
+          onClick={() => void submitAll()}
+          disabled={saving || !catatan.trim()}
+          className="btn-secondary mt-5 w-full py-3"
+        >
+          {saving ? "Menyimpan…" : "Kirim laporan tanpa foto"}
+        </button>
       )}
 
       {savedMsg && (
@@ -288,10 +469,7 @@ export default function CaptureScreen({
       )}
 
       <p className="mt-4 text-center text-xs text-slate-500">
-        {remaining > 0
-          ? "Sisa kuota " + remaining + " foto untuk siklus ini."
-          : "Kuota siklus ini sudah habis — tunggu siklus berikutnya."}
-        {queueCount > 0 && " · " + queueCount + " laporan menunggu sinkron"}
+        Pelaporan tersedia 24 jam. Metadata waktu tetap dicatat untuk rekap.
       </p>
     </div>
   );

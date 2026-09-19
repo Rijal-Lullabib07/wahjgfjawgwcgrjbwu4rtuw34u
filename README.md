@@ -1,6 +1,6 @@
-# SIPLAP — Sistem Informasi Pelaporan Giat Lapangan (Satpol PP)
+# SIPLAP — Sistem Informasi Pelaporan Giat Lapangan Polres
 
-PWA pelaporan kegiatan lapangan berbasis foto untuk Satuan Polisi Pamong Praja.
+PWA pelaporan kegiatan lapangan berbasis foto untuk Polres.
 15 regu mengirim 2 foto per siklus (12 siklus × 2 jam/hari) dengan watermark GPS &
 waktu. Admin memantau secara real-time dan menarik rekap laporan (PDF/Excel).
 
@@ -13,7 +13,7 @@ waktu. Admin memantau secara real-time dan menarik rekap laporan (PDF/Excel).
 - **Generator laporan**: filter harian/mingguan/bulanan/custom, gabungan/per regu,
   export PDF (jsPDF + thumbnail) & Excel (SheetJS)
 - **Reminder notifikasi Web Push (VAPID)** 15 menit sebelum siklus berakhir — tetap sampai walau app
-ditutup; reminder lokal dipakai sebagai cadangan bila push tidak tersedia
+  ditutup; reminder lokal dipakai sebagai cadangan bila push tidak tersedia
 - **RLS Supabase**: regu hanya akses laporan miliknya; admin baca semua
 
 ## Setup Supabase
@@ -29,45 +29,52 @@ ditutup; reminder lokal dipakai sebagai cadangan bila push tidak tersedia
 3. **SQL Editor** → jalankan seluruh isi `supabase/migrations/0001_init.sql`
    (tabel, index, storage bucket, RLS, realtime — idempoten, aman diulang).
 4. **SQL Editor** → jalankan `supabase/migrations/0002_seed.sql`
-   (15 akun regu `REGU01`–`REGU15` + 1 admin, password default tercantum di file — ganti!).
-5. **SQL Editor** → jalankan `supabase/migrations/0003_reminder_logs.sql`
-   (log agar satu regu hanya menerima satu reminder per siklus).
-6. **SQL Editor** → jalankan `supabase/migrations/0004_push_claim.sql`
-   (fungsi `claim_push_subscription` — device boleh pindah regu).
-7. Cek login: `REGU01` / `siplap2026`, admin `admin@satpolpp.go.id` / `admin2026`.
+   (631 master username pelapor dan 27 master username pemantau/admin JAWARA; tidak membuat password).
+5. **SQL Editor** → jalankan `supabase/migrations/0003_foto_quota.sql`
+   lalu `supabase/migrations/0003_reminder_logs.sql`.
+6. **SQL Editor** → jalankan `supabase/migrations/0004_push_claim.sql` dan
+   `supabase/migrations/0005_fix_storage_rls.sql`.
+7. Jalankan `0006_jawara_accounts.sql`, lalu `0007_open_reporting.sql`, kemudian `0008_media_limits.sql`.
+8. Jalankan `npm run provision:jawara` untuk membuat akun Auth dan password acak.
 
-## 8. Aktifkan notifikasi pengingat (Web Push VAPID)
+## Notifikasi pengingat
 
-Reminder dikirim oleh Edge Function `reminder-push` yang dipicu pg_cron tiap 5 menit,
-**bukan** oleh halaman — jadi tetap masuk saat app tertutup / HP di kantong.
+Notifikasi pengingat batas siklus dinonaktifkan karena pelaporan tersedia 24 jam.
+Fitur Web Push tidak diperlukan untuk alur pelaporan saat ini.
 
 **a. Generate kunci VAPID** (sekali saja, simpan hasilnya)
+
 ```bash
 npx web-push generate-vapid-keys
 ```
 
 **b. Isi kunci PUBLIK di `.env`**, lalu restart `npm run dev` / build ulang:
+
 ```env
 VITE_VAPID_PUBLIC_KEY=<Public Key>
 ```
 
 **c. Set secret Edge Function** (kunci PRIVAT hanya di server, jangan pernah di frontend):
+
 ```bash
 supabase secrets set \
   VAPID_PUBLIC_KEY="<Public Key>" \
   VAPID_PRIVATE_KEY="<Private Key>" \
-  VAPID_SUBJECT="mailto:admin@satpolpp.go.id" \
-  CRON_SECRET="<string pendek pilihan sendiri, mis. satpolpp-cron-9f3k2m7q>"
+  VAPID_SUBJECT="mailto:admin@polres.go.id" \
+  CRON_SECRET="<string pendek pilihan sendiri, mis. polres-cron-9f3k2m7q>"
 ```
+
 `CRON_SECRET` dipakai pg_cron sebagai tanda pengenal, dikirim lewat header **`x-cron-secret`**
 (sengaja bukan `Authorization`, agar tidak terkena pemeriksaan JWT bawaan platform). Jadi tidak
 perlu menempel `service_role` key yang panjang ke dalam SQL — sumber 401 yang paling sering
 terjadi. Bebas diganti kapan saja, cukup ubah secret + jadwal cron-nya.
 
 **d. Deploy Edge Function dengan pemeriksaan JWT bawaan DIMATIKAN**
+
 ```bash
 supabase functions deploy reminder-push --no-verify-jwt
 ```
+
 Alasan: pg_cron tidak membawa JWT user, dan pemeriksaan bawaan platform hanya mengerti format
 kunci lama — kalau dibiarkan aktif, request ditolak sebelum kode kita jalan (gejala: pesan
 `{"code":"UNAUTHORIZED_INVALID_JWT_FORMAT","message":"Invalid JWT"}` atau `Invalid API key`).
@@ -78,6 +85,7 @@ Sebagai gantinya, function memverifikasi sendiri header `x-cron-secret`.
 **e. Aktifkan ekstensi** — Dashboard → Database → Extensions → aktifkan **`pg_cron`** dan **`pg_net`**.
 
 **f. Jadwalkan cron** di SQL Editor (ganti `<PROJECT_REF>` dan `<SERVICE_ROLE_KEY>`):
+
 ```sql
 select cron.unschedule('siplap-reminder') where exists (
   select 1 from cron.job where jobname = 'siplap-reminder'
@@ -101,17 +109,20 @@ select cron.schedule(
 
 **g. Uji end-to-end** — buka app sebagai regu, login, klik **"Aktifkan"** pada banner
 notifikasi (browser minta izin), lalu dari terminal:
+
 ```bash
 curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/reminder-push" \
   -H "x-cron-secret: <CRON_SECRET>" \
   -H "Content-Type: application/json" \
   -d '{"test":true}'
 ```
+
 Respons `{"ok":true,...,"results":[{"regu":"Regu 1","foto":0,"sent":1}]}` = notifikasi
 benar-benar terkirim ke device. `"sent":0` berarti belum ada device yang mendaftar →
 cek isi tabel `push_subscriptions`.
 
 **h. Verifikasi cron** yang sedang berjalan:
+
 ```sql
 select jobname, schedule, active from cron.job;
 select status, return_message, start_time from cron.job_run_details order by start_time desc limit 5;
@@ -141,12 +152,40 @@ npm run build    # produksi (ikut typecheck) → dist/
 Deploy `dist/` ke Vercel/Netlify/Cloudflare Pages. PWA manifest & service worker
 otomatis dari `vite-plugin-pwa`.
 
+## Provisioning akun JAWARA
+
+Migration `supabase/migrations/0006_jawara_accounts.sql` menambahkan username,
+level pelapor, unit, wilayah, dan pembatasan akses laporan. Jalankan migration
+tersebut setelah migration sebelumnya.
+
+Jalankan juga `supabase/migrations/0007_open_reporting.sql` setelahnya. Migration
+ini membuka pelaporan 24 jam, menghapus kuota foto per siklus, dan tetap
+menyimpan metadata waktu untuk kebutuhan rekap.
+
+Migration ini juga menonaktifkan akun demo lama `REGU01`–`REGU15` yang memakai
+password mudah ditebak. Jangan mengaktifkannya kembali untuk produksi.
+
+Untuk membuat akun pemantau dan pelapor, gunakan Supabase service-role key hanya
+di terminal lokal atau server administrasi, jangan pernah di `.env` frontend,
+browser, atau repository:
+
+```powershell
+$env:SUPABASE_SERVICE_ROLE_KEY = "<SERVICE_ROLE_KEY>"
+$env:VITE_SUPABASE_URL = "https://<PROJECT_REF>.supabase.co"
+npm run provision:jawara
+```
+
+Script membuat password acak kuat yang berbeda untuk setiap akun baru dan menyimpan hasilnya hanya di
+`jawara-credentials-latest.csv` serta `pw.md`, yang sudah masuk `.gitignore`. Akun yang sudah
+ada tidak di-reset passwordnya saat script dijalankan ulang. Setelah kredensial
+dibagikan melalui kanal aman, hapus kedua file tersebut.
+
 ## Akun
 
-| Role | Kredensial | Keterangan |
-|------|-----------|------------|
-| Regu | Kode: `REGU01`–`REGU15`, PIN: `siplap2026` | ⚠️ wajib ganti PIN |
-| Admin | `admin@satpolpp.go.id` / `admin2026` | ⚠️ wajib ganti password |
+| Role     | Kredensial                                           | Keterangan                         |
+| -------- | ---------------------------------------------------- | ---------------------------------- |
+| Pelapor  | Username JAWARA dari `jawara-credentials-latest.csv` | Password acak, wajib disimpan aman |
+| Pemantau | Username JAWARA dari `jawara-credentials-latest.csv` | Password acak, wajib disimpan aman |
 
 ## Struktur
 

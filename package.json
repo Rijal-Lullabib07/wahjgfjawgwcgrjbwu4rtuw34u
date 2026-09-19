@@ -1,10 +1,11 @@
 {
-  "name": "siplap-satpolpp",
+  "name": "siplap-polres",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "icons": "node scripts/generate-icons.mjs",
+    "provision:jawara": "node scripts/provision-jawara-accounts.mjs",
     "dev": "npm run icons && vite",
     "build": "npm run icons && tsc --noEmit && vite build",
     "preview": "vite preview",

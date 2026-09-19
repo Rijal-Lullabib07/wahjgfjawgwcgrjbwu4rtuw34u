@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
-type FacingMode = 'environment' | 'user';
+type FacingMode = "environment" | "user";
 
 function errMessage(err: unknown): string {
-  if (!(err instanceof Error)) return 'Kamera tidak tersedia';
+  if (!(err instanceof Error)) return "Kamera tidak tersedia";
   switch (err.name) {
-    case 'NotAllowedError':
-    case 'SecurityError':
-      return 'Akses kamera ditolak. Buka pengaturan browser/HP → izin kamera → izinkan untuk SIPLAP.';
-    case 'NotFoundError':
-    case 'OverconstrainedError':
-      return 'Kamera tidak ditemukan di perangkat ini.';
-    case 'NotReadableError':
-      return 'Kamera sedang dipakai aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.';
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Akses kamera ditolak. Buka pengaturan browser/HP → izin kamera → izinkan untuk SIPLAP.";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "Kamera tidak ditemukan di perangkat ini.";
+    case "NotReadableError":
+      return "Kamera sedang dipakai aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.";
     default:
-      return err.message || 'Kamera gagal dinyalakan';
+      return err.message || "Kamera gagal dinyalakan";
   }
 }
 
@@ -26,7 +26,7 @@ function errMessage(err: unknown): string {
 export function useCamera() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [facing, setFacing] = useState<FacingMode>('environment');
+  const [facing, setFacing] = useState<FacingMode>("environment");
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [insecure, setInsecure] = useState(false);
@@ -35,7 +35,7 @@ export function useCamera() {
   // Ditambah pengecualian Android WebView, tempat browser lama mendaftarkan
   // getUserMedia meski halaman tidak aman — dan gagal jalan.
   const isSecure =
-    typeof window !== 'undefined' &&
+    typeof window !== "undefined" &&
     (window.isSecureContext ||
       /Android/i.test(navigator.userAgent) === false ||
       /; wv\)/i.test(navigator.userAgent));
@@ -47,31 +47,43 @@ export function useCamera() {
   }, []);
 
   const start = useCallback(
-    async (mode: FacingMode = facing) => {
+    async (mode: FacingMode = facing, withAudio = false) => {
       stop();
       setError(null);
 
       if (!isSecure) {
         setInsecure(true);
         setError(
-          'Kamera butuh koneksi aman (HTTPS). Buka aplikasi lewat alamat https://…, bukan http://',
+          "Kamera butuh koneksi aman (HTTPS). Buka aplikasi lewat alamat https://…, bukan http://",
         );
         return;
       }
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError('Browser ini tidak mendukung akses kamera. Coba Chrome terbaru.');
+        setError(
+          "Browser ini tidak mendukung akses kamera. Coba Chrome terbaru.",
+        );
         return;
       }
 
       // Coba bertahap: HD → resolusi default → constraint longgar.
       const attempts: MediaStreamConstraints[] = [
         {
-          video: { facingMode: { ideal: mode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          audio: false,
+          video: {
+            facingMode: { ideal: mode },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: withAudio,
         },
-        { video: { facingMode: { ideal: mode } }, audio: false },
-        { video: true, audio: false },
+        { video: { facingMode: { ideal: mode } }, audio: withAudio },
+        { video: true, audio: withAudio },
       ];
+      if (withAudio) {
+        attempts.push(
+          { video: { facingMode: { ideal: mode } }, audio: false },
+          { video: true, audio: false },
+        );
+      }
 
       let lastErr: unknown = null;
       for (const constraints of attempts) {
@@ -81,7 +93,10 @@ export function useCamera() {
           const stream = await Promise.race([
             navigator.mediaDevices.getUserMedia(constraints),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Waktu permintaan kamera habis')), 15000),
+              setTimeout(
+                () => reject(new Error("Waktu permintaan kamera habis")),
+                15000,
+              ),
             ),
           ]);
           streamRef.current = stream;
@@ -98,7 +113,7 @@ export function useCamera() {
         } catch (err) {
           lastErr = err;
           // NotAllowedError tidak akan membaik dengan constraint longgar — hentikan.
-          if (err instanceof Error && err.name === 'NotAllowedError') break;
+          if (err instanceof Error && err.name === "NotAllowedError") break;
         }
       }
       setError(errMessage(lastErr));
@@ -107,7 +122,7 @@ export function useCamera() {
   );
 
   const switchCamera = useCallback(() => {
-    const next: FacingMode = facing === 'environment' ? 'user' : 'environment';
+    const next: FacingMode = facing === "environment" ? "user" : "environment";
     setFacing(next);
     void start(next);
   }, [facing, start]);
@@ -116,5 +131,14 @@ export function useCamera() {
     return () => stop();
   }, [stop]);
 
-  return { videoRef, ready, error, facing, start, stop, switchCamera, insecure };
+  return {
+    videoRef,
+    ready,
+    error,
+    facing,
+    start,
+    stop,
+    switchCamera,
+    insecure,
+  };
 }
