@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
@@ -25,13 +26,6 @@ if (!supabaseUrl || !serviceRoleKey) {
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-const monitorDefaultPassword = process.env.JAWARA_MONITOR_PASSWORD;
-const reporterDefaultPassword = process.env.JAWARA_REPORTER_PASSWORD;
-if (!monitorDefaultPassword || !reporterDefaultPassword) {
-  throw new Error(
-    "Missing JAWARA_MONITOR_PASSWORD and JAWARA_REPORTER_PASSWORD in .env.provision.local.",
-  );
-}
 
 // Counts and unit keys come from JAWARA APP.xlsx / panduan-update-app-web.html.
 const polsekReporters = [
@@ -75,6 +69,24 @@ const functionMonitors = [
 ];
 
 const emailFor = (username, type) => `${username}@${type}.siplap.id`;
+
+const randomPassword = () => {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const special = "!@#$%^&*";
+  const chars = [
+    alphabet[randomBytes(1)[0] % 26],
+    alphabet[26 + (randomBytes(1)[0] % 26)],
+    String(2 + (randomBytes(1)[0] % 8)),
+    special[randomBytes(1)[0] % special.length],
+  ];
+  while (chars.length < 20)
+    chars.push(alphabet[randomBytes(1)[0] % alphabet.length]);
+  for (let index = chars.length - 1; index > 0; index--) {
+    const swapIndex = randomBytes(1)[0] % (index + 1);
+    [chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]];
+  }
+  return chars.join("");
+};
 const reporterAccounts = [];
 const monitorAccounts = [
   {
@@ -168,8 +180,7 @@ async function ensureAuthUser(account, users, type) {
   const existing = users.get(email);
   if (existing) return { email, password: null, created: false };
 
-  const password =
-    type === "monitor" ? monitorDefaultPassword : reporterDefaultPassword;
+  const password = randomPassword();
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,

@@ -25,13 +25,17 @@ export async function exportExcel(
       .map((f) => f.watermark_timestamp)
       .join("; "),
     Jumlah_Video: (l.videos ?? []).length,
-    Path_Video: (l.videos ?? []).map((v) => v.storage_path).join("; "),
+    Path_Video: (l.videos ?? [])
+      .map((v) => v.storage_path ?? "")
+      .filter(Boolean)
+      .join("; "),
     Video_Durasi_Detik: (l.videos ?? [])
       .map((v) => v.duration_seconds ?? "")
       .join("; "),
     Video_Watermark_Waktu: (l.videos ?? [])
-      .map((v) => v.watermark_timestamp)
+      .map((v) => v.watermark_timestamp ?? "")
       .join("; "),
+    Video: (l.videos ?? []).length > 0 ? "Tersedia" : "Tidak ada",
     Status_Sync: l.status_sync,
   }));
 

@@ -41,6 +41,7 @@ export default function ReportScreen() {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState<string>("all"); // 'all' = gabungan
+  const [categorySearch, setCategorySearch] = useState("");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,13 @@ export default function ReportScreen() {
     queryFn: fetchReguList,
   });
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
+  const filteredReguList = useMemo(() => {
+    const query = categorySearch.trim().toLocaleLowerCase("id-ID");
+    if (!query) return reguList;
+    return reguList.filter((regu) =>
+      reguDisplayName(regu).toLocaleLowerCase("id-ID").includes(query),
+    );
+  }, [categorySearch, reguList]);
 
   const { data: laporan = [], isFetching } = useQuery({
     queryKey: ["laporan-report", preset, custom, reguId],
@@ -175,18 +183,30 @@ export default function ReportScreen() {
           <label className="mb-2 block text-sm font-medium text-slate-300">
             Kategori
           </label>
+          <input
+            type="search"
+            className="input mb-2"
+            placeholder="Cari kategori/pelapor..."
+            value={categorySearch}
+            onChange={(e) => setCategorySearch(e.target.value)}
+          />
           <select
             className="input"
             value={reguId}
             onChange={(e) => setReguId(e.target.value)}
           >
             <option value="all">Laporan Gabungan (semua pelapor)</option>
-            {reguList.map((r) => (
+            {filteredReguList.map((r) => (
               <option key={r.id} value={r.id}>
                 {reguDisplayName(r)}
               </option>
             ))}
           </select>
+          {categorySearch.trim() && filteredReguList.length === 0 && (
+            <p className="mt-2 text-xs text-slate-400">
+              Kategori/pelapor tidak ditemukan.
+            </p>
+          )}
         </div>
 
         <div>
