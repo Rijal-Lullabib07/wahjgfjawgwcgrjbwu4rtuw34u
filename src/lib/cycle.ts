@@ -1,54 +1,48 @@
 /**
- * Logika siklus laporan: 1 hari = 12 siklus × 2 jam.
- * Siklus dimulai pukul 04.00 WIB ( UTC+8 ) → siklus 1: 04–06, siklus 2: 06–08, ... siklus 12: 02–04.
+ * Pelaporan 24 jam — tidak ada lagi siklus 2 jam.
+ *
+ * Laporan bisa dikirim kapan saja sepanjang hari; satu hari = satu periode
+ * pelaporan (00.00–24.00 WIB). Konstanta & fungsi siklus dipertahankan agar
+ * skema DB lama (`laporan.siklus_ke`) dan komponen yang sudah memakai
+ * `CycleInfo` tetap kompatibel: `siklusKe` selalu 1 dan `minutesLeft` selalu 0
+ * (tidak dipakai lagi di UI).
  */
-export const CYCLE_START_HOUR = 4; // siklus 1 mulai 04:00 lokal
-export const CYCLE_LENGTH_HOURS = 2;
-export const CYCLES_PER_DAY = 12;
+export const CYCLE_START_HOUR = 0; // periode mulai 00.00 lokal
+export const CYCLE_LENGTH_HOURS = 24;
+export const CYCLES_PER_DAY = 1;
+/** Refensi lama (maks foto "lengkap"); tidak lagi dipakai UI pemantau. */
 export const FOTOS_PER_SIKLUS = 2;
-export const REMINDER_MINUTES_BEFORE = 15;
 
 export interface CycleInfo {
-  siklusKe: number; // 1..12
+  siklusKe: number; // selalu 1 (kompatibilitas kolom laporan.siklus_ke)
   start: Date;
   end: Date;
-  minutesLeft: number;
-  label: string;
+  minutesLeft: number; // selalu 0 — tidak dipakai lagi
+  label: string; // contoh: "Pelaporan 24 jam · 20 Sep"
 }
 
-/** Hitung info siklus berjalan pada waktu tertentu (default: sekarang). */
+/** Info periode pelaporan berjalan pada waktu tertentu (default: sekarang). */
 export function getCurrentCycle(now: Date = new Date()): CycleInfo {
-  const startOfDay = new Date(now);
-  startOfDay.setHours(CYCLE_START_HOUR, 0, 0, 0);
-  if (now < startOfDay) startOfDay.setDate(startOfDay.getDate() - 1);
-
-  const elapsedMs = now.getTime() - startOfDay.getTime();
-  const idx = Math.floor(elapsedMs / (CYCLE_LENGTH_HOURS * 3600_000)); // 0..11
-  const siklusKe = idx + 1;
-
-  const start = new Date(startOfDay.getTime() + idx * CYCLE_LENGTH_HOURS * 3600_000);
+  const start = new Date(now);
+  start.setHours(CYCLE_START_HOUR, 0, 0, 0);
   const end = new Date(start.getTime() + CYCLE_LENGTH_HOURS * 3600_000);
-  const minutesLeft = Math.max(0, Math.round((end.getTime() - now.getTime()) / 60_000));
 
   const fmt = (d: Date) =>
-    d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
 
   return {
-    siklusKe,
+    siklusKe: 1,
     start,
     end,
-    minutesLeft,
-    label: `Siklus ${siklusKe} · ${fmt(start)}–${fmt(end)}`,
+    minutesLeft: 0,
+    label: `Pelaporan 24 jam · ${fmt(now)}`,
   };
 }
 
-/** Rentang waktu siklus untuk tanggal & nomor siklus tertentu. */
-export function getCycleRange(date: Date, siklusKe: number): { start: Date; end: Date } {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(CYCLE_START_HOUR, 0, 0, 0);
-  const start = new Date(
-    startOfDay.getTime() + (siklusKe - 1) * CYCLE_LENGTH_HOURS * 3600_000,
-  );
+/** Rentang waktu periode untuk tanggal tertentu (00.00–24.00). */
+export function getCycleRange(date: Date, _siklusKe = 1): { start: Date; end: Date } {
+  const start = new Date(date);
+  start.setHours(CYCLE_START_HOUR, 0, 0, 0);
   const end = new Date(start.getTime() + CYCLE_LENGTH_HOURS * 3600_000);
   return { start, end };
 }

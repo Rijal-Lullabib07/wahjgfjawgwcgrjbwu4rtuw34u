@@ -19,7 +19,7 @@ interface Props {
 type StepState = 'ok' | 'fail' | 'pending';
 
 const TEST_TITLE = 'SIPLAP aktif ✅';
-const TEST_BODY = 'Pengingat siklus akan masuk otomatis di 15 menit terakhir.';
+const TEST_BODY = 'Pemberitahuan laporan baru akan masuk otomatis.';
 
 /** Kirim notifikasi tes via SW; fallback Notification biasa bila SW belum siap. */
 async function showTestNotification(): Promise<void> {
@@ -146,7 +146,7 @@ export default function PushSetupModal({ open, onClose, reguId, onEnabled }: Pro
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="eyebrow">Notifikasi</div>
-            <h2 className="text-lg font-bold leading-tight">Aktifkan pengingat siklus</h2>
+            <h2 className="text-lg font-bold leading-tight">Aktifkan notifikasi</h2>
           </div>
           <button
             onClick={onClose}

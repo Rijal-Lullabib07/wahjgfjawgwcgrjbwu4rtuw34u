@@ -74,7 +74,9 @@ const unitPresence = {
   binmas: allWilayah.filter(
     (w) => !["plered", "darangdan", "sukasari"].includes(w),
   ),
-  propam: allWilayah.filter((w) => !["kota", "campaka"].includes(w)),
+  propam: allWilayah.filter(
+    (w) => !["kota", "campaka", "maniis"].includes(w),
+  ),
   lantas: ["kota", "plered", "jatiluhur", "bungursari", "cibatu"],
   sium: allWilayah,
 };
@@ -246,7 +248,20 @@ async function ensureAuthUser(account, users) {
     emailFor(account.username, account.kind === "pemantau" ? "monitor" : "regu")
   ).toLowerCase();
   const existing = users.get(email);
-  if (existing) return { email, password: null, created: false };
+  if (existing) {
+    // JAWARA_RESET_EXISTING=1: reset password akun existing (mis. run
+    // sebelumnya gagal sebelum CSV ditulis). Tanpa flag, password lama
+    // dipertahankan dan CSV menandai [existing password preserved].
+    if (!process.env.JAWARA_RESET_EXISTING) {
+      return { email, password: null, created: false };
+    }
+    const password = randomPassword();
+    const { error } = await supabase.auth.admin.updateUserById(existing.id, {
+      password,
+    });
+    if (error) throw error;
+    return { email, password, created: false, reset: true };
+  }
 
   const password = randomPassword();
   const { data, error } = await supabase.auth.admin.createUser({
@@ -359,7 +374,7 @@ const lines = [
       account.kind,
       account.accessLevel,
       account.unitKey ?? account.wilayahKey ?? "all",
-      account.created ? "created" : "existing",
+      account.reset ? "reset" : account.created ? "created" : "existing",
     ]
       .map(csvEscape)
       .join(","),
@@ -392,7 +407,7 @@ const markdown = [
         account.password ?? "[existing password preserved]",
         account.unitKey ?? account.wilayahKey ?? "all",
         account.email,
-        account.created ? "created" : "existing",
+        account.reset ? "reset" : account.created ? "created" : "existing",
       ]
         .map((value) => `| ${String(value).replaceAll("|", "\\|")} `)
         .join("") + "|",

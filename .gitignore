@@ -3,7 +3,8 @@ dist/
 dev-dist/
 .env
 .env.local
-*.local
+.env*
+.vapid-tmp.txt
 jawara-credentials-*.csv
 pw.md
 .DS_Store

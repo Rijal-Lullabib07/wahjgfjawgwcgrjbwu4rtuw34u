@@ -1,80 +1,83 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Laporan, Regu } from "../../types";
+/**
+ * Tab 📊 Monitoring — tab utama pemantau.
+ *
+ * Terdiri dari:
+ *  - Header command center + kartu ringkasan (total pelapor, laporan masuk,
+ *    sudah/belum lapor) — dipindah dari tab Monitoring lama.
+ *  - Folder per Polsek (dipindah dari tab 📁 Folder): unit/satuan masuk ke
+ *    folder Polseknya masing-masing.
+ *  - Kartu laporan dengan player video, unduh foto/video, dan salin keterangan.
+ *
+ * Semua data folder lewat RPC di Supabase (db_supabase.sql bagian 8):
+ *   - folder_overview()     → daftar folder + jumlah hari ini + waktu terakhir + "N baru"
+ *   - folder_laporan(key)   → isi laporan sebuah folder (RLS tetap berlaku)
+ *   - mark_folder_read(key) → tandai folder sudah dibuka (badge hilang)
+ *
+ * folder_key (harus sama dengan konvensi SQL):
+ *   polsek:<wilayah> | unit:<wilayah>:<unit> | satuan:<unit> | arsip:<wilayah>
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { SessionUser } from "../../types";
+import {
+  fetchFolderLaporan,
+  fetchFolderOverview,
+  formatWaktuWib,
+  markFolderRead,
+  type FolderLaporanRow,
+  type FolderRow,
+} from "../../lib/folders";
 import {
   fetchLaporan,
   fetchReguList,
-  subscribeLaporan,
-  fotoUrl,
   fotoDownloadUrl,
-  videoUrl,
+  fotoUrl,
   videoDownloadUrl,
+  videoUrl,
 } from "../../lib/supabase/api";
-import {
-  getCurrentCycle,
-  formatWaktu,
-  FOTOS_PER_SIKLUS,
-} from "../../lib/cycle";
-import {
-  reverseGeocode,
-  cachedPlace,
-  formatPlace,
-  type PlaceInfo,
-} from "../../lib/geo";
-import { reguDisplayName, reguOrigin } from "../../lib/regu";
+import PlaceBadge from "../../components/PlaceBadge";
 
-/** Badge lokasi: nama tempat (reverse geocoding), fallback koordinat. */
-function PlaceBadge({ lat, lng }: { lat: number | null; lng: number | null }) {
-  const [place, setPlace] = useState<PlaceInfo | null>(() =>
-    cachedPlace(lat, lng),
-  );
+interface Props {
+  session: SessionUser;
+  /** Naik tiap ada perubahan realtime → badge & ringkasan dihitung ulang. */
+  refreshKey: number;
+  /** folder_key dari popup "Buka laporan" / notifikasi sistem. */
+  openFolderKey: string | null;
+  onOpenHandled: () => void;
+}
 
-  useEffect(() => {
-    if (lat == null || lng == null) return;
-    const cached = cachedPlace(lat, lng);
-    if (cached) {
-      setPlace(cached);
-      return;
-    }
-    let active = true;
-    void reverseGeocode(lat, lng).then((p) => {
-      if (active && p) setPlace(p);
-    });
-    return () => {
-      active = false;
-    };
-  }, [lat, lng]);
-
+function BaruBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
   return (
-    <span className="badge bg-navy-700 text-navy-100">
-      📍 {formatPlace(place, lat, lng)}
+    <span className="rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white shadow">
+      {count} baru
     </span>
   );
 }
 
-/** URL foto langsung dari Supabase Storage (public bucket). */
-function FotoThumb({ path }: { path: string }) {
+function SyncBadge({ status }: { status: string }) {
+  if (status === "synced") {
+    return (
+      <span className="badge bg-emerald-500/15 text-emerald-300">✓ synced</span>
+    );
+  }
+  if (status === "failed") {
+    return <span className="badge bg-red-500/15 text-red-300">✗ gagal</span>;
+  }
+  return <span className="badge bg-amber-500/15 text-amber-300">⏳ pending</span>;
+}
+
+function FolderStats({ row }: { row: FolderRow }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-navy-600 bg-navy-900">
-      <img
-        src={fotoUrl(path)}
-        alt="Foto giat"
-        className="aspect-square w-full object-cover"
-        loading="lazy"
-      />
-      <a
-        href={fotoDownloadUrl(path)}
-        download
-        target="_blank"
-        rel="noreferrer"
-        className="block border-t border-navy-600 px-2 py-1.5 text-center text-[11px] font-semibold text-sky-300 hover:bg-navy-800 hover:text-white"
-      >
-        Download foto
-      </a>
+    <div className="flex items-center gap-3 text-xs text-slate-400">
+      <span>📅 {row.today_count} hari ini</span>
+      <span>🕘 terakhir: {formatWaktuWib(row.last_at)}</span>
     </div>
   );
 }
 
+/** Player video + tombol unduh. */
 function VideoPreview({
   path,
   durationSeconds,
@@ -90,182 +93,182 @@ function VideoPreview({
         preload="metadata"
         className="aspect-video w-full object-cover"
       />
-      <div className="px-2 py-1 text-[10px] text-sky-200">
-        🎥 Video{durationSeconds ? ` · ${durationSeconds} detik` : ""}
+      <div className="flex items-center justify-between gap-2 px-2 py-1">
+        <span className="text-[10px] text-sky-200">
+          🎥 Video{durationSeconds ? ` · ${durationSeconds} detik` : ""}
+        </span>
+        <a
+          href={videoDownloadUrl(path)}
+          download
+          target="_blank"
+          rel="noreferrer"
+          className="text-[11px] font-semibold text-sky-300 hover:text-white"
+        >
+          ⬇ Unduh
+        </a>
       </div>
-      <a
-        href={videoDownloadUrl(path)}
-        download
-        target="_blank"
-        rel="noreferrer"
-        className="block border-t border-navy-700 px-2 py-1.5 text-center text-[11px] font-semibold text-sky-300 hover:bg-navy-800 hover:text-white"
-      >
-        Download video
-      </a>
     </div>
   );
 }
 
-function StatusBadge({
-  count,
-  videoCount,
-}: {
-  count: number;
-  videoCount: number;
-}) {
-  if (count >= FOTOS_PER_SIKLUS) {
-    return (
-      <span className="badge bg-emerald-500/15 text-emerald-300">
-        ✅ Lengkap
-      </span>
-    );
-  }
-  if (videoCount > 0) {
-    return (
-      <span className="badge bg-sky-500/15 text-sky-300">
-        🎥 Video terkirim
-      </span>
-    );
-  }
-  if (count > 0) {
-    return (
-      <span className="badge bg-amber-500/15 text-amber-300">
-        ⏳ {count}/2 foto
-      </span>
-    );
-  }
-  return (
-    <span className="badge bg-red-500/15 text-red-300">❌ Belum lapor</span>
-  );
-}
+/** Tombol salin keterangan laporan (clipboard API + fallback lama). */
+function CopyNoteButton({ note }: { note: string }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-/**
- * Monitoring realtime, diklasifikasikan per pelapor:
- - Ringkasan status semua pelapor dalam grid (klik kartu → fokus pelapor)
- - Tab filter per pelapor + panel detail laporan pelapor terpilih
- */
-export default function MonitoringScreen() {
-  const queryClient = useQueryClient();
-  const cycle = useMemo(() => getCurrentCycle(), [Date.now() / 60000]);
-  const [reguFilter, setReguFilter] = useState<string>("semua");
-  const [copiedReportId, setCopiedReportId] = useState<string | null>(null);
-  const [copyError, setCopyError] = useState<string | null>(null);
-
-  const {
-    data: reguList = [],
-    error: reguError,
-  } = useQuery({
-    queryKey: ["regu-list"],
-    queryFn: fetchReguList,
-  });
-
-  const {
-    data: laporanList = [],
-    error: laporanError,
-  } = useQuery({
-    queryKey: ["laporan-recent"],
-    queryFn: () => fetchLaporan({ limit: 200 }),
-  });
-
-  // Realtime: invalidasi query saat ada perubahan di backend
-  useEffect(() => {
-    return subscribeLaporan(() => {
-      void queryClient.invalidateQueries({ queryKey: ["laporan-recent"] });
-    });
-  }, [queryClient]);
-
-  // Refresh tiap 30 detik sebagai fallback
-  useEffect(() => {
-    const t = setInterval(() => {
-      void queryClient.invalidateQueries({ queryKey: ["laporan-recent"] });
-    }, 30000);
-    return () => clearInterval(t);
-  }, [queryClient]);
-
-  // Status per regu di siklus berjalan
-  const statusPerRegu = useMemo(() => {
-    const map = new Map<
-      string,
-      { regu: Regu; count: number; videoCount: number; lastAt: string | null }
-    >();
-    for (const r of reguList) {
-      map.set(r.id, { regu: r, count: 0, videoCount: 0, lastAt: null });
-    }
-    for (const l of laporanList) {
-      const entry = map.get(l.regu_id);
-      if (!entry) continue;
-      if (l.siklus_ke === cycle.siklusKe) {
-        entry.count += l.fotos?.length ?? 0;
-        entry.videoCount += l.videos?.length ?? 0;
-        const t = l.timestamp_kirim;
-        if (!entry.lastAt || t > entry.lastAt) entry.lastAt = t;
+  const copy = async () => {
+    setFailed(false);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(note);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = note;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand("copy");
+        textarea.remove();
+        if (!ok) throw new Error("copy gagal");
       }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+      window.setTimeout(() => setFailed(false), 2000);
     }
-    return [...map.values()].sort((a, b) =>
-      a.regu.nama_regu.localeCompare(b.regu.nama_regu),
-    );
-  }, [reguList, laporanList, cycle.siklusKe]);
-
-  const belumLapor = statusPerRegu.filter((s) => s.count === 0).length;
-
-  // Klasifikasi per regu: laporan dikelompokkan dalam Map regu_id → laporan[]
-  const laporanPerRegu = useMemo(() => {
-    const map = new Map<string, Laporan[]>();
-    for (const l of laporanList) {
-      const arr = map.get(l.regu_id);
-      if (arr) arr.push(l);
-      else map.set(l.regu_id, [l]);
-    }
-    return map;
-  }, [laporanList]);
-
-  // Regu terpilih: dari filter, atau otomatis regu yang belum lapor paling awal
-  const selected = useMemo(() => {
-    if (reguFilter !== "semua") {
-      return statusPerRegu.find((s) => s.regu.id === reguFilter) ?? null;
-    }
-    return null;
-  }, [reguFilter, statusPerRegu]);
-
-  const selectedLaporan = selected
-    ? (laporanPerRegu.get(selected.regu.id) ?? []).slice(0, 12)
-    : [];
-  const queryError = reguError ?? laporanError;
-
-  const copyReportNote = async (laporan: Laporan) => {
-    const note = laporan.catatan?.trim();
-    if (!note) return;
-    setCopyError(null);
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(note);
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = note;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      const copied = document.execCommand("copy");
-      textarea.remove();
-      if (!copied) throw new Error("Keterangan tidak dapat disalin");
-    }
-    setCopiedReportId(laporan.id);
-    window.setTimeout(() => setCopiedReportId(null), 2000);
   };
 
   return (
-    <div className="space-y-6">
-      {queryError && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          Gagal memuat data pemantauan:{" "}
-          {queryError instanceof Error
-            ? queryError.message
-            : typeof queryError === "object" && queryError !== null
-              ? JSON.stringify(queryError)
-              : String(queryError)}
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className={
+        "shrink-0 rounded-lg border px-2 py-1 text-[11px] font-semibold transition " +
+        (copied
+          ? "border-emerald-500/40 text-emerald-300"
+          : failed
+            ? "border-red-500/40 text-red-300"
+            : "border-navy-600 text-sky-300 hover:bg-navy-800 hover:text-white")
+      }
+    >
+      {copied ? "Tersalin ✓" : failed ? "Gagal salin" : "📋 Salin"}
+    </button>
+  );
+}
+
+function LaporanCard({ item }: { item: FolderLaporanRow }) {
+  return (
+    <div className="card">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-white">
+            {item.nama_regu}
+          </div>
+          <div className="mt-0.5 text-xs text-slate-400">
+            {formatWaktuWib(item.timestamp_kirim)}
+          </div>
+        </div>
+        <SyncBadge status={item.status_sync} />
+      </div>
+      {item.catatan && (
+        <div className="mt-2 rounded-lg bg-navy-900/70 px-3 py-2">
+          <div className="flex items-start justify-between gap-3">
+            <p className="whitespace-pre-wrap text-sm text-slate-300">
+              {item.catatan}
+            </p>
+            <CopyNoteButton note={item.catatan} />
+          </div>
         </div>
       )}
+      {item.fotos.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {item.fotos.map((foto) => (
+            <div
+              key={foto.id}
+              className="overflow-hidden rounded-lg border border-navy-700"
+            >
+              <a href={fotoUrl(foto.storage_path)} target="_blank" rel="noreferrer">
+                <img
+                  src={fotoUrl(foto.storage_path)}
+                  alt={`Foto ${foto.urutan_foto}`}
+                  loading="lazy"
+                  className="aspect-square w-full object-cover"
+                />
+              </a>
+              <a
+                href={fotoDownloadUrl(foto.storage_path)}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="block border-t border-navy-700 px-2 py-1 text-center text-[11px] font-semibold text-sky-300 hover:bg-navy-800 hover:text-white"
+              >
+                ⬇ Unduh
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+      {item.videos.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {item.videos.map((video) => (
+            <VideoPreview
+              key={video.id}
+              path={video.storage_path}
+              durationSeconds={video.duration_seconds}
+            />
+          ))}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <PlaceBadge lat={item.latitude} lng={item.longitude} />
+      </div>
+    </div>
+  );
+}
+
+/** Header command center + kartu ringkasan (dipindah dari tab Monitoring lama). */
+function MonitoringIntro({
+  refreshKey,
+}: {
+  refreshKey: number;
+}) {
+  const [stats, setStats] = useState<{
+    total: number;
+    laporan: number;
+    sudah: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [reguList, laporanList] = await Promise.all([
+          fetchReguList(),
+          fetchLaporan({ limit: 200 }),
+        ]);
+        if (!active) return;
+        const sudah = new Set(laporanList.map((l) => l.regu_id)).size;
+        setStats({
+          total: reguList.length,
+          laporan: laporanList.length,
+          sudah,
+        });
+      } catch {
+        /* ringkasan tidak kritikal — biarkan "—" */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [refreshKey]);
+
+  const belum = stats ? stats.total - stats.sudah : null;
+
+  return (
+    <>
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="eyebrow">Command center / monitoring</div>
@@ -273,238 +276,424 @@ export default function MonitoringScreen() {
             Pantau giat lapangan
           </h1>
           <p className="mt-1 max-w-xl text-sm text-slate-400">
-            Setiap pelapor menampilkan asal Polsek. Jika tertulis “Polsek belum
-            ditentukan”, data akun tersebut belum memiliki mapping Polsek.
+            Laporan dari tiap unit/satuan masuk ke folder Polsek/satuannya
+            masing-masing. Klik folder untuk melihat isinya.
           </p>
         </div>
         <div className="status-live">Realtime aktif</div>
       </section>
 
-      {/* Ringkasan */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="card relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-gold-400" />
-          <div className="text-xs text-slate-400">Siklus berjalan</div>
-          <div className="mt-2 text-lg font-bold">{cycle.label}</div>
+          <div className="text-xs text-slate-400">Total pelapor</div>
+          <div className="mt-2 text-lg font-bold">
+            {stats ? stats.total : "—"}
+          </div>
         </div>
         <div className="card relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-sky-400" />
-          <div className="text-xs text-slate-400">Sisa waktu</div>
+          <div className="text-xs text-slate-400">Laporan terakhir</div>
           <div className="mono mt-2 text-lg font-bold text-sky-300">
-            {String(cycle.minutesLeft).padStart(2, "0")} menit
+            {stats ? stats.laporan : "—"}
           </div>
         </div>
         <div className="card relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-emerald-400" />
           <div className="text-xs text-slate-400">Sudah lapor</div>
           <div className="mt-2 text-lg font-bold text-emerald-400">
-            {statusPerRegu.length - belumLapor}/{statusPerRegu.length}
+            {stats ? `${stats.sudah}/${stats.total}` : "—"}
           </div>
         </div>
         <div className="card relative overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-red-400" />
           <div className="text-xs text-slate-400">Belum lapor</div>
           <div className="mt-2 text-lg font-bold text-red-400">
-            {belumLapor}
+            {belum ?? "—"}
           </div>
         </div>
       </div>
+    </>
+  );
+}
 
-      {/* Grid status pelapor — klik untuk fokus ke pelapor tersebut */}
-      <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="eyebrow">Coverage</div>
-            <h2 className="mt-1 font-semibold">
-              Status Pelapor{" "}
-              <span className="font-normal text-slate-500">
-                / {cycle.label}
-              </span>
-            </h2>
-          </div>
-          <span className="mono text-xs text-slate-500">
-            {statusPerRegu.length} pelapor aktif
-          </span>
+export default function MonitoringScreen({
+  session,
+  refreshKey,
+  openFolderKey,
+  onOpenHandled,
+}: Props) {
+  const [rows, setRows] = useState<FolderRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedPolsek, setExpandedPolsek] = useState<string | null>(null);
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [detailRows, setDetailRows] = useState<FolderLaporanRow[] | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const scope = session.accessLevel ?? "all";
+  const wilayahScope = session.scopeKey ?? null;
+
+  const load = useCallback(async () => {
+    try {
+      setRows(await fetchFolderOverview());
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load, refreshKey]);
+
+  const openDetail = useCallback(
+    async (key: string) => {
+      setDetailKey(key);
+      setDetailRows(null);
+      setDetailLoading(true);
+      setExpandedPolsek(null);
+      // Badge "N baru" hilang saat folder dibuka.
+      void markFolderRead(key);
+      try {
+        setDetailRows(await fetchFolderLaporan(key));
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDetailLoading(false);
+        void load();
+      }
+    },
+    [load],
+  );
+
+  // Popup "Buka laporan" / tombol notifikasi meminta folder tertentu.
+  useEffect(() => {
+    if (openFolderKey) {
+      void openDetail(openFolderKey);
+      onOpenHandled();
+    }
+  }, [openFolderKey, openDetail, onOpenHandled]);
+
+  // Deep link dari notifikasi sistem: /?folder=<key>
+  useEffect(() => {
+    const key = searchParams.get("folder");
+    if (key) {
+      setSearchParams({}, { replace: true });
+      void openDetail(key);
+    }
+  }, [searchParams, setSearchParams, openDetail]);
+
+  const byParent = useMemo(() => {
+    const map = new Map<string, FolderRow[]>();
+    for (const row of rows ?? []) {
+      if (!row.parent_key) continue;
+      const list = map.get(row.parent_key) ?? [];
+      list.push(row);
+      map.set(row.parent_key, list);
+    }
+    return map;
+  }, [rows]);
+
+  const polsekRows = useMemo(
+    () => (rows ?? []).filter((r) => r.folder_kind === "polsek"),
+    [rows],
+  );
+  const satuanRows = useMemo(
+    () => (rows ?? []).filter((r) => r.folder_kind === "satuan"),
+    [rows],
+  );
+
+  const expandPolsek = (key: string) => {
+    // Badge folder polsek hilang saat dibuka (di-expand).
+    void markFolderRead(key);
+    setExpandedPolsek((cur) => (cur === key ? null : key));
+    void load();
+  };
+
+  const closeDetail = () => {
+    setDetailKey(null);
+    setDetailRows(null);
+    void load();
+  };
+
+  // ---------- Tampilan isi folder ----------
+  if (detailKey) {
+    const label =
+      (rows ?? []).find((r) => r.folder_key === detailKey)?.folder_label ??
+      detailKey;
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={closeDetail}
+            className="rounded-xl border border-navy-700 px-3 py-2 text-sm text-slate-300 transition hover:text-white"
+          >
+            ← Kembali
+          </button>
+          <h2 className="truncate text-lg font-bold text-white">{label}</h2>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {statusPerRegu.map(({ regu, count, videoCount, lastAt }) => (
-            <button
-              key={regu.id}
-              onClick={() =>
-                setReguFilter((prev) => (prev === regu.id ? "semua" : regu.id))
-              }
-              className={
-                "card flex items-center justify-between gap-3 text-left transition " +
-                (reguFilter === regu.id
-                  ? "ring-2 ring-gold-400/70"
-                  : "hover:border-navy-500 hover:bg-navy-800")
-              }
-            >
-              <div>
-                <div className="font-semibold">{reguDisplayName(regu)}</div>
-                <div className="text-xs text-slate-400">
-                  {lastAt
-                    ? "Terakhir kirim " + formatWaktu(lastAt)
-                    : "Belum ada laporan"}
-                </div>
-              </div>
-              <StatusBadge count={count} videoCount={videoCount} />
-            </button>
+        {detailLoading && (
+          <div className="card text-sm text-slate-400">Memuat laporan…</div>
+        )}
+        {!detailLoading && (detailRows ?? []).length === 0 && (
+          <div className="card text-sm text-slate-400">
+            Belum ada laporan di folder ini.
+          </div>
+        )}
+        <div className="space-y-3">
+          {(detailRows ?? []).map((item) => (
+            <LaporanCard key={item.id} item={item} />
           ))}
-          {statusPerRegu.length === 0 && (
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card border-red-500/30 text-sm text-red-300">
+        {error}
+        <button
+          onClick={() => void load()}
+          className="ml-3 underline hover:no-underline"
+        >
+          Coba lagi
+        </button>
+      </div>
+    );
+  }
+
+  if (rows === null) {
+    return <div className="card text-sm text-slate-400">Memuat folder…</div>;
+  }
+
+  // ---------- Kapolsek: langsung masuk folder Polseknya ----------
+  if (scope === "wilayah" && wilayahScope) {
+    const polsekKey = `polsek:${wilayahScope}`;
+    const polsekRow = polsekRows.find((r) => r.folder_key === polsekKey);
+    const children = byParent.get(polsekKey) ?? [];
+    return (
+      <div className="space-y-6">
+        <MonitoringIntro refreshKey={refreshKey} />
+        <div className="space-y-4">
+          <div className="card relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gold-400" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="eyebrow">Folder Polsek Anda</div>
+                <h2 className="mt-1 text-lg font-bold text-white">
+                  {polsekRow?.folder_label ?? `Polsek ${wilayahScope}`}
+                </h2>
+              </div>
+              <BaruBadge count={polsekRow?.new_count ?? 0} />
+            </div>
+            {polsekRow && (
+              <div className="mt-2">
+                <FolderStats row={polsekRow} />
+              </div>
+            )}
+          </div>
+          {children.length === 0 && (
             <div className="card text-sm text-slate-400">
-              Memuat data pelapor…
+              Belum ada folder unit di Polsek ini.
             </div>
           )}
-        </div>
-      </section>
-
-      {/* Panel detail per pelapor yang dipilih */}
-      {selected && (
-        <section className="rounded-2xl border border-gold-400/30 bg-navy-800/40 p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="font-bold text-gold-400">
-                📋 {reguDisplayName(selected.regu)}
-              </h2>
-              <p className="text-xs font-medium text-gold-300">
-                Asal: {reguOrigin(selected.regu)}
-              </p>
-              <p className="text-xs text-slate-400">
-                {selectedLaporan.length} laporan terakhir · kode{" "}
-                {selected.regu.kode_login}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge
-                count={selected.count}
-                videoCount={selected.videoCount}
-              />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {children.map((child) => (
               <button
-                onClick={() => setReguFilter("semua")}
-                className="rounded-lg px-2.5 py-1 text-xs text-slate-400 hover:text-white"
+                key={child.folder_key}
+                onClick={() => void openDetail(child.folder_key)}
+                className="card text-left transition hover:border-gold-400/40"
               >
-                ✕ Tutup
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-sm font-semibold text-slate-200">
+                    📁 {child.folder_label}
+                  </span>
+                  <BaruBadge count={child.new_count} />
+                </div>
+                <div className="mt-2">
+                  <FolderStats row={child} />
+                </div>
               </button>
-            </div>
+            ))}
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          {selectedLaporan.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              Belum ada laporan tersimpan untuk pelapor ini.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {selectedLaporan.map((l: Laporan) => (
-                <div key={l.id} className="card">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-semibold">
-                      Siklus {l.siklus_ke} · {formatWaktu(l.timestamp_kirim)}
-                    </div>
-                    <PlaceBadge lat={l.latitude} lng={l.longitude} />
+  // ---------- Kasat: satuan + folder unitnya di tiap Polsek ----------
+  if (scope === "fungsi") {
+    const unitRows = (rows ?? []).filter((r) => r.folder_kind === "unit");
+    const groups = new Map<string, FolderRow[]>();
+    for (const row of unitRows) {
+      const key = row.parent_key ?? "-";
+      const list = groups.get(key) ?? [];
+      list.push(row);
+      groups.set(key, list);
+    }
+    return (
+      <div className="space-y-6">
+        <MonitoringIntro refreshKey={refreshKey} />
+        {satuanRows.length > 0 && (
+          <section>
+            <div className="eyebrow mb-3">Satuan Polres</div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {satuanRows.map((row) => (
+                <button
+                  key={row.folder_key}
+                  onClick={() => void openDetail(row.folder_key)}
+                  className="card text-left transition hover:border-gold-400/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-sm font-semibold text-slate-200">
+                      📁 {row.folder_label}
+                    </span>
+                    <BaruBadge count={row.new_count} />
                   </div>
-                  {l.catatan && (
-                    <div className="mb-3 rounded-xl border border-navy-600 bg-navy-900/60 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="whitespace-pre-wrap text-xs text-slate-300">
-                          💬 {l.catatan}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void copyReportNote(l).catch(() =>
-                              setCopyError("Keterangan tidak dapat disalin."),
-                            )
-                          }
-                          className="shrink-0 rounded-lg border border-navy-600 px-2 py-1 text-[11px] font-semibold text-sky-300 hover:bg-navy-800 hover:text-white"
-                        >
-                          {copiedReportId === l.id
-                            ? "Tersalin"
-                            : "Salin keterangan"}
-                        </button>
-                      </div>
-                      {copyError && copiedReportId !== l.id && (
-                        <p className="mt-2 text-[11px] text-red-300">
-                          {copyError}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {(l.fotos ?? []).map((f) => (
-                      <div key={f.id}>
-                        <FotoThumb path={f.storage_path} />
-                        <div className="mt-1 text-[10px] text-slate-500">
-                          Foto {f.urutan_foto} · 📍{" "}
-                          {formatPlace(
-                            cachedPlace(f.watermark_lat, f.watermark_lng),
-                            f.watermark_lat,
-                            f.watermark_lng,
-                          )}
+                  <div className="mt-2">
+                    <FolderStats row={row} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+        {unitRows.length > 0 && (
+          <section>
+            <div className="eyebrow mb-3">Pelapor tingkat Polsek</div>
+            <div className="space-y-4">
+              {[...groups.entries()].map(([parentKey, children]) => (
+                <div key={parentKey}>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {children[0]?.folder_label.split(" — ")[1] ?? parentKey}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {children.map((child) => (
+                      <button
+                        key={child.folder_key}
+                        onClick={() => void openDetail(child.folder_key)}
+                        className="card text-left transition hover:border-gold-400/40"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-sm font-semibold text-slate-200">
+                            📁 {child.folder_label.split(" — ")[0]}
+                          </span>
+                          <BaruBadge count={child.new_count} />
                         </div>
-                      </div>
+                        <div className="mt-2">
+                          <FolderStats row={child} />
+                        </div>
+                      </button>
                     ))}
                   </div>
-                  {(l.videos ?? []).length > 0 && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {(l.videos ?? []).map((video) => (
-                        <VideoPreview
-                          key={video.id}
-                          path={video.storage_path}
-                          durationSeconds={video.duration_seconds}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
-          )}
-        </section>
-      )}
-
-      {/* Feed foto terbaru (semua pelapor) */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Feed Foto Terbaru</h2>
-          <span className="badge bg-navy-700 text-navy-100">
-            <span className="anim-pulse-dot mr-1 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Realtime aktif
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {laporanList.slice(0, 24).map((l: Laporan) =>
-            (l.fotos ?? []).map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setReguFilter(l.regu_id)}
-                className="card p-2 text-left transition hover:border-gold-400/50"
-                title={`Lihat semua laporan ${l.regu?.nama_regu ?? "pelapor"} (${l.regu ? reguOrigin(l.regu) : "asal tidak diketahui"})`}
-              >
-                <FotoThumb path={f.storage_path} />
-                <div className="mt-2 text-xs font-semibold">
-                  {l.regu ? reguDisplayName(l.regu) : "Pelapor — Asal tidak diketahui"}
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  Siklus {l.siklus_ke} · {formatWaktu(l.timestamp_kirim)}
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  {formatPlace(
-                    cachedPlace(f.watermark_lat, f.watermark_lng),
-                    f.watermark_lat,
-                    f.watermark_lng,
-                  )}
-                </div>
-              </button>
-            )),
-          )}
-        </div>
-        {laporanList.length === 0 && (
+          </section>
+        )}
+        {satuanRows.length === 0 && unitRows.length === 0 && (
           <div className="card text-sm text-slate-400">
-            Belum ada foto masuk. Laporan dari pelapor akan muncul otomatis di
-            sini.
+            Tidak ada folder dalam cakupan Anda.
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ---------- Kapolres / Wakapolres / Admin: dua tingkat ----------
+  // Urutan: Satuan (Polres) di ATAS, folder Polsek di bawah.
+  return (
+    <div className="space-y-6">
+      <MonitoringIntro refreshKey={refreshKey} />
+
+      <section>
+        <div className="eyebrow mb-3">Pelapor tingkat Polres</div>
+        {satuanRows.length === 0 && (
+          <div className="card text-sm text-slate-400">
+            Belum ada folder satuan.
+          </div>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {satuanRows.map((row) => (
+            <button
+              key={row.folder_key}
+              onClick={() => void openDetail(row.folder_key)}
+              className="card text-left transition hover:border-gold-400/40"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm font-semibold text-slate-200">
+                  📁 {row.folder_label}
+                </span>
+                <BaruBadge count={row.new_count} />
+              </div>
+              <div className="mt-2">
+                <FolderStats row={row} />
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div className="eyebrow mb-3">Pelapor tingkat Polsek</div>
+        {polsekRows.length === 0 && (
+          <div className="card text-sm text-slate-400">
+            Belum ada folder Polsek.
+          </div>
+        )}
+        <div className="space-y-3">
+          {polsekRows.map((row) => {
+            const open = expandedPolsek === row.folder_key;
+            const children = byParent.get(row.folder_key) ?? [];
+            return (
+              <div key={row.folder_key} className="card">
+                <button
+                  type="button"
+                  onClick={() => expandPolsek(row.folder_key)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <span className="text-sm font-semibold text-slate-200">
+                    {open ? "📂" : "📁"} {row.folder_label}
+                  </span>
+                  <BaruBadge count={row.new_count} />
+                </button>
+                <div className="mt-2">
+                  <FolderStats row={row} />
+                </div>
+                {open && (
+                  <div className="mt-3 grid gap-2 border-t border-navy-700 pt-3 sm:grid-cols-2">
+                    {children.length === 0 && (
+                      <div className="text-xs text-slate-500">
+                        Belum ada folder unit.
+                      </div>
+                    )}
+                    {children.map((child) => (
+                      <button
+                        key={child.folder_key}
+                        onClick={() => void openDetail(child.folder_key)}
+                        className="rounded-xl border border-navy-700/70 bg-navy-900/60 px-3 py-2 text-left transition hover:border-gold-400/40"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm text-slate-300">
+                            📁 {child.folder_label}
+                          </span>
+                          <BaruBadge count={child.new_count} />
+                        </div>
+                        <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                          <span>📅 {child.today_count} hari ini</span>
+                          <span>🕘 {formatWaktuWib(child.last_at)}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </section>
     </div>
   );

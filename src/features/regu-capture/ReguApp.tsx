@@ -132,18 +132,7 @@ export default function ReguApp({ session, onLogout }: Props) {
         </div>
         <div className="mt-3 flex items-center justify-between text-xs">
           <span className="badge bg-navy-700 text-navy-100">{cycle.label}</span>
-          <span
-            className={
-              cycle.minutesLeft <= 15
-                ? "font-semibold text-gold-400"
-                : "text-slate-400"
-            }
-          >
-            <span className="mono">
-              {String(cycle.minutesLeft).padStart(2, "0")}m
-            </span>{" "}
-            tersisa
-          </span>
+          <span className="text-slate-400">Laporan bisa dikirim kapan saja</span>
         </div>
       </header>
 

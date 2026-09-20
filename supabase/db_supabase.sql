@@ -545,10 +545,11 @@ as $$
       ('polair','Satpolairud'),
       ('tahti','Sattahti')
   ),
-  -- Folder unit & arsip yang relevan (sudah terfilter cakupan).
+  -- Folder satuan/unit/arsip yang relevan (sudah terfilter cakupan).
   sub_folders as (
     select distinct fs.folder_key from folder_src fs
     where fs.folder_key like 'unit:%' or fs.folder_key like 'arsip:%'
+       or fs.folder_key like 'satuan:%'
   ),
   polsek_folders as (
     select distinct
@@ -559,6 +560,7 @@ as $$
     from sub_folders sf
     cross join me
     where me.access_level in ('all', 'wilayah')
+      and (sf.folder_key like 'unit:%' or sf.folder_key like 'arsip:%')
   ),
   -- Agregat folder induk (polsek) dari folder anaknya.
   parent_agg as (
@@ -840,7 +842,7 @@ on conflict (kode_login) do update set
 -- 10e. Pelapor level 1: 96 akun unit di Polsek (reskrim.jatiluhur, dst.)
 -- Presensi unit mengikuti JAWARA APP.xlsx (BKO diabaikan):
 --   samapta tidak ada di Sukatani, binmas tidak ada di Plered/Darangdan/Sukasari,
---   propam tidak ada di Purwakarta Kota/Campaka, lantas hanya di
+--   propam tidak ada di Purwakarta Kota/Campaka/Maniis, lantas hanya di
 --   Kota/Plered/Jatiluhur/Bungursari/Cibatu, sium = staf gabungan di semua Polsek.
 insert into public.regu (nama_regu, kode_login, status_aktif, access_level, unit_key, wilayah_key)
 select
@@ -947,4 +949,47 @@ end $$;
 --   2. README → setup VAPID, NOTIFY_SECRET, deploy notify-laporan,
 --      dan Database Webhook pada tabel laporan.
 -- =============================================================
+
+-- =============================================================
+-- 12) TRIGGER WEBHOOK PENGANTAR PUSH (pengganti Database Webhook)
+-- =============================================================
+-- Memanggil Edge Function `notify-laporan` setiap ada INSERT di
+-- tabel laporan. Format payload sama persis dengan Database Webhook
+-- Supabase ({type:"INSERT", record:{...}}), jadi function tidak perlu
+-- diubah. Butuh extension pg_net (aktif default di project Supabase).
+-- Catatan: NOTIFY_SECRET di bawah harus sama dengan secret Edge Function.
+
+create extension if not exists pg_net with schema extensions;
+
+create or replace function public.notify_laporan_webhook()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_secret text := '87e52634b0f8aba24dd847488716909eff135668eacee0f4';
+  v_url text := 'https://icflekfhqemzjsruylnu.supabase.co/functions/v1/notify-laporan';
+begin
+  perform net.http_post(
+    url := v_url,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-notify-secret', v_secret
+    ),
+    body := jsonb_build_object(
+      'type', 'INSERT',
+      'table', TG_TABLE_NAME,
+      'schema', TG_TABLE_SCHEMA,
+      'record', to_jsonb(new)
+    )
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_notify_laporan on public.laporan;
+create trigger trg_notify_laporan
+after insert on public.laporan
+for each row execute function public.notify_laporan_webhook();
 

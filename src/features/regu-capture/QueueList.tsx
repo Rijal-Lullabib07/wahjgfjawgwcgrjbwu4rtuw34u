@@ -92,7 +92,7 @@ export default function QueueList({ onQueueChanged }: Props) {
           <div key={item.localId} className="card">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="font-semibold">Siklus {item.siklusKe}</div>
+                <div className="font-semibold">Laporan</div>
                 <div className="text-xs text-slate-400">
                   {new Date(item.timestampKirim).toLocaleString("id-ID")}
                 </div>

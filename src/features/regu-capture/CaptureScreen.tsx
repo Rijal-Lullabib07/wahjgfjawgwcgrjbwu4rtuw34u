@@ -78,7 +78,7 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
         lat: geo.lat,
         lng: geo.lng,
         timestamp: ts,
-        label: "SIPLAP · Siklus " + cycle.siklusKe,
+        label: "SIPLAP · Pelaporan Harian",
         place: geo.place
           ? geo.place.detail
             ? `${geo.place.name} — ${geo.place.detail}`
@@ -301,7 +301,7 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
           </div>
         )}
 
-        {/* GPS badge: nama tempat dulu, koordinat sebagai detail kecil */}
+        {/* GPS badge: akurasi ditonjolkan — pemantau melihat lokasi yang sama */}
         <div className="absolute left-3 top-3 max-w-[75%] rounded-xl border border-white/10 bg-black/60 px-3 py-1.5 text-white backdrop-blur">
           {geo.error ? (
             <span className="text-[11px] font-medium">⚠️ GPS: {geo.error}</span>
@@ -317,12 +317,32 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
               <div className="truncate text-[10px] leading-tight text-slate-300">
                 {geo.place?.detail
                   ? geo.place.detail
-                  : `${geo.lat.toFixed(5)}, ${(geo.lng ?? 0).toFixed(5)}`}
+                  : `${geo.lat.toFixed(6)}, ${(geo.lng ?? 0).toFixed(6)}`}
                 {geo.accuracy != null && ` · ±${Math.round(geo.accuracy)}m`}
+              </div>
+              <div
+                className={
+                  "mt-0.5 text-[10px] font-semibold " +
+                  (geo.locked ? "text-emerald-400" : "text-amber-300")
+                }
+              >
+                {geo.locked
+                  ? "🎯 Lokasi akurat"
+                  : `🎯 Menajamkan GPS… ±${geo.accuracy != null ? Math.round(geo.accuracy) : "?"}m`}
               </div>
             </>
           )}
         </div>
+
+        {/* Perbarui lokasi */}
+        {geo.lat != null && !geo.locked && (
+          <button
+            onClick={geo.refresh}
+            className="absolute right-3 top-16 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur transition hover:bg-black/80 active:scale-95"
+          >
+            🎯 Perbarui lokasi
+          </button>
+        )}
 
         {/* Tombol ganti kamera */}
         {camera.ready && (
@@ -392,6 +412,12 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
           Jelaskan singkat kegiatan, lokasi, atau kejadian yang dilaporkan.
         </span>
       </label>
+
+      {geo.lat == null && !geo.error && (
+        <p className="mt-2 text-xs font-semibold text-amber-300">
+          📍 GPS belum terkunci — tunggu sebentar agar lokasi laporan akurat.
+        </p>
+      )}
 
       {/* Hasil jepretan */}
       {shots.length > 0 && (

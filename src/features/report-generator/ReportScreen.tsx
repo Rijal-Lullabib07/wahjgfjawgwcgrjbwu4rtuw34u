@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Laporan } from "../../types";
 import { fetchLaporan, fetchReguList } from "../../lib/supabase/api";
-import { formatKoordinat, formatWaktu } from "../../lib/cycle";
+import { formatWaktu } from "../../lib/cycle";
 import { exportPdf } from "./exportPdf";
 import { exportExcel } from "./exportExcel";
 import { reguDisplayName } from "../../lib/regu";
+import PlaceBadge from "../../components/PlaceBadge";
 
 type Preset = "harian" | "mingguan" | "bulanan" | "custom";
 
@@ -41,7 +42,6 @@ export default function ReportScreen() {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState<string>("all"); // 'all' = gabungan
-  const [categorySearch, setCategorySearch] = useState("");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,13 +51,6 @@ export default function ReportScreen() {
     queryFn: fetchReguList,
   });
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
-  const filteredReguList = useMemo(() => {
-    const query = categorySearch.trim().toLocaleLowerCase("id-ID");
-    if (!query) return reguList;
-    return reguList.filter((regu) =>
-      reguDisplayName(regu).toLocaleLowerCase("id-ID").includes(query),
-    );
-  }, [categorySearch, reguList]);
 
   const { data: laporan = [], isFetching } = useQuery({
     queryKey: ["laporan-report", preset, custom, reguId],
@@ -70,24 +63,34 @@ export default function ReportScreen() {
       }),
   });
 
+  /**
+   * SATU kotak pencarian untuk semuanya: nama unit/satuan/Polsek asal,
+   * keterangan, waktu, koordinat, dan status. Semua kata yang diketik
+   * harus cocok (urutan bebas) — cocok walau hanya sebagian kata, mis.
+   * "reskrim plered patroli" menemukan laporan Reskrim Polsek Plered
+   * yang keterangannya memuat "patroli".
+   */
   const filteredLaporan = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("id-ID");
     if (!query) return laporan;
+    const terms = query.split(/\s+/).filter(Boolean);
 
     return laporan.filter((l) => {
       const searchable = [
         l.regu ? reguDisplayName(l.regu) : l.regu_id,
+        l.regu ? (l.regu.unit_key ?? "") : "",
+        l.regu ? (l.regu.wilayah_key ?? "") : "",
         l.catatan,
-        l.siklus_ke,
-        l.latitude,
-        l.longitude,
         l.status_sync,
         formatWaktu(l.timestamp_kirim),
+        l.timestamp_kirim,
+        l.latitude != null ? l.latitude.toFixed(6) : "",
+        l.longitude != null ? l.longitude.toFixed(6) : "",
       ]
-        .filter((value) => value !== null && value !== undefined)
+        .filter((value) => value !== null && value !== undefined && value !== "")
         .join(" ")
         .toLocaleLowerCase("id-ID");
-      return searchable.includes(query);
+      return terms.every((t) => searchable.includes(t));
     });
   }, [laporan, search]);
 
@@ -115,10 +118,6 @@ export default function ReportScreen() {
   return (
     <div className="space-y-5">
       <div className="card space-y-4">
-        <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-200">
-          Asal pelapor ditampilkan pada setiap nama. Data yang belum memiliki
-          mapping Polsek akan diberi tanda “Polsek belum ditentukan”.
-        </div>
         {/* Preset rentang waktu */}
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -178,37 +177,26 @@ export default function ReportScreen() {
           </div>
         )}
 
-        {/* Kategori laporan */}
+        {/* Kategori (pelapor) */}
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-300">
             Kategori
           </label>
-          <input
-            type="search"
-            className="input mb-2"
-            placeholder="Cari kategori/pelapor..."
-            value={categorySearch}
-            onChange={(e) => setCategorySearch(e.target.value)}
-          />
           <select
             className="input"
             value={reguId}
             onChange={(e) => setReguId(e.target.value)}
           >
             <option value="all">Laporan Gabungan (semua pelapor)</option>
-            {filteredReguList.map((r) => (
+            {reguList.map((r) => (
               <option key={r.id} value={r.id}>
                 {reguDisplayName(r)}
               </option>
             ))}
           </select>
-          {categorySearch.trim() && filteredReguList.length === 0 && (
-            <p className="mt-2 text-xs text-slate-400">
-              Kategori/pelapor tidak ditemukan.
-            </p>
-          )}
         </div>
 
+        {/* SATU kotak pencarian: unit/satuan/Polsek + keterangan + waktu + koordinat */}
         <div>
           <label
             htmlFor="report-search"
@@ -221,7 +209,7 @@ export default function ReportScreen() {
               id="report-search"
               type="search"
               className="input"
-              placeholder="Cari pelapor, keterangan, siklus, waktu, koordinat, atau status..."
+              placeholder="Cari unit/satuan, Polsek, keterangan, waktu, atau koordinat..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -236,6 +224,10 @@ export default function ReportScreen() {
               </button>
             )}
           </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Tulis sebagian saja — mis. "reskrim plered patroli". Semua kata
+            harus cocok di nama pelapor atau keterangan.
+          </p>
         </div>
       </div>
 
@@ -317,13 +309,13 @@ function PreviewTable({
 
   return (
     <div className="card overflow-x-auto p-0">
-      <table className="w-full min-w-[640px] text-left text-sm">
+      <table className="w-full min-w-[760px] text-left text-sm">
         <thead className="border-b border-navy-700 text-xs uppercase text-slate-400">
           <tr>
             <th className="px-4 py-3">Waktu</th>
             <th className="px-4 py-3">Pelapor</th>
-            <th className="px-4 py-3">Siklus</th>
-            <th className="px-4 py-3">Koordinat</th>
+            <th className="px-4 py-3">Keterangan</th>
+            <th className="px-4 py-3">Lokasi</th>
             <th className="px-4 py-3">Foto</th>
             <th className="px-4 py-3">Video</th>
             <th className="px-4 py-3">Status</th>
@@ -343,9 +335,13 @@ function PreviewTable({
                   ? reguDisplayName(l.regu)
                   : l.regu_id}
               </td>
-              <td className="px-4 py-2.5">{l.siklus_ke}</td>
-              <td className="px-4 py-2.5 text-xs">
-                {formatKoordinat(l.latitude, l.longitude)}
+              <td className="max-w-[220px] px-4 py-2.5 text-xs text-slate-300">
+                <span className="line-clamp-2 whitespace-pre-wrap">
+                  {l.catatan ?? "—"}
+                </span>
+              </td>
+              <td className="px-4 py-2.5">
+                <PlaceBadge lat={l.latitude} lng={l.longitude} />
               </td>
               <td className="px-4 py-2.5">{l.fotos?.length ?? 0}</td>
               <td className="px-4 py-2.5">{l.videos?.length ?? 0}</td>

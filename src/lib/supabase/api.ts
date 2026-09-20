@@ -154,7 +154,18 @@ export async function fetchLaporan(filter: {
   if (filter.to) query = query.lte("timestamp_kirim", filter.to.toISOString());
   const { data, error } = await query;
   if (error) throw describeSupabaseError(error, "Gagal memuat laporan");
-  return (data ?? []) as Laporan[];
+  // `laporan_video` punya unique(laporan_id) → PostgREST menganggap relasi
+  // satu-ke-satu dan mengembalikan OBJEK (atau null), bukan array. Normalisasi
+  // agar pemakaian `(l.videos ?? []).map(...)` tidak meledak.
+  const normalized = (data ?? []).map((row) => {
+    const r = row as Laporan;
+    return {
+      ...r,
+      fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
+      videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
+    } as Laporan;
+  });
+  return normalized;
 }
 
 /** Upload satu foto ke Supabase Storage, kembalikan storage_path. */
@@ -316,8 +327,12 @@ export function subscribeLaporan(
   }) => void,
 ): () => void {
   const client = requireClient();
+  // Nama channel harus UNIK per langganan: `client.channel(nama)` mengembalikan
+  // instance yang sama jika nama sudah dipakai, dan menambah callback
+  // `postgres_changes` ke channel yang sudah di-subscribe akan throw.
+  // AdminApp, MonitoringScreen, dan ReguApp bisa subscribe bersamaan.
   const channel = client
-    .channel("laporan-changes")
+    .channel(`laporan-changes:${Math.random().toString(36).slice(2)}`)
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "laporan" },

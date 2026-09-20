@@ -71,10 +71,10 @@ function LoginHero() {
         style={{ animationDelay: "1.2s" }}
       >
         <div className="flex items-center gap-1.5 text-[10px] font-semibold text-white">
-          🔔 Pengingat
+          🔔 Notifikasi
         </div>
         <div className="mt-1 text-[9px] leading-snug text-slate-400">
-          Siklus berakhir dalam 15 menit — kirim laporanmu!
+          Laporan baru langsung diberitahukan ke pemantau.
         </div>
       </div>
 
@@ -275,7 +275,7 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                 <b className="font-semibold text-white">
                   Pelapor wajib pasang ke homescreen
                 </b>{" "}
-                agar pengingat siklus &amp; kirim laporan otomatis saat online
+                agar notifikasi &amp; kirim laporan otomatis saat online
                 berjalan optimal.
               </span>
             </p>

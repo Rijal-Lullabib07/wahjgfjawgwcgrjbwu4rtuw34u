@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Laporan, Regu } from "../../types";
-import { formatKoordinat, formatWaktu } from "../../lib/cycle";
+import { formatWaktu } from "../../lib/cycle";
 import { fotoUrl } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
 
@@ -31,6 +31,15 @@ async function mediaDataUrl(storagePath: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Koordinat 6 desimal (≈ 0,1 m) untuk dokumen resmi; "—" bila kosong. */
+function koordinatPresisi(
+  lat: number | null,
+  lng: number | null,
+): string {
+  if (lat == null || lng == null) return "—";
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 }
 
 /** Export laporan ke PDF dengan ringkasan, tabel rekap, dan thumbnail foto/video. */
@@ -74,15 +83,14 @@ export async function exportPdf(
     40,
   );
 
-  // Tabel rekap
+  // Tabel rekap — kolom Siklus diganti Lokasi (koordinat presisi)
   autoTable(doc, {
     startY: 45,
     head: [[
       "Waktu",
       "Pelapor",
       "Keterangan",
-      "Siklus",
-      "Koordinat",
+      "Lokasi",
       "Foto",
       "Video",
       "Status",
@@ -91,8 +99,7 @@ export async function exportPdf(
       new Date(l.timestamp_kirim).toLocaleString("id-ID"),
       l.regu ? reguDisplayName(l.regu) : l.regu_id,
       l.catatan ?? "",
-      String(l.siklus_ke),
-      formatKoordinat(l.latitude, l.longitude),
+      koordinatPresisi(l.latitude, l.longitude),
       String(l.fotos?.length ?? 0),
       String((l.videos ?? []).length),
       l.status_sync,
@@ -100,13 +107,12 @@ export async function exportPdf(
     styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
     columnStyles: {
       0: { cellWidth: 24 },
-      1: { cellWidth: 34 },
-      2: { cellWidth: 42 },
-      3: { cellWidth: 12 },
-      4: { cellWidth: 24 },
+      1: { cellWidth: 32 },
+      2: { cellWidth: 46 },
+      3: { cellWidth: 28 },
+      4: { cellWidth: 12 },
       5: { cellWidth: 12 },
-      6: { cellWidth: 12 },
-      7: { cellWidth: 18 },
+      6: { cellWidth: 18 },
     },
     headStyles: { fillColor: [15, 61, 110] },
     alternateRowStyles: { fillColor: [240, 244, 250] },
@@ -122,17 +128,20 @@ export async function exportPdf(
   let fotoCount = 0;
   let videoCount = 0;
 
-  for (const l of detail) {
-    if (y > 250) {
+  /** Pastikan ruang `needed` mm tersedia; pindah halaman bila tidak. */
+  const ensureSpace = (needed: number) => {
+    if (y + needed > 282) {
       doc.addPage();
       y = 16;
     }
+  };
+
+  for (const l of detail) {
+    ensureSpace(20);
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.text(
       (l.regu ? reguDisplayName(l.regu) : "Regu") +
-        " — Siklus " +
-        l.siklus_ke +
         " — " +
         formatWaktu(l.timestamp_kirim),
       14,
@@ -143,16 +152,34 @@ export async function exportPdf(
     if (l.catatan) {
       const lines = doc.splitTextToSize("Keterangan: " + l.catatan, 182);
       doc.setFontSize(8);
+      ensureSpace(lines.length * 4 + 2);
       doc.text(lines, 14, y);
       y += lines.length * 4 + 2;
     }
 
     for (const f of l.fotos ?? []) {
       if (fotoCount >= maxFoto) break;
+      // Setiap baris thumbnail butuh 52 mm — cek SEBELUM menggambar agar
+      // foto tidak tergambar di luar kanvas halaman (penyebab foto "hilang").
+      if (y + 52 > 282) {
+        doc.addPage();
+        y = 16;
+      }
       const dataUrl = await mediaDataUrl(f.storage_path);
       const x = 14 + (fotoCount % 3) * 62;
       if (dataUrl) {
-        doc.addImage(dataUrl, "JPEG", x, y, 58, 44);
+        // Format dideteksi dari data URL (foto bisa JPEG atau PNG hasil
+        // watermark) — pemaksaan "JPEG" membuat jsPDF melempar error dan
+        // gambar tidak muncul.
+        try {
+          doc.addImage(dataUrl, x, y, 58, 44);
+        } catch {
+          doc.setDrawColor(200);
+          doc.rect(x, y, 58, 44);
+          doc.setFontSize(7);
+          doc.text("foto gagal dimuat", x + 4, y + 23);
+          doc.setFontSize(9);
+        }
       } else {
         doc.setDrawColor(200);
         doc.rect(x, y, 58, 44);
@@ -162,7 +189,7 @@ export async function exportPdf(
       }
       doc.setFontSize(6.5);
       doc.text(
-        formatKoordinat(f.watermark_lat, f.watermark_lng) +
+        koordinatPresisi(f.watermark_lat, f.watermark_lng) +
           " · " +
           formatWaktu(f.watermark_timestamp),
         x,
@@ -173,12 +200,16 @@ export async function exportPdf(
     }
     if ((l.fotos?.length ?? 0) % 3 !== 0) y += 56;
 
-    const videoList = l.videos ?? [];
+    const videoList = Array.isArray(l.videos) ? l.videos : [];
     if (videoList.length > 0) {
       y += 4;
       for (let i = 0; i < videoList.length; i++) {
         const v = videoList[i];
         if (videoCount >= maxVideo) break;
+        if (y + 52 > 282) {
+          doc.addPage();
+          y = 16;
+        }
         const x = 14 + (videoCount % 3) * 62;
         doc.setDrawColor(80, 140, 190);
         doc.setFillColor(235, 245, 255);

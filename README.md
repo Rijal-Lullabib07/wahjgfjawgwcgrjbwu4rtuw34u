@@ -95,13 +95,15 @@ sendiri header `x-notify-secret`):
 supabase functions deploy notify-laporan --no-verify-jwt
 ```
 
-**e. Buat Database Webhook** — Dashboard → **Database → Webhooks → Create**:
+**e. Pengantar webhook** — SUDAH OTOMATIS: `db_supabase.sql` bagian 12 memasang
+trigger `trg_notify_laporan` yang memanggil function pada setiap INSERT tabel
+`laporan` (payload identik dengan Database Webhook, via extension `pg_net`).
+Alternatif manual (salah satu saja): Dashboard → **Database → Webhooks → Create**:
 
 - Name: `siplap-laporan` · Table: `laporan` · Events: **INSERT**
 - Method: `POST` · URL:
   `https://<PROJECT_REF>.supabase.co/functions/v1/notify-laporan`
-- HTTP Headers (section **HTTP Headers**): tambahkan
-  `x-notify-secret` = `<NOTIFY_SECRET>`
+- HTTP Headers: `x-notify-secret` = `<NOTIFY_SECRET>`
 
 Function menerima `x-notify-secret` **atau** `Authorization: Bearer <kunci>`,
 jadi salah satu saja cukup.

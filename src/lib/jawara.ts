@@ -109,7 +109,9 @@ const unitPresence: Record<string, string[]> = {
   binmas: allWilayah.filter(
     (w) => !["plered", "darangdan", "sukasari"].includes(w),
   ),
-  propam: allWilayah.filter((w) => !["kota", "campaka"].includes(w)),
+  propam: allWilayah.filter(
+    (w) => !["kota", "campaka", "maniis"].includes(w),
+  ),
   lantas: ["kota", "plered", "jatiluhur", "bungursari", "cibatu"],
   sium: [...allWilayah],
   spkt: [...allWilayah],

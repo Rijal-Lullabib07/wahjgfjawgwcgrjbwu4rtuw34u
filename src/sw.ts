@@ -95,7 +95,7 @@ async function handlePush(data: PushData): Promise<void> {
   const opts: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
     body: isLaporan
       ? (data.body ?? 'Laporan baru masuk.')
-      : (data.body ?? 'Segera kirim laporan siklus Anda.'),
+      : (data.body ?? 'Ada pemberitahuan baru dari SIPLAP.'),
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],

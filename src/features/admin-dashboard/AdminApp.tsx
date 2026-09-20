@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionUser } from "../../types";
 import MonitoringScreen from "./MonitoringScreen";
 import OrganizationScreen from "./OrganizationScreen";
-import FolderScreen from "./FolderScreen";
 import ReportPopup, { type ReportPopupData } from "./ReportPopup";
 import ReportScreen from "../report-generator/ReportScreen";
 import PolresLogo from "../../components/PolresLogo";
@@ -23,7 +22,7 @@ interface Props {
   onLogout: () => void;
 }
 
-type Tab = "folder" | "monitoring" | "struktur" | "laporan";
+type Tab = "monitoring" | "struktur" | "laporan";
 
 /** Tombol "Aktifkan notifikasi" untuk pemantau (sekali saja, lalu aktif). */
 function NotificationButton({ session }: { session: SessionUser }) {
@@ -82,9 +81,9 @@ function NotificationButton({ session }: { session: SessionUser }) {
   );
 }
 
-/** Dashboard Pemantau/Admin: tab utama 📁 Folder + monitoring realtime. */
+/** Dashboard Pemantau/Admin: tab utama 📊 Monitoring (folder + ringkasan). */
 export default function AdminApp({ session, onLogout }: Props) {
-  const [tab, setTab] = useState<Tab>("folder");
+  const [tab, setTab] = useState<Tab>("monitoring");
   const [refreshKey, setRefreshKey] = useState(0);
   const [popup, setPopup] = useState<ReportPopupData | null>(null);
   const [openFolderKey, setOpenFolderKey] = useState<string | null>(null);
@@ -173,7 +172,7 @@ export default function AdminApp({ session, onLogout }: Props) {
 
   const handleOpenFromPopup = useCallback((folderKey: string) => {
     setPopup(null);
-    setTab("folder");
+    setTab("monitoring");
     setOpenFolderKey(folderKey);
   }, []);
 
@@ -217,8 +216,7 @@ export default function AdminApp({ session, onLogout }: Props) {
         <nav className="mx-auto mt-4 flex max-w-6xl gap-2">
           {(
             [
-              ["folder", "📁 Folder"],
-              ["monitoring", "📡 Monitoring"],
+              ["monitoring", "📊 Monitoring"],
               ...(session.role === "admin"
                 ? ([["struktur", "🏢 Struktur"]] as Array<[Tab, string]>)
                 : []),
@@ -242,15 +240,13 @@ export default function AdminApp({ session, onLogout }: Props) {
       </header>
 
       <main className="safe-bottom mx-auto w-full max-w-6xl flex-1 px-4 py-6">
-        {tab === "folder" ? (
-          <FolderScreen
+        {tab === "monitoring" ? (
+          <MonitoringScreen
             session={session}
             refreshKey={refreshKey}
             openFolderKey={openFolderKey}
             onOpenHandled={() => setOpenFolderKey(null)}
           />
-        ) : tab === "monitoring" ? (
-          <MonitoringScreen />
         ) : tab === "struktur" && session.role === "admin" ? (
           <OrganizationScreen />
         ) : (
