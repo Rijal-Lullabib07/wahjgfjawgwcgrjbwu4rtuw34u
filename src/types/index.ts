@@ -104,6 +104,10 @@ export interface SessionUser {
   reguId?: string;
   namaRegu?: string;
   kodeLogin?: string;
-  // untuk admin
+  // untuk admin/pemantau
   email?: string;
+  monitorId?: string;
+  username?: string;
+  accessLevel?: "all" | "wilayah" | "fungsi";
+  scopeKey?: string | null;
 }

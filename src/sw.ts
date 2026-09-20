@@ -52,17 +52,50 @@ async function syncFromSW(): Promise<void> {
 
 // ---------- Push notification ----------
 
+interface PushData {
+  title?: string;
+  body?: string;
+  url?: string;
+  tag?: string;
+  laporanId?: string;
+  folderKey?: string;
+}
+
 self.addEventListener('push', (event) => {
   const pushEvent = event as ExtendableEvent & { data?: { json: () => unknown; text: () => string } | null };
-  let data: { title?: string; body?: string; url?: string; tag?: string } = {};
+  let data: PushData = {};
   try {
     const raw = pushEvent.data as { json?: () => unknown; text?: () => string } | null;
-    data = raw && typeof raw.json === 'function' ? (raw.json() as typeof data) : {};
+    data = raw && typeof raw.json === 'function' ? (raw.json() as PushData) : {};
   } catch {
     data = {};
   }
+  pushEvent.waitUntil(handlePush(data));
+});
+
+async function handlePush(data: PushData): Promise<void> {
+  const isLaporan = data.tag === 'siplap-laporan';
+
+  if (isLaporan) {
+    // Kalau app sedang TERBUKA (ada window visible), TAHAN notifikasi sistem
+    // supaya tidak dobel dengan popup in-app — teruskan isi push ke halaman.
+    const clientList = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+    const visibleClient = clientList.find(
+      (client) => (client as WindowClient).visibilityState === 'visible',
+    );
+    if (visibleClient) {
+      visibleClient.postMessage({ type: 'SIPLAP_LAPORAN_PUSH', data });
+      return;
+    }
+  }
+
   const opts: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
-    body: data.body ?? 'Segera kirim laporan siklus Anda.',
+    body: isLaporan
+      ? (data.body ?? 'Laporan baru masuk.')
+      : (data.body ?? 'Segera kirim laporan siklus Anda.'),
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
@@ -72,12 +105,17 @@ self.addEventListener('push', (event) => {
     // Android mengganti notifikasi bertag sama secara DIAM; renotify membuat
     // pengingat berulang tetap berbunyi & bergetar.
     renotify: true,
+    // Untuk laporan: url membawa folder tujuan (/?folder=<key>) → klik
+    // notifikasi langsung membuka folder yang benar.
     data: { url: data.url ?? '/' },
   };
-  pushEvent.waitUntil(
-    self.registration.showNotification(data.title ?? 'SIPLAP — Pengingat Laporan', opts),
+  await self.registration.showNotification(
+    isLaporan
+      ? (data.title ?? 'SIPLAP — Laporan Baru')
+      : (data.title ?? 'SIPLAP — Pengingat Laporan'),
+    opts,
   );
-});
+}
 
 self.addEventListener('notificationclick', (event) => {
   const notifEvent = event as ExtendableEvent & {

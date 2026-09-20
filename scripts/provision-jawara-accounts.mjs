@@ -27,140 +27,207 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Counts and unit keys come from JAWARA APP.xlsx / panduan-update-app-web.html.
-const polsekReporters = [
-  ["Purwakarta Kota", "kota", 35],
-  ["Plered", "plered", 25],
-  ["Jatiluhur", "jatiluhur", 27],
-  ["Bungursari", "bungursari", 27],
-  ["Campaka", "campaka", 22],
-  ["Cibatu", "cibatu", 23],
-  ["Pasawahan", "pasawahan", 24],
-  ["Darangdan", "darangdan", 16],
-  ["Wanayasa", "wanayasa", 18],
-  ["Maniis", "maniis", 14],
-  ["Sukatani", "sukatani", 16],
-  ["Sukasari", "sukasari", 16],
-  ["Kiarapedes", "kiarapedes", 12],
-  ["Bojong", "bojong", 14],
-];
-const polresReporters = [
-  ["Satintelkam", "intelkam", 30],
-  ["Satreskrim", "reskrim", 73],
-  ["Satresnarkoba", "narkoba", 35],
-  ["Satbinmas", "binmas", 9],
-  ["Satsamapta", "samapta", 44],
-  ["Pam Obvit Samapta", "pamobvit", 24],
-  ["Satlantas", "lantas", 96],
-  ["Satpolairud", "polair", 7],
-  ["Sattahti", "tahti", 10],
-];
-const functionMonitors = [
-  ["KASAT INTEL", "intelkam", "kasat"],
-  ["KASAT RESKRIM", "reskrim", "kasat"],
-  ["KASATRESNARKOBA", "narkoba", "kasat"],
-  ["KASAT BINMAS", "binmas", "kasat"],
-  ["KASAT SAMAPTA", "samapta", "kasat"],
-  ["PAMOBVIT SAMAPTA", "pamobvit", "kasat"],
-  ["KASAT LANTAS", "lantas", "kasat"],
-  ["KASAT POLAIR", "polair", "kasat"],
-  ["KASAT TAHTI", "tahti", "kasat"],
-  ["KASAT SPKT", "spkt", "kasat"],
+// ================================================================
+// Struktur akun SIPLAP (146 total) — sesuai db_supabase.sql:
+//   Pemantau (27)    : Kapolres, Wakapolres (read-only), Admin Utama,
+//                      10 Kasat (fungsi), 14 Kapolsek (wilayah)
+//   Pelapor Lv2 (9)  : satu per satuan Polres (reskrim.polres, dst.)
+//   Pelapor Lv1 (110): 96 akun unit di Polsek + 14 SPKT
+// ================================================================
+
+const wilayahList = [
+  ["kota", "Purwakarta Kota"],
+  ["plered", "Plered"],
+  ["jatiluhur", "Jatiluhur"],
+  ["bungursari", "Bungursari"],
+  ["campaka", "Campaka"],
+  ["cibatu", "Cibatu"],
+  ["pasawahan", "Pasawahan"],
+  ["darangdan", "Darangdan"],
+  ["wanayasa", "Wanayasa"],
+  ["maniis", "Maniis"],
+  ["sukatani", "Sukatani"],
+  ["sukasari", "Sukasari"],
+  ["kiarapedes", "Kiarapedes"],
+  ["bojong", "Bojong"],
 ];
 
-const emailFor = (username, type) => `${username}@${type}.siplap.id`;
-
-const randomPassword = () => {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const special = "!@#$%^&*";
-  const chars = [
-    alphabet[randomBytes(1)[0] % 26],
-    alphabet[26 + (randomBytes(1)[0] % 26)],
-    String(2 + (randomBytes(1)[0] % 8)),
-    special[randomBytes(1)[0] % special.length],
-  ];
-  while (chars.length < 20)
-    chars.push(alphabet[randomBytes(1)[0] % alphabet.length]);
-  for (let index = chars.length - 1; index > 0; index--) {
-    const swapIndex = randomBytes(1)[0] % (index + 1);
-    [chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]];
-  }
-  return chars.join("");
+const unitLabels = {
+  reskrim: "Reskrim",
+  intelkam: "Intelkam",
+  bhabinkamtibmas: "Bhabinkamtibmas",
+  samapta: "Samapta",
+  binmas: "Binmas",
+  propam: "Propam",
+  lantas: "Lantas",
+  sium: "Sium & Humas",
+  spkt: "SPKT",
 };
-const reporterAccounts = [];
+
+// Presensi unit per Polsek (mengikuti JAWARA APP.xlsx, BKO diabaikan).
+const allWilayah = wilayahList.map(([w]) => w);
+const unitPresence = {
+  reskrim: allWilayah,
+  intelkam: allWilayah,
+  bhabinkamtibmas: allWilayah,
+  samapta: allWilayah.filter((w) => w !== "sukatani"),
+  binmas: allWilayah.filter(
+    (w) => !["plered", "darangdan", "sukasari"].includes(w),
+  ),
+  propam: allWilayah.filter((w) => !["kota", "campaka"].includes(w)),
+  lantas: ["kota", "plered", "jatiluhur", "bungursari", "cibatu"],
+  sium: allWilayah,
+};
+
+const polresSatus = [
+  ["Satintelkam", "intelkam"],
+  ["Satreskrim", "reskrim"],
+  ["Satresnarkoba", "narkoba"],
+  ["Satbinmas", "binmas"],
+  ["Satsamapta", "samapta"],
+  ["Pam Obvit Samapta", "pamobvit"],
+  ["Satlantas", "lantas"],
+  ["Satpolairud", "polair"],
+  ["Sattahti", "tahti"],
+];
+
+const kasatUnits = [
+  ["KASAT INTELKAM", "intelkam"],
+  ["KASAT RESKRIM", "reskrim"],
+  ["KASAT RESNARKOBA", "narkoba"],
+  ["KASAT BINMAS", "binmas"],
+  ["KASAT SAMAPTA", "samapta"],
+  ["PAM OBVIT SAMAPTA", "pamobvit"],
+  ["KASAT LANTAS", "lantas"],
+  ["KASAT POLAIR", "polair"],
+  ["KASAT TAHTI", "tahti"],
+  ["KASAT SPKT", "spkt"],
+];
+
 const monitorAccounts = [
   {
     kind: "pemantau",
     username: "polres.kapolres",
-    name: "Kapolres",
+    name: "KAPOLRES",
     accessLevel: "all",
     scopeKey: null,
+    unitKey: null,
+    wilayahKey: null,
   },
   {
     kind: "pemantau",
     username: "polres.wakapolres",
-    name: "Wakapolres",
+    name: "WAKAPOLRES",
     accessLevel: "all",
     scopeKey: null,
+    unitKey: null,
+    wilayahKey: null,
   },
   {
     kind: "pemantau",
     username: "polres.admin",
-    name: "Admin Utama",
+    name: "ADMIN UTAMA",
+    email: "admin@polres.go.id",
     accessLevel: "all",
     scopeKey: null,
-    email: "admin@polres.go.id",
+    unitKey: null,
+    wilayahKey: null,
   },
-  ...functionMonitors.map(([name, unit]) => ({
+  ...kasatUnits.map(([name, unit]) => ({
     kind: "pemantau",
     username: `${unit}.kasat`,
     name,
     accessLevel: "fungsi",
     scopeKey: unit,
+    unitKey: null,
+    wilayahKey: null,
   })),
-  ...polsekReporters.map(([name, unit]) => ({
+  ...wilayahList.map(([wilayah, nama]) => ({
     kind: "pemantau",
-    username: `${unit}.kapolsek`,
-    name: `KAPOLSEK ${name.toUpperCase()}`,
+    username: `${wilayah}.kapolsek`,
+    name: `KAPOLSEK ${nama.toUpperCase()}`,
     accessLevel: "wilayah",
-    scopeKey: unit,
+    scopeKey: wilayah,
+    unitKey: null,
+    wilayahKey: null,
   })),
 ];
 
-for (const [name, unit, count] of polresReporters) {
-  for (let index = 1; index <= count; index++) {
-    reporterAccounts.push({
-      kind: "pelapor",
-      username: `${unit}.pelapor${String(index).padStart(2, "0")}`,
-      name: `${name} Pelapor ${String(index).padStart(2, "0")}`,
-      accessLevel: "pelapor-level-2",
-      unitKey: unit,
-      wilayahKey: null,
-    });
-  }
-}
-for (const [name, unit, count] of polsekReporters) {
-  for (let index = 1; index <= count; index++) {
-    reporterAccounts.push({
-      kind: "pelapor",
-      username: `${unit}.pelapor${String(index).padStart(2, "0")}`,
-      name: `${name} Pelapor ${String(index).padStart(2, "0")}`,
-      accessLevel: "pelapor-level-1",
-      unitKey: null,
-      wilayahKey: unit,
-    });
-  }
-}
-for (const [index, [, wilayahKey]] of polsekReporters.entries()) {
-  reporterAccounts.push({
+const reporterAccounts = [
+  // Level 2: satu akun per satuan Polres.
+  ...polresSatus.map(([name, unit]) => ({
     kind: "pelapor",
-    username: `spkt.pelapor${String(index + 1).padStart(2, "0")}`,
-    name: `SPKT Pelapor ${String(index + 1).padStart(2, "0")}`,
+    username: `${unit}.polres`,
+    name,
+    accessLevel: "pelapor-level-2",
+    scopeKey: unit,
+    unitKey: unit,
+    wilayahKey: null,
+  })),
+  // Level 1: akun unit di tiap Polsek.
+  ...Object.entries(unitPresence).flatMap(([unit, wilayahs]) =>
+    wilayahs.map((wilayah) => {
+      const nama = wilayahList.find(([w]) => w === wilayah)?.[1] ?? wilayah;
+      return {
+        kind: "pelapor",
+        username: `${unit}.${wilayah}`,
+        name: `${unitLabels[unit]} Polsek ${nama}`,
+        accessLevel: "pelapor-level-1",
+        scopeKey: wilayah,
+        unitKey: unit,
+        wilayahKey: wilayah,
+      };
+    }),
+  ),
+  // SPKT: satu akun per Polsek.
+  ...wilayahList.map(([wilayah, nama]) => ({
+    kind: "pelapor",
+    username: `spkt.${wilayah}`,
+    name: `SPKT Polsek ${nama}`,
     accessLevel: "pelapor-level-1",
+    scopeKey: wilayah,
     unitKey: "spkt",
-    wilayahKey,
-  });
+    wilayahKey: wilayah,
+  })),
+];
+
+const allAccounts = [...monitorAccounts, ...reporterAccounts];
+if (allAccounts.length !== 146) {
+  throw new Error(
+    `Struktur akun salah: ${allAccounts.length} akun (harusnya 146).`,
+  );
 }
+
+const emailFor = (username, type) => `${username}@${type}.siplap.id`;
+
+// Password pola KATA-ANGKA-KATA (contoh: Mangga-7429-Roti) —
+// tidak terlalu gampang ditebak, tidak terlalu susah diketik di HP.
+const WORDS = [
+  "Mangga", "Roti", "Nasi", "Kopi", "Teh", "Gula", "Susu", "Buku", "Pena",
+  "Meja", "Kursi", "Lampu", "Pintu", "Kunci", "Gunung", "Laut", "Pantai",
+  "Batu", "Pasir", "Kayu", "Bunga", "Daun", "Padi", "Jagung", "Kelapa",
+  "Pisang", "Jambu", "Ayam", "Bebek", "Sapi", "Kuda", "Ikan", "Udang",
+  "Kucing", "Burung", "Elang", "Garuda", "Bintang", "Bulan", "Awan",
+  "Hujan", "Angin", "Petir", "Pelangi", "Teluk", "Bukit", "Lembah", "Sawah",
+  "Kebun", "Rumah", "Jalan", "Sekolah", "Pasar", "Warung", "Kamar", "Dapur",
+  "Taman", "Pohon", "Besi", "Emas", "Perak", "Kaca", "Kertas", "Kartu",
+  "Surat", "Kabar", "Cerita", "Lagu", "Gitar", "Bendera", "Topi", "Baju",
+  "Sepatu", "Sandal", "Tas", "Dompet", "Jam", "Payung", "Sarung", "Sabuk",
+  "Gelang", "Cincin", "Kalung", "Pagar", "Gerbang", "Menara", "Jangkar",
+  "Perahu", "Sampan", "Dayung", "Nelayan", "Petani", "Sopir", "Kurir",
+  "Kapal", "Roda", "Ban", "Mesin", "Senter", "Kompas", "Peta", "Tenda",
+];
+
+const randomWord = () => WORDS[randomBytes(1)[0] % WORDS.length];
+
+const randomPassword = () => {
+  const first = randomWord();
+  let second = randomWord();
+  // Hindari kedua kata sama agar polanya tidak monoton.
+  while (second === first) second = randomWord();
+  const number = 1000 + (randomBytes(2).readUInt16BE(0) % 9000);
+  return `${first}-${number}-${second}`;
+};
 
 async function loadUsers() {
   const { data, error } = await supabase.auth.admin.listUsers({
@@ -173,9 +240,10 @@ async function loadUsers() {
   );
 }
 
-async function ensureAuthUser(account, users, type) {
+async function ensureAuthUser(account, users) {
   const email = (
-    account.email ?? emailFor(account.username, type)
+    account.email ??
+    emailFor(account.username, account.kind === "pemantau" ? "monitor" : "regu")
   ).toLowerCase();
   const existing = users.get(email);
   if (existing) return { email, password: null, created: false };
@@ -196,7 +264,7 @@ async function ensureAuthUser(account, users, type) {
 }
 
 async function provisionMonitor(account, users) {
-  const auth = await ensureAuthUser(account, users, "monitor");
+  const auth = await ensureAuthUser(account, users);
   const { data: existing, error: lookupError } = await supabase
     .from("admin_users")
     .select("id")
@@ -204,11 +272,18 @@ async function provisionMonitor(account, users) {
     .maybeSingle();
   if (lookupError) throw lookupError;
 
+  // Kapolres & Admin Utama boleh kelola; Wakapolres read-only;
+  // Kasat & Kapolsek hanya pemantau.
+  const role =
+    account.accessLevel === "all" && account.username !== "polres.wakapolres"
+      ? "admin"
+      : "pimpinan";
+
   const row = {
     nama: account.name,
     email: auth.email,
     username: account.username,
-    role: account.accessLevel === "all" ? "admin" : "pimpinan",
+    role,
     access_level: account.accessLevel,
     scope_key: account.scopeKey,
   };
@@ -226,7 +301,7 @@ async function provisionMonitor(account, users) {
 }
 
 async function provisionReporter(account, users) {
-  const auth = await ensureAuthUser(account, users, "regu");
+  const auth = await ensureAuthUser(account, users);
   const { data, error } = await supabase
     .from("regu")
     .upsert(
@@ -237,6 +312,7 @@ async function provisionReporter(account, users) {
         access_level: account.accessLevel,
         unit_key: account.unitKey,
         wilayah_key: account.wilayahKey,
+        is_legacy: false,
       },
       { onConflict: "kode_login" },
     )
@@ -270,7 +346,7 @@ const lines = [
     "email",
     "kind",
     "access_level",
-    "scope_key",
+    "scope",
     "status",
   ]
     .map(csvEscape)
@@ -282,7 +358,7 @@ const lines = [
       account.email,
       account.kind,
       account.accessLevel,
-      account.scopeKey ?? account.unitKey ?? account.wilayahKey ?? "",
+      account.unitKey ?? account.wilayahKey ?? "all",
       account.created ? "created" : "existing",
     ]
       .map(csvEscape)
@@ -304,6 +380,7 @@ const markdown = [
   "",
   "> SENSITIVE: simpan di password manager atau kanal privat, jangan commit ke Git.",
   "> Akun existing ditandai `[existing password preserved]` dan tidak di-reset oleh script.",
+  "> Format password: KATA-ANGKA-KATA (contoh: Mangga-7429-Roti).",
   "",
   "| Jenis | Username | Password | Scope | Email | Status |",
   "|---|---|---|---|---|---|",
@@ -313,7 +390,7 @@ const markdown = [
         account.kind,
         account.username,
         account.password ?? "[existing password preserved]",
-        account.scopeKey ?? account.unitKey ?? account.wilayahKey ?? "all",
+        account.unitKey ?? account.wilayahKey ?? "all",
         account.email,
         account.created ? "created" : "existing",
       ]
@@ -331,7 +408,7 @@ try {
   /* Windows ACLs may ignore chmod. */
 }
 
-console.log(`Provisioned ${created.length} JAWARA accounts.`);
+console.log(`Provisioned ${created.length} JAWARA accounts (target 146).`);
 console.log(
   `Credentials written to ${output} and ${markdownOutput}. Treat both files as secrets and delete them after secure delivery.`,
 );

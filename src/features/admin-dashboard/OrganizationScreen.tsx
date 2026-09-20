@@ -22,7 +22,7 @@ function GroupList({
   groups,
 }: {
   title: string;
-  groups: readonly { name: string; count: number }[];
+  groups: readonly { name: string; count: number; items?: readonly string[] }[];
 }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   return (
@@ -55,12 +55,18 @@ function GroupList({
               </button>
               {open && (
                 <div className="mt-3 grid max-h-56 gap-1 overflow-y-auto border-t border-navy-700 pt-3">
-                  {Array.from({ length: group.count }, (_, index) => (
+                  {(
+                    group.items ??
+                    Array.from(
+                      { length: group.count },
+                      (_, index) => `${group.name} ${index + 1}`,
+                    )
+                  ).map((item) => (
                     <div
-                      key={index}
+                      key={item}
                       className="rounded-lg bg-navy-900/70 px-3 py-1.5 text-xs text-slate-400"
                     >
-                      {group.name} {index + 1}
+                      {item}
                     </div>
                   ))}
                 </div>
@@ -195,7 +201,7 @@ export default function OrganizationScreen() {
           <div className="absolute inset-x-0 top-0 h-1 bg-sky-400" />
           <div className="text-xs text-slate-400">Pemantau fungsi</div>
           <div className="mt-2 text-2xl font-bold">
-            {jawaraTotals.functionMonitors}
+            {jawaraStructure.functionMonitors.length}
           </div>
         </div>
         <div className="card relative overflow-hidden">
@@ -215,6 +221,10 @@ export default function OrganizationScreen() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <MonitorList
+          title="Pemantau all access"
+          names={jawaraStructure.allAccessNames}
+        />
         <MonitorList
           title="Pemantau sesuai fungsi Polres"
           names={jawaraStructure.functionMonitors}

@@ -1,145 +1,130 @@
 # SIPLAP — Sistem Informasi Pelaporan Giat Lapangan Polres
 
-PWA pelaporan kegiatan lapangan berbasis foto untuk Polres.
-15 regu mengirim 2 foto per siklus (12 siklus × 2 jam/hari) dengan watermark GPS &
-waktu. Admin memantau secara real-time dan menarik rekap laporan (PDF/Excel).
+PWA pelaporan kegiatan lapangan berbasis foto/video untuk Polres Purwakarta.
+Pelapor mengirim laporan (maks 4 foto + 1 video) dengan watermark GPS & waktu;
+pemantau memantau lewat **tab 📁 Folder** (Polsek → unit → laporan) dan menerima
+**popup + notifikasi push** setiap laporan baru masuk dalam cakupannya.
 
 ## Fitur
 
 - **Kamera live capture** (getUserMedia, tanpa upload galeri) + watermark GPS & waktu via `<canvas>`
 - **Offline-first**: foto & metadata tersimpan di IndexedDB, auto-sync ke Supabase saat online
-  (Background Sync API di Android, retry-on-foreground di iOS)
-- **Realtime dashboard** admin: status 15 regu per siklus + feed foto terbaru
-- **Generator laporan**: filter harian/mingguan/bulanan/custom, gabungan/per regu,
-  export PDF (jsPDF + thumbnail) & Excel (SheetJS)
-- **Reminder notifikasi Web Push (VAPID)** 15 menit sebelum siklus berakhir — tetap sampai walau app
-  ditutup; reminder lokal dipakai sebagai cadangan bila push tidak tersedia
-- **RLS Supabase**: regu hanya akses laporan miliknya; admin baca semua
+- **Folder pemantau**: tab 📁 Folder = halaman utama. Tiap folder menampilkan
+  jumlah laporan hari ini, waktu laporan terakhir, dan badge merah **"N baru"**
+  yang hilang saat folder dibuka. Tampilan mengikuti hak akses (RLS).
+- **Popup laporan baru**: bunyi + getar + tombol **"Buka laporan"** yang langsung
+  membuka folder yang benar — hanya untuk laporan dalam cakupan pemantau.
+- **Web Push (notify-laporan)**: kalau app ditutup, notifikasi sistem tetap
+  masuk; klik notifikasi membuka folder laporan tersebut. Kalau app sedang
+  terbuka, notifikasi sistem **ditahan** agar tidak dobel dengan popup.
+- **Generator laporan**: export PDF (jsPDF + thumbnail) & Excel (SheetJS)
+- **RLS Supabase**: pelapor hanya akses laporan miliknya; pemantau sesuai cakupan
 
-## Setup Supabase
+## Struktur akun (146 total)
 
-1. Buat project di [supabase.com](https://supabase.com). Catat **Project URL** & **anon key**
-   (Settings → API).
+| Kelompok | Jumlah | Cakupan |
+| --- | --- | --- |
+| Kapolres | 1 | Pemantau + kelola (semua folder) |
+| Wakapolres | 1 | Read-only (semua folder) |
+| Admin Utama | 1 | Kelola (akun terpisah) |
+| Kasat (fungsi) | 10 | Satuannya di Polres + folder unit yang sama di tiap Polsek |
+| Kapolsek (wilayah) | 14 | Langsung masuk folder Polseknya |
+| Pelapor level 2 | 9 | Satu akun per satuan Polres (`reskrim.polres`, dst.) |
+| Pelapor level 1 | 96 | Akun unit di Polsek (`reskrim.jatiluhur`, dst.) |
+| SPKT | 14 | Satu akun per Polsek (`spkt.jatiluhur`, dst.) |
+
+Akun lama (format `.pelapor01`–`.pelapor73` dst.) **tidak dibuat** di project
+baru. Skema tetap mendukung arsip lewat kolom `regu.is_legacy`: bila kelak data
+lama diimpor, laporannya tampil di folder satuan masing-masing dan di folder
+**"Arsip akun lama"** di Polsek masing-masing.
+
+## Setup Supabase (PROJECT BARU)
+
+1. Buat project di [supabase.com](https://supabase.com). Catat **Project URL** &
+   **anon key** (Settings → API).
 2. Salin `.env.example` → `.env`:
    ```env
    VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
    VITE_SUPABASE_ANON_KEY=<ANON_KEY>
-   VITE_VAPID_PUBLIC_KEY=<VAPID_PUBLIC_KEY>   # didapat di langkah 8
+   VITE_VAPID_PUBLIC_KEY=<VAPID_PUBLIC_KEY>   # didapat di langkah 5
    ```
-3. **SQL Editor** → jalankan seluruh isi `supabase/migrations/0001_init.sql`
-   (tabel, index, storage bucket, RLS, realtime — idempoten, aman diulang).
-4. **SQL Editor** → jalankan `supabase/migrations/0002_seed.sql`
-   (631 master username pelapor dan 27 master username pemantau/admin JAWARA; tidak membuat password).
-5. **SQL Editor** → jalankan `supabase/migrations/0003_foto_quota.sql`
-   lalu `supabase/migrations/0003_reminder_logs.sql`.
-6. **SQL Editor** → jalankan `supabase/migrations/0004_push_claim.sql` dan
-   `supabase/migrations/0005_fix_storage_rls.sql`.
-7. Jalankan `0006_jawara_accounts.sql`, lalu `0007_open_reporting.sql`, kemudian `0008_media_limits.sql`.
-8. Jalankan `npm run provision:jawara` untuk membuat akun Auth dan password acak.
+3. **SQL Editor** → jalankan **seluruh isi `supabase/db_supabase.sql`**.
+   Satu file ini berisi: tabel + index, helper & RLS scope-aware, storage
+   bucket `laporan-foto`, realtime, RPC folder (`folder_overview`,
+   `folder_laporan`, `mark_folder_read`), dan **seed 146 akun** (metadata saja,
+   tanpa password). Idempoten — aman dijalankan ulang.
+   > Folder `supabase/migrations/` adalah riwayat project lama; untuk project
+   > baru cukup `db_supabase.sql`.
+4. **Provision akun Auth** (membuat password):
+   ```powershell
+   # .env.provision.local: VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+   npm run provision:jawara
+   ```
+   Script membuat **146 akun** dengan password pola **KATA-ANGKA-KATA**
+   (contoh: `Mangga-7429-Roti`) — tidak terlalu gampang ditebak, tidak terlalu
+   susah diketik di HP. Hasilnya ditulis ke `jawara-credentials-latest.csv`
+   dan `pw.md` (keduanya sudah di `.gitignore`). Bagikan lewat kanal aman lalu
+   **hapus kedua file**.
 
-## Notifikasi pengingat
+## Notifikasi laporan baru (popup + Web Push)
 
-Notifikasi pengingat batas siklus dinonaktifkan karena pelaporan tersedia 24 jam.
-Fitur Web Push tidak diperlukan untuk alur pelaporan saat ini.
+Popup di app langsung jalan setelah login pemantau. **Push** perlu setup sekali:
 
-**a. Generate kunci VAPID** (sekali saja, simpan hasilnya)
+**a. Generate kunci VAPID** (sekali saja, simpan hasilnya):
 
 ```bash
 npx web-push generate-vapid-keys
 ```
 
-**b. Isi kunci PUBLIK di `.env`**, lalu restart `npm run dev` / build ulang:
+**b. Isi kunci PUBLIK di `.env`** (`VITE_VAPID_PUBLIC_KEY`), lalu build ulang.
 
-```env
-VITE_VAPID_PUBLIC_KEY=<Public Key>
-```
-
-**c. Set secret Edge Function** (kunci PRIVAT hanya di server, jangan pernah di frontend):
+**c. Set secret Edge Function** (kunci privat hanya di server):
 
 ```bash
 supabase secrets set \
   VAPID_PUBLIC_KEY="<Public Key>" \
   VAPID_PRIVATE_KEY="<Private Key>" \
   VAPID_SUBJECT="mailto:admin@polres.go.id" \
-  CRON_SECRET="<string pendek pilihan sendiri, mis. polres-cron-9f3k2m7q>"
+  NOTIFY_SECRET="<string acak pilihan sendiri>"
 ```
 
-`CRON_SECRET` dipakai pg_cron sebagai tanda pengenal, dikirim lewat header **`x-cron-secret`**
-(sengaja bukan `Authorization`, agar tidak terkena pemeriksaan JWT bawaan platform). Jadi tidak
-perlu menempel `service_role` key yang panjang ke dalam SQL — sumber 401 yang paling sering
-terjadi. Bebas diganti kapan saja, cukup ubah secret + jadwal cron-nya.
-
-**d. Deploy Edge Function dengan pemeriksaan JWT bawaan DIMATIKAN**
+**d. Deploy function** (pemeriksaan JWT dimatikan; function memverifikasi
+sendiri header `x-notify-secret`):
 
 ```bash
-supabase functions deploy reminder-push --no-verify-jwt
+supabase functions deploy notify-laporan --no-verify-jwt
 ```
 
-Alasan: pg_cron tidak membawa JWT user, dan pemeriksaan bawaan platform hanya mengerti format
-kunci lama — kalau dibiarkan aktif, request ditolak sebelum kode kita jalan (gejala: pesan
-`{"code":"UNAUTHORIZED_INVALID_JWT_FORMAT","message":"Invalid JWT"}` atau `Invalid API key`).
-Supabase sendiri kini merekomendasikan mematikannya dan mengatur autentikasi di dalam function.
-Kalau deploy lewat Dashboard: buka function → **Settings** → matikan **Verify JWT**.
-Sebagai gantinya, function memverifikasi sendiri header `x-cron-secret`.
+**e. Buat Database Webhook** — Dashboard → **Database → Webhooks → Create**:
 
-**e. Aktifkan ekstensi** — Dashboard → Database → Extensions → aktifkan **`pg_cron`** dan **`pg_net`**.
+- Name: `siplap-laporan` · Table: `laporan` · Events: **INSERT**
+- Method: `POST` · URL:
+  `https://<PROJECT_REF>.supabase.co/functions/v1/notify-laporan`
+- HTTP Headers (section **HTTP Headers**): tambahkan
+  `x-notify-secret` = `<NOTIFY_SECRET>`
 
-**f. Jadwalkan cron** di SQL Editor (ganti `<PROJECT_REF>` dan `<SERVICE_ROLE_KEY>`):
+Function menerima `x-notify-secret` **atau** `Authorization: Bearer <kunci>`,
+jadi salah satu saja cukup.
 
-```sql
-select cron.unschedule('siplap-reminder') where exists (
-  select 1 from cron.job where jobname = 'siplap-reminder'
-);
+**f. Aktifkan per pemantau** — tiap pemantau menekan tombol
+**"🔔 Aktifkan notifikasi"** sekali (izin browser). **iPhone wajib dipasang ke
+Home Screen dulu** (Share → Add to Home Screen); Web Push tidak jalan di
+Safari biasa.
 
-select cron.schedule(
-  'siplap-reminder',
-  '*/5 * * * *',
-  $$
-  select net.http_post(
-    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/reminder-push',
-    headers := jsonb_build_object(
-      'Content-Type','application/json',
-      'x-cron-secret','<CRON_SECRET>'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
-```
+**g. Uji end-to-end** — login sebagai pelapor dalam cakupan, kirim laporan:
 
-**g. Uji end-to-end** — buka app sebagai regu, login, klik **"Aktifkan"** pada banner
-notifikasi (browser minta izin), lalu dari terminal:
+- App pemantau **terbuka** → popup muncul (bunyi + getar) + tombol
+  **"Buka laporan"**; notifikasi sistem ditahan (tidak dobel).
+- App **ditutup** → notifikasi sistem masuk; klik → app terbuka langsung di
+  folder laporan tersebut.
 
-```bash
-curl -X POST "https://<PROJECT_REF>.supabase.co/functions/v1/reminder-push" \
-  -H "x-cron-secret: <CRON_SECRET>" \
-  -H "Content-Type: application/json" \
-  -d '{"test":true}'
-```
+Respons function saat webhook terpicu:
+`{"ok":true,"laporanId":"…","folderKey":"unit:jatiluhur:reskrim","sent":2,…}`.
+`sent:0` berarti belum ada device pemantau dalam cakupan yang menekan
+"Aktifkan notifikasi".
 
-Respons `{"ok":true,...,"results":[{"regu":"Regu 1","foto":0,"sent":1}]}` = notifikasi
-benar-benar terkirim ke device. `"sent":0` berarti belum ada device yang mendaftar →
-cek isi tabel `push_subscriptions`.
-
-**h. Verifikasi cron** yang sedang berjalan:
-
-```sql
-select jobname, schedule, active from cron.job;
-select status, return_message, start_time from cron.job_run_details order by start_time desc limit 5;
-select * from public.reminder_logs order by sent_at desc limit 10;
-```
-
-### Catatan penting
-
-- **Reminder hanya dikirim di 15 menit terakhir siklus.** Di luar window itu responsnya
-  `{"skipped":true}` — itu normal, bukan error.
-- **iOS** wajib 16.4+ dan app harus **dipasang ke home screen** (Share → Add to Home Screen)
-  baru Web Push bisa masuk. Di Safari biasa, notifikasi tidak akan sampai.
-- `VITE_VAPID_PUBLIC_KEY` hanya boleh berisi **Public Key**. Kalau tertukar dengan Private Key,
-  `pushManager.subscribe()` akan gagal.
-- Bila push gagal didaftarkan, app otomatis memakai **reminder lokal** (`src/lib/push/localReminder.ts`)
-  yang hanya bunyi selama app hidup. Keduanya memakai tag `siplap-reminder` yang sama,
-  jadi tidak akan muncul dua notifikasi untuk siklus yang sama.
+> Function `reminder-push` (pengingat siklus) tetap ada tapi dinonaktifkan
+> karena pelaporan tersedia 24 jam — tidak perlu di-deploy untuk project baru.
 
 ## Menjalankan
 
@@ -149,62 +134,41 @@ npm run dev      # development
 npm run build    # produksi (ikut typecheck) → dist/
 ```
 
-Deploy `dist/` ke Vercel/Netlify/Cloudflare Pages. PWA manifest & service worker
-otomatis dari `vite-plugin-pwa`.
+Deploy `dist/` ke Vercel/Netlify/Cloudflare Pages. PWA manifest & service
+worker otomatis dari `vite-plugin-pwa`.
 
-## Provisioning akun JAWARA
+## Folder pemantau (cara kerja singkat)
 
-Migration `supabase/migrations/0006_jawara_accounts.sql` menambahkan username,
-level pelapor, unit, wilayah, dan pembatasan akses laporan. Jalankan migration
-tersebut setelah migration sebelumnya.
-
-Jalankan juga `supabase/migrations/0007_open_reporting.sql` setelahnya. Migration
-ini membuka pelaporan 24 jam, menghapus kuota foto per siklus, dan tetap
-menyimpan metadata waktu untuk kebutuhan rekap.
-
-Migration ini juga menonaktifkan akun demo lama `REGU01`–`REGU15` yang memakai
-password mudah ditebak. Jangan mengaktifkannya kembali untuk produksi.
-
-Untuk membuat akun pemantau dan pelapor, gunakan Supabase service-role key hanya
-di terminal lokal atau server administrasi, jangan pernah di `.env` frontend,
-browser, atau repository:
-
-```powershell
-$env:SUPABASE_SERVICE_ROLE_KEY = "<SERVICE_ROLE_KEY>"
-$env:VITE_SUPABASE_URL = "https://<PROJECT_REF>.supabase.co"
-npm run provision:jawara
-```
-
-Script membuat password acak kuat yang berbeda untuk setiap akun baru dan
-menyimpan hasilnya hanya di `jawara-credentials-latest.csv` serta `pw.md`, yang
-sudah masuk `.gitignore`. Akun yang sudah ada tidak di-reset saat script
-dijalankan ulang. Setelah kredensial dibagikan melalui kanal aman, hapus kedua
-file tersebut.
-
-## Akun
-
-| Role     | Kredensial                                           | Keterangan                         |
-| -------- | ---------------------------------------------------- | ---------------------------------- |
-| Pelapor  | Username JAWARA dari `jawara-credentials-latest.csv` | Password acak, wajib disimpan aman |
-| Pemantau | Username JAWARA dari `jawara-credentials-latest.csv` | Password acak, wajib disimpan aman |
+- **Kapolres / Wakapolres / Admin**: dua tingkat — **Polsek → unit → laporan**
+  dan **Satuan Polres → laporan**.
+- **Kapolsek**: langsung masuk ke folder Polseknya (semua unit + SPKT).
+- **Kasat (mis. Kasat Intel)**: melihat folder **Satintelkam** dan folder
+  **Intelkam** di tiap Polsek — tanpa unit lain.
+- Badge **"N baru"** = laporan yang masuk sejak folder terakhir dibuka
+  (tabel `folder_reads`); hilang saat folder dibuka/expand.
+- Semua angka dihitung server-side oleh RPC `folder_overview()` sesuai
+  hak akses; RLS tetap menjaga isi laporan.
 
 ## Struktur
 
 ```
-src/features/regu-capture      → kamera, watermark, offline queue (sisi Regu)
-src/features/admin-dashboard   → monitoring realtime (sisi Admin)
+src/features/regu-capture      → kamera, watermark, offline queue (sisi pelapor)
+src/features/admin-dashboard   → FolderScreen (tab utama), monitoring realtime, popup
 src/features/report-generator  → export PDF/Excel
+src/lib/folders.ts             → RPC folder (overview, isi, mark read)
+src/lib/notify.ts              → bunyi + getar popup
+src/lib/push                   → Web Push VAPID (subscribe, vapid, localReminder)
 src/lib/supabase               → client + adapter data
-src/lib/offline-sync           → IndexedDB + sync manager
-src/lib/push                   → Web Push VAPID + reminder lokal (cadangan)
-supabase/migrations            → 0001 skema+RLS, 0002 seed akun
-supabase/functions             → Edge Functions (reminder-push, archive-photos)
+supabase/db_supabase.sql       → skema lengkap + seed 146 akun (project baru)
+supabase/functions             → notify-laporan, reminder-push, archive-photos, generate-report
+scripts/provision-jawara-accounts.mjs → buat akun Auth + password
 ```
 
 ## Keamanan
 
 - Hanya `anon key` di frontend — semua akses dijaga **Row Level Security**.
-- `service_role key` hanya di Edge Functions / pg_cron (server-side), tidak pernah di frontend.
+- `service_role key` hanya di Edge Functions / provisioning (server-side),
+  tidak pernah di frontend.
 - Kamera hanya live capture; tidak ada jalur upload galeri.
-- Password regu tersimpan ter-hash (bcrypt) di Supabase Auth.
-# pelaporan-
+- Password tersimpan ter-hash di Supabase Auth; file kredensial dihapus setelah
+  dibagikan.

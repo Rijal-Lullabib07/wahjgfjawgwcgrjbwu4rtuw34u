@@ -99,12 +99,20 @@ export async function loginAdmin(
 
   const { data: admin, error: adminErr } = await client
     .from("admin_users")
-    .select("*")
+    .select("id, nama, email, role, username, access_level, scope_key")
     .or(`email.eq.${email},username.eq.${normalized}`)
     .single();
   if (adminErr || !admin) throw new Error("Bukan akun admin yang valid");
 
-  return { role: admin.role, nama: admin.nama, email: admin.email };
+  return {
+    role: admin.role,
+    nama: admin.nama,
+    email: admin.email,
+    monitorId: admin.id,
+    username: admin.username ?? undefined,
+    accessLevel: admin.access_level,
+    scopeKey: admin.scope_key,
+  };
 }
 
 export async function logout(): Promise<void> {
@@ -293,15 +301,46 @@ export function videoDownloadUrl(storagePath: string): string {
 
 // ---------- Realtime ----------
 
-/** Subscribe perubahan tabel laporan & laporan_foto via Supabase Realtime. */
-export function subscribeLaporan(cb: () => void): () => void {
+/** Subscribe perubahan tabel laporan & laporan_foto via Supabase Realtime.
+ *  `cb` dipanggil untuk semua perubahan (refresh data);
+ *  `onInsert` dipanggil khusus saat laporan BARU masuk (payload barisnya)
+ *  — dipakai popup "Laporan baru". Realtime menghormati RLS, jadi
+ *  pemantau hanya menerima laporan dalam cakupannya. */
+export function subscribeLaporan(
+  cb: () => void,
+  onInsert?: (row: {
+    id: string;
+    regu_id: string;
+    timestamp_kirim: string;
+    catatan: string | null;
+  }) => void,
+): () => void {
   const client = requireClient();
   const channel = client
     .channel("laporan-changes")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "laporan" },
-      () => cb(),
+      (payload) => {
+        cb();
+        if (!onInsert) return;
+        const newRow = payload.new as
+          | {
+              id?: string;
+              regu_id?: string;
+              timestamp_kirim?: string;
+              catatan?: string | null;
+            }
+          | undefined;
+        if (newRow?.id && newRow?.regu_id) {
+          onInsert({
+            id: newRow.id,
+            regu_id: newRow.regu_id,
+            timestamp_kirim: newRow.timestamp_kirim ?? new Date().toISOString(),
+            catatan: newRow.catatan ?? null,
+          });
+        }
+      },
     )
     .on(
       "postgres_changes",
