@@ -31,9 +31,9 @@ import {
 import {
   fetchLaporan,
   fetchReguList,
-  fotoDownloadUrl,
   fotoUrl,
-  videoDownloadUrl,
+  namaFileUnduhan,
+  unduhFileStorage,
   videoUrl,
 } from "../../lib/supabase/api";
 import PlaceBadge from "../../components/PlaceBadge";
@@ -77,6 +77,46 @@ function FolderStats({ row }: { row: FolderRow }) {
   );
 }
 
+/** Tombol unduh file Storage via blob agar langsung muncul dialog simpan. */
+function UnduhButton({
+  storagePath,
+  className,
+}: {
+  storagePath: string;
+  className?: string;
+}) {
+  const [state, setState] = useState<"idle" | "proses" | "gagal">("idle");
+
+  const unduh = async () => {
+    setState("proses");
+    try {
+      await unduhFileStorage(storagePath, namaFileUnduhan(storagePath));
+      setState("idle");
+    } catch {
+      setState("gagal");
+      window.setTimeout(() => setState("idle"), 2000);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={state === "proses"}
+      onClick={() => void unduh()}
+      className={
+        className ??
+        "text-[11px] font-semibold text-sky-300 hover:text-white disabled:opacity-60"
+      }
+    >
+      {state === "proses"
+        ? "⏳ Mengunduh…"
+        : state === "gagal"
+          ? "⚠ Gagal — coba lagi"
+          : "⬇ Unduh"}
+    </button>
+  );
+}
+
 /** Player video + tombol unduh. */
 function VideoPreview({
   path,
@@ -97,15 +137,7 @@ function VideoPreview({
         <span className="text-[10px] text-sky-200">
           🎥 Video{durationSeconds ? ` · ${durationSeconds} detik` : ""}
         </span>
-        <a
-          href={videoDownloadUrl(path)}
-          download
-          target="_blank"
-          rel="noreferrer"
-          className="text-[11px] font-semibold text-sky-300 hover:text-white"
-        >
-          ⬇ Unduh
-        </a>
+        <UnduhButton storagePath={path} />
       </div>
     </div>
   );
@@ -198,15 +230,10 @@ function LaporanCard({ item }: { item: FolderLaporanRow }) {
                   className="aspect-square w-full object-cover"
                 />
               </a>
-              <a
-                href={fotoDownloadUrl(foto.storage_path)}
-                download
-                target="_blank"
-                rel="noreferrer"
-                className="block border-t border-navy-700 px-2 py-1 text-center text-[11px] font-semibold text-sky-300 hover:bg-navy-800 hover:text-white"
-              >
-                ⬇ Unduh
-              </a>
+              <UnduhButton
+                storagePath={foto.storage_path}
+                className="block w-full border-t border-navy-700 px-2 py-1 text-center text-[11px] font-semibold text-sky-300 hover:bg-navy-800 hover:text-white disabled:opacity-60"
+              />
             </div>
           ))}
         </div>

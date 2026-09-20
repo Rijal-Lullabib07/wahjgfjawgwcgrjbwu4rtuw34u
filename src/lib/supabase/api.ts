@@ -285,12 +285,42 @@ export function fotoUrl(storagePath: string): string {
   return data.publicUrl;
 }
 
-export function fotoDownloadUrl(storagePath: string): string {
+/**
+ * Unduh file dari Storage sebagai blob, lalu simpan via <a download>.
+ *
+ * Atribut `download` pada <a> DIABAIKAN browser bila URL-nya lintas domain
+ * (mis. supabase.co ≠ domain app) — halaman malah terbuka di tab baru.
+ * Triknya: fetch file → buat object URL (same-origin) → klik <a download>
+ * sehingga browser langsung membuka dialog simpan file.
+ */
+export async function unduhFileStorage(
+  storagePath: string,
+  namaFile: string,
+): Promise<void> {
   const client = requireClient();
   const { data } = client.storage
     .from("laporan-foto")
     .getPublicUrl(storagePath, { download: true });
-  return data.publicUrl;
+  const res = await fetch(data.publicUrl);
+  if (!res.ok) throw new Error(`Gagal mengambil file (HTTP ${res.status}).`);
+  const blob = await res.blob();
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objUrl;
+  a.download = namaFile;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objUrl), 30_000);
+}
+
+/** Nama file yang ramah untuk unduhan, dari storage path
+ *  `<reguId>/<laporanId>/foto/foto-1.jpg` → `laporan-<id>/foto-1.jpg`. */
+export function namaFileUnduhan(storagePath: string): string {
+  const parts = storagePath.split("/");
+  const nama = parts[parts.length - 1] || "file";
+  const laporanId = parts.length >= 2 ? parts[parts.length - 3] : undefined;
+  return laporanId ? `laporan-${laporanId.slice(0, 8)}-${nama}` : nama;
 }
 
 /** URL publik video dari Storage. */
@@ -299,14 +329,6 @@ export function videoUrl(storagePath: string): string {
   const { data } = client.storage
     .from("laporan-foto")
     .getPublicUrl(storagePath);
-  return data.publicUrl;
-}
-
-export function videoDownloadUrl(storagePath: string): string {
-  const client = requireClient();
-  const { data } = client.storage
-    .from("laporan-foto")
-    .getPublicUrl(storagePath, { download: true });
   return data.publicUrl;
 }
 
