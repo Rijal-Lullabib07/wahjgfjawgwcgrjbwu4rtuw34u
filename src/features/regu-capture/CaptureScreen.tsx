@@ -78,7 +78,7 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
         lat: geo.lat,
         lng: geo.lng,
         timestamp: ts,
-        label: "SIPLAP · Pelaporan Harian",
+        label: "SALAM PRESISI · Pelaporan Harian",
         place: geo.place
           ? geo.place.detail
             ? `${geo.place.name} — ${geo.place.detail}`
@@ -217,13 +217,13 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl px-4 py-4 sm:px-6">
+    <div className="mx-auto w-full max-w-xl px-4 py-5 sm:px-6">
       {/* Status pelaporan */}
-      <div className="card mb-4 border-sky-400/20 bg-navy-800/75">
+      <div className="card mb-4 border-sky-400/20 bg-gradient-to-br from-[#142d4d] to-[#0e2039] p-4 shadow-[0_18px_40px_rgba(2,12,25,0.2)]">
         <div className="flex items-center justify-between">
           <div>
             <div className="eyebrow">Pelaporan terbuka</div>
-            <div className="mt-1 font-semibold text-white">
+            <div className="mt-1 text-base font-extrabold text-white">
               Bisa melapor kapan saja
             </div>
           </div>
@@ -234,12 +234,12 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
             </div>
           </div>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-slate-400">
           Media bersifat opsional. Maksimal 4 foto dan 1 video per laporan.
         </p>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-navy-900 p-1">
+      <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0b172b] p-1.5">
         <button
           type="button"
           onClick={() => void changeMode("foto")}
@@ -261,7 +261,7 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
       </div>
 
       {/* Live preview kamera */}
-      <div className="camera-frame relative overflow-hidden rounded-[1.5rem] border border-navy-500/70 bg-black shadow-2xl shadow-black/30">
+        <div className="camera-frame relative overflow-hidden rounded-[1.75rem] border border-sky-400/20 bg-black shadow-[0_20px_45px_rgba(2,12,25,0.38)]">
         <video
           ref={camera.videoRef}
           playsInline
@@ -357,7 +357,7 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
       </div>
 
       {/* Shutter besar — mode foto atau video */}
-      <div className="mt-5 flex flex-col items-center gap-2 pb-1">
+      <div className="mt-5 flex flex-col items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.025] py-4 pb-4">
         <button
           onClick={toggleCapture}
           disabled={
@@ -399,10 +399,10 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
         )}
       </div>
 
-      <label className="mt-5 block text-sm font-medium text-slate-300">
+      <label className="mt-5 block rounded-2xl border border-white/10 bg-[#0e2039]/70 p-4 text-sm font-medium text-slate-200">
         Perihal laporan
         <textarea
-          className="input mt-1 min-h-24 resize-y"
+          className="input mt-2 min-h-28 resize-y border-white/10 bg-[#09172b] text-sm leading-5"
           value={catatan}
           onChange={(event) => setCatatan(event.target.value)}
           placeholder="Contoh: Patroli wilayah dan pengamanan kegiatan masyarakat"
@@ -420,7 +420,7 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
       )}
 
       {/* Hasil jepretan */}
-      {shots.length > 0 && (
+      {(shots.length > 0 || Boolean(videoShot)) && (
         <div className="mt-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             {shots.map((s, i) => (
@@ -450,11 +450,16 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
           <button
             onClick={() => void submitAll()}
             disabled={saving || !catatan.trim()}
-            className="btn-primary w-full py-4"
+            className="group relative mt-1 flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-gold-300/70 bg-gradient-to-r from-gold-400 via-amber-300 to-gold-400 px-5 py-4 text-base font-extrabold text-navy-950 shadow-[0_10px_28px_rgba(245,185,66,0.22)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(245,185,66,0.3)] active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
           >
-            {saving
-              ? "Menyimpan…"
-              : `Kirim Laporan (${shots.length} foto${videoShot ? " + 1 video" : ""})`}
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-950/10 text-lg transition group-hover:scale-110">
+              {saving ? "⏳" : "➤"}
+            </span>
+            <span>
+              {saving
+                ? "Menyimpan laporan…"
+                : `Kirim laporan${shots.length > 0 || videoShot ? ` · ${shots.length} foto${videoShot ? " + 1 video" : ""}` : ""}`}
+            </span>
           </button>
         </div>
       )}
@@ -482,9 +487,12 @@ export default function CaptureScreen({ cycle, onCaptureDone }: Props) {
         <button
           onClick={() => void submitAll()}
           disabled={saving || !catatan.trim()}
-          className="btn-secondary mt-5 w-full py-3"
+          className="group relative mt-5 flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-gold-300/70 bg-gradient-to-r from-gold-400 via-amber-300 to-gold-400 px-5 py-4 text-base font-extrabold text-navy-950 shadow-[0_10px_28px_rgba(245,185,66,0.22)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(245,185,66,0.3)] active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
         >
-          {saving ? "Menyimpan…" : "Kirim laporan tanpa foto"}
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-950/10 text-lg">
+            {saving ? "⏳" : "➤"}
+          </span>
+          <span>{saving ? "Menyimpan laporan…" : "Kirim laporan tanpa foto"}</span>
         </button>
       )}
 

@@ -56,7 +56,7 @@ export async function exportPdf(
 
   // Header
   doc.setFontSize(14);
-  doc.text("SIPLAP — Sistem Informasi Pelaporan Giat Lapangan", 14, 16);
+  doc.text("SALAM PRESISI — Pelaporan Giat Lapangan Polres", 14, 16);
   doc.setFontSize(11);
   doc.text(title + " (Polres)", 14, 23);
   doc.setFontSize(9);
@@ -242,7 +242,7 @@ export async function exportPdf(
   }
 
   const fname =
-    "siplap-" +
+    "salam-presisi-" +
     (ctx.reguId === "all" ? "gabungan" : ctx.reguId) +
     "-" +
     ctx.range.from.toISOString().slice(0, 10) +

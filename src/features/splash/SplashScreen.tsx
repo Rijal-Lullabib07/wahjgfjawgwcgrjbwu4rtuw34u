@@ -20,13 +20,13 @@ export default function SplashScreen() {
         </div>
 
         {/* Judul */}
-        <h1 className="splash-title mt-7 text-3xl font-bold tracking-[0.28em] text-white">
-          SIPLAP
+        <h1 className="splash-title mt-7 text-2xl font-bold tracking-[0.28em] text-white sm:text-3xl">
+          SALAM PRESISI
         </h1>
         <p className="splash-sub mt-2 max-w-xs text-center text-xs leading-relaxed text-slate-400">
-          Sistem Informasi Pelaporan
+          Pelaporan Giat
           <br />
-          Giat Lapangan Polres
+          Lapangan Polres
         </p>
 
         {/* Progress bar */}

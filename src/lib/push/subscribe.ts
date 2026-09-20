@@ -83,7 +83,7 @@ export function describePushBlocker(blocker: Exclude<PushBlocker, null>): string
       // Android WebView (browser dalam-app Facebook/WhatsApp/dll) tidak punya
       // PushManager → ini penyebab paling umum "tombol notifikasi tidak jalan".
       return p === 'android'
-        ? 'Browser/WebView ini tidak mendukung Web Push. Jangan buka SIPLAP dari link WhatsApp/Facebook — buka Chrome langsung, atau lebih baik pasang SIPLAP ke Home Screen (lihat tombol Pasang App).'
+        ? 'Browser/WebView ini tidak mendukung Web Push. Jangan buka SALAM PRESISI dari link WhatsApp/Facebook — buka Chrome langsung, atau lebih baik pasang SALAM PRESISI ke Home Screen (lihat tombol Pasang App).'
         : 'Browser ini tidak mendukung Web Push. Gunakan Safari iOS 16.4+ dengan app terpasang ke Home Screen.';
   }
 }
@@ -105,7 +105,7 @@ async function getRegistration(timeoutMs = 8000): Promise<ServiceWorkerRegistrat
   ]);
   if (!reg) {
     throw new Error(
-      'Service worker belum aktif. Tutup semua tab SIPLAP, buka lagi, tunggu beberapa detik, lalu coba sekali lagi.',
+      'Service worker belum aktif. Tutup semua tab SALAM PRESISI, buka lagi, tunggu beberapa detik, lalu coba sekali lagi.',
     );
   }
   return reg;
@@ -195,7 +195,7 @@ async function getOrCreateSubscription(
     const detail = err instanceof Error ? err.message : String(err);
     throw new Error(
       p === 'android'
-        ? `Browser menolak registrasi push (${detail}). Cek Pengaturan Android → Aplikasi → Chrome/SIPLAP → Notifikasi dalam keadaan aktif, lalu coba lagi.`
+        ? `Browser menolak registrasi push (${detail}). Cek Pengaturan Android → Aplikasi → Chrome/SALAM PRESISI → Notifikasi dalam keadaan aktif, lalu coba lagi.`
         : `Browser menolak registrasi push (${detail}). Pastikan izin notifikasi diaktifkan lalu coba lagi.`,
     );
   }
@@ -223,7 +223,7 @@ export async function enablePush(reguId: string | undefined): Promise<void> {
     throw new Error(
       p === 'android'
         ? 'Izin notifikasi ditolak. Sentuh ikon 🔒 di address bar Chrome → Izin → Notifikasi → Izinkan, lalu coba lagi.'
-        : 'Izin notifikasi ditolak. Buka Pengaturan Safari/SIPLAP → Notifikasi → Izinkan, lalu coba lagi.',
+        : 'Izin notifikasi ditolak. Buka Pengaturan Safari/SALAM PRESISI → Notifikasi → Izinkan, lalu coba lagi.',
     );
   }
 

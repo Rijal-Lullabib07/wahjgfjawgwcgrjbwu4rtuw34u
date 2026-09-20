@@ -7,7 +7,7 @@ function errMessage(err: unknown): string {
   switch (err.name) {
     case "NotAllowedError":
     case "SecurityError":
-      return "Akses kamera ditolak. Buka pengaturan browser/HP → izin kamera → izinkan untuk SIPLAP.";
+      return "Akses kamera ditolak. Buka pengaturan browser/HP → izin kamera → izinkan untuk SALAM PRESISI.";
     case "NotFoundError":
     case "OverconstrainedError":
       return "Kamera tidak ditemukan di perangkat ini.";

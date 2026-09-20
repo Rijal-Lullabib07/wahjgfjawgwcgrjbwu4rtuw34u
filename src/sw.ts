@@ -95,7 +95,7 @@ async function handlePush(data: PushData): Promise<void> {
   const opts: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
     body: isLaporan
       ? (data.body ?? 'Laporan baru masuk.')
-      : (data.body ?? 'Ada pemberitahuan baru dari SIPLAP.'),
+      : (data.body ?? 'Ada pemberitahuan baru dari SALAM PRESISI.'),
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
@@ -111,8 +111,8 @@ async function handlePush(data: PushData): Promise<void> {
   };
   await self.registration.showNotification(
     isLaporan
-      ? (data.title ?? 'SIPLAP — Laporan Baru')
-      : (data.title ?? 'SIPLAP — Pengingat Laporan'),
+      ? (data.title ?? 'SALAM PRESISI — Laporan Baru')
+      : (data.title ?? 'SALAM PRESISI — Pengingat Laporan'),
     opts,
   );
 }

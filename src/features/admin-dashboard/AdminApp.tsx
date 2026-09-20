@@ -178,28 +178,15 @@ export default function AdminApp({ session, onLogout }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="safe-top sticky top-0 z-10 border-b border-navy-700/70 bg-navy-950/90 px-4 py-3 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
+      <header className="safe-top sticky top-0 z-10 border-b border-white/10 bg-[#0b1428]/90 px-4 py-3 shadow-[0_12px_40px_rgba(2,12,25,0.28)] backdrop-blur-2xl sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <PolresLogo className="h-10 w-32" />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold tracking-tight text-white">
-                  SIPLAP
-                </span>
-                <span className="status-live hidden sm:inline-flex">
-                  Live ops
-                </span>
-              </div>
-              <div className="text-xs text-slate-400">
-                Pusat kendali{" "}
-                {session.role === "pimpinan" ? "pimpinan" : "admin"}
-              </div>
-            </div>
+            <PolresLogo className="h-12 w-36 sm:h-14 sm:w-44" />
+            <span className="status-live hidden sm:inline-flex">Live ops</span>
           </div>
           <div className="flex items-center gap-3">
             <NotificationButton session={session} />
-            <div className="hidden text-right sm:block">
+            <div className="hidden text-right md:block">
               <div className="text-xs text-slate-500">Masuk sebagai</div>
               <div className="text-sm font-semibold text-slate-200">
                 {session.nama}
@@ -207,13 +194,13 @@ export default function AdminApp({ session, onLogout }: Props) {
             </div>
             <button
               onClick={onLogout}
-              className="rounded-xl border border-navy-700 px-3 py-2 text-sm text-slate-400 transition hover:border-red-400/40 hover:text-red-300"
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300 transition hover:border-red-400/40 hover:bg-red-400/10 hover:text-red-300"
             >
               Keluar
             </button>
           </div>
         </div>
-        <nav className="mx-auto mt-4 flex max-w-6xl gap-2">
+        <nav className="mx-auto mt-4 flex max-w-6xl gap-2 overflow-x-auto pb-0.5">
           {(
             [
               ["monitoring", "📊 Monitoring"],
@@ -227,10 +214,10 @@ export default function AdminApp({ session, onLogout }: Props) {
               key={key}
               onClick={() => setTab(key)}
               className={
-                "rounded-xl border px-4 py-2 text-sm font-semibold transition " +
+                "shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition sm:px-4 sm:text-sm " +
                 (tab === key
-                  ? "bg-gold-400 text-navy-900"
-                  : "text-slate-400 hover:text-white")
+                  ? "border-gold-300 bg-gold-400 text-navy-900 shadow-lg shadow-gold-400/10"
+                  : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-white")
               }
             >
               {label}

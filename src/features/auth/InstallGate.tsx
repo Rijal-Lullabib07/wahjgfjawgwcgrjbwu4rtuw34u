@@ -19,7 +19,7 @@ export default function InstallGate({ children }: Props) {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-10">
       <div className="card text-center">
         <div className="mb-4 text-5xl">📲</div>
-        <h1 className="text-xl font-bold">Pasang SIPLAP ke Homescreen</h1>
+        <h1 className="text-xl font-bold">Pasang SALAM PRESISI ke Homescreen</h1>
         <p className="mt-3 text-sm leading-relaxed text-slate-300">
           Untuk iPhone/iPad, notifikasi pengingat laporan <b>hanya berjalan</b> jika
           aplikasi sudah dipasang ke homescreen.
@@ -35,7 +35,7 @@ export default function InstallGate({ children }: Props) {
           </li>
           <li className="flex gap-3">
             <span className="badge bg-gold-400/20 text-gold-400">3</span>
-            Buka SIPLAP dari ikon di homescreen, lalu login kembali
+            Buka SALAM PRESISI dari ikon di homescreen, lalu login kembali
           </li>
         </ol>
       </div>

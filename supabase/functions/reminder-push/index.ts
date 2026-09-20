@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
       .eq("regu_id", regu.id);
 
     const payload = JSON.stringify({
-      title: testMode ? "🧪 Tes Notifikasi SIPLAP" : "⏰ Pengingat SIPLAP",
+      title: testMode ? "🧪 Tes Notifikasi SALAM PRESISI" : "⏰ Pengingat SALAM PRESISI",
       body: testMode
         ? `Berhasil! Notifikasi sampai ke device ini (${regu.nama_regu}).`
         : `Regu ${regu.nama_regu}: ${Math.ceil(minutesLeft)} menit lagi batas siklus ${cycle.siklusKe} berakhir. Segera kirim ${FOTOS_PER_SIKLUS} foto!`,

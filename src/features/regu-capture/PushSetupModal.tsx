@@ -18,7 +18,7 @@ interface Props {
 
 type StepState = 'ok' | 'fail' | 'pending';
 
-const TEST_TITLE = 'SIPLAP aktif ✅';
+const TEST_TITLE = 'Notifikasi SALAM PRESISI aktif ✅';
 const TEST_BODY = 'Pemberitahuan laporan baru akan masuk otomatis.';
 
 /** Kirim notifikasi tes via SW; fallback Notification biasa bila SW belum siap. */
@@ -190,7 +190,7 @@ export default function PushSetupModal({ open, onClose, reguId, onEnabled }: Pro
             onClick={() => void promptInstall()}
             className="btn-secondary mt-4 w-full py-3"
           >
-            📲 Pasang SIPLAP ke Home Screen
+            📲 Pasang SALAM PRESISI ke Home Screen
           </button>
         )}
 
@@ -220,7 +220,7 @@ export default function PushSetupModal({ open, onClose, reguId, onEnabled }: Pro
         {done && (
           <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-300">
             ✅ <b>Notifikasi aktif!</b> Notifikasi tes sudah dikirim. Jika tidak muncul,
-            pastikan notifikasi diaktifkan di Pengaturan → Aplikasi → SIPLAP/Chrome.
+            pastikan notifikasi diaktifkan di Pengaturan → Aplikasi → SALAM PRESISI/Chrome.
             <button onClick={onClose} className="btn-primary mt-3 w-full py-2.5 text-sm">
               Selesai
             </button>
@@ -251,10 +251,10 @@ export default function PushSetupModal({ open, onClose, reguId, onEnabled }: Pro
               ) : (
                 <>
                   <li>
-                    Buka <b>Pengaturan</b> iPhone → Safari → <b>Notifikasi SIPLAP</b> → Izinkan
+                    Buka <b>Pengaturan</b> iPhone → Safari → <b>Notifikasi SALAM PRESISI</b> → Izinkan
                   </li>
                   <li>
-                    Atau hapus SIPLAP dari Home Screen, pasang ulang via Share → Add to Home
+                    Atau hapus SALAM PRESISI dari Home Screen, pasang ulang via Share → Add to Home
                     Screen
                   </li>
                 </>
@@ -274,7 +274,7 @@ export default function PushSetupModal({ open, onClose, reguId, onEnabled }: Pro
               <li>
                 Pilih <b>Add to Home Screen</b>
               </li>
-              <li>Buka SIPLAP dari ikon Home Screen, ulangi aktivasi</li>
+              <li>Buka SALAM PRESISI dari ikon Home Screen, ulangi aktivasi</li>
             </ol>
           </div>
         )}
@@ -282,7 +282,7 @@ export default function PushSetupModal({ open, onClose, reguId, onEnabled }: Pro
         {/* Catatan Android: rekomendasi pasang agar push lebih andal */}
         {isAndroid && !standalone && !browserBlocked && (
           <p className="mt-4 text-[12px] leading-relaxed text-slate-400">
-            💡 Tips: pasang SIPLAP ke Home Screen agar pengingat lebih andal terkirim walau
+            💡 Tips: pasang SALAM PRESISI ke Home Screen agar pengingat lebih andal terkirim walau
             app ditutup.
           </p>
         )}

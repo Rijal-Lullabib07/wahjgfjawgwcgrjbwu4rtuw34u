@@ -114,25 +114,33 @@ export default function ReguApp({ session, onLogout }: Props) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="safe-top sticky top-0 z-10 border-b border-navy-700/70 bg-navy-950/90 px-4 py-3 backdrop-blur-xl">
-        <div className="flex items-center justify-between">
+      <header className="safe-top sticky top-0 z-10 border-b border-white/10 bg-[#0b1428]/90 px-4 py-3 shadow-[0_12px_40px_rgba(2,12,25,0.28)] backdrop-blur-2xl">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <PolresLogo className="h-9 w-28" />
+            <PolresLogo className="h-11 w-36 sm:h-12 sm:w-40" />
             <div>
-              <div className="eyebrow">SIPLAP / lapangan</div>
-              <div className="font-bold leading-tight">{session.namaRegu}</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-400">
+                Pelapor lapangan
+              </div>
+              <div className="mt-0.5 max-w-32 truncate text-sm font-bold leading-tight text-white">
+                {session.namaRegu}
+              </div>
             </div>
           </div>
           <button
             onClick={onLogout}
-            className="rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:text-white"
+            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-400/40 hover:bg-red-400/10 hover:text-red-300"
           >
             Keluar
           </button>
         </div>
-        <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="badge bg-navy-700 text-navy-100">{cycle.label}</span>
-          <span className="text-slate-400">Laporan bisa dikirim kapan saja</span>
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+          <span className="badge border border-sky-400/20 bg-sky-400/10 text-sky-200">
+            {cycle.label}
+          </span>
+          <span className="truncate text-right text-slate-400">
+            Laporan bisa dikirim kapan saja
+          </span>
         </div>
       </header>
 

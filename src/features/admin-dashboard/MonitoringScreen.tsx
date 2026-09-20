@@ -193,7 +193,7 @@ function CopyNoteButton({ note }: { note: string }) {
 
 function LaporanCard({ item }: { item: FolderLaporanRow }) {
   return (
-    <div className="card">
+    <div className="card border-white/10 bg-[#122947]/80 shadow-[0_14px_35px_rgba(2,12,25,0.18)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-white">
@@ -206,7 +206,7 @@ function LaporanCard({ item }: { item: FolderLaporanRow }) {
         <SyncBadge status={item.status_sync} />
       </div>
       {item.catatan && (
-        <div className="mt-2 rounded-lg bg-navy-900/70 px-3 py-2">
+        <div className="mt-3 rounded-xl border border-white/5 bg-navy-950/50 px-3 py-2.5">
           <div className="flex items-start justify-between gap-3">
             <p className="whitespace-pre-wrap text-sm text-slate-300">
               {item.catatan}
@@ -296,46 +296,49 @@ function MonitoringIntro({
 
   return (
     <>
-      <section className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <section className="relative overflow-hidden rounded-3xl border border-gold-400/15 bg-gradient-to-br from-[#142d4d] via-[#102541] to-[#0d1b32] p-5 shadow-[0_20px_55px_rgba(2,12,25,0.25)] sm:p-7">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-gold-400/10 blur-3xl" />
+        <div className="relative">
           <div className="eyebrow">Command center / monitoring</div>
-          <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
             Pantau giat lapangan
           </h1>
-          <p className="mt-1 max-w-xl text-sm text-slate-400">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300/80 sm:text-base">
             Laporan dari tiap unit/satuan masuk ke folder Polsek/satuannya
             masing-masing. Klik folder untuk melihat isinya.
           </p>
+          <div className="mt-5">
+            <div className="status-live w-fit">Realtime aktif</div>
+          </div>
         </div>
-        <div className="status-live">Realtime aktif</div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="card relative overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gold-400" />
-          <div className="text-xs text-slate-400">Total pelapor</div>
-          <div className="mt-2 text-lg font-bold">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        <div className="card relative overflow-hidden border-gold-400/15 bg-white/[0.04] p-4 sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-gold-400 to-amber-200" />
+          <div className="text-xs font-semibold text-slate-400">Total pelapor</div>
+          <div className="mt-3 text-2xl font-extrabold tracking-tight text-white">
             {stats ? stats.total : "—"}
           </div>
         </div>
-        <div className="card relative overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-1 bg-sky-400" />
-          <div className="text-xs text-slate-400">Laporan terakhir</div>
-          <div className="mono mt-2 text-lg font-bold text-sky-300">
+        <div className="card relative overflow-hidden border-sky-400/15 bg-white/[0.04] p-4 sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-400 to-cyan-200" />
+          <div className="text-xs font-semibold text-slate-400">Laporan terakhir</div>
+          <div className="mono mt-3 text-2xl font-bold text-sky-300">
             {stats ? stats.laporan : "—"}
           </div>
         </div>
-        <div className="card relative overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-1 bg-emerald-400" />
-          <div className="text-xs text-slate-400">Sudah lapor</div>
-          <div className="mt-2 text-lg font-bold text-emerald-400">
+        <div className="card relative overflow-hidden border-emerald-400/15 bg-white/[0.04] p-4 sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 to-teal-200" />
+          <div className="text-xs font-semibold text-slate-400">Sudah lapor</div>
+          <div className="mt-3 text-2xl font-extrabold tracking-tight text-emerald-400">
             {stats ? `${stats.sudah}/${stats.total}` : "—"}
           </div>
         </div>
-        <div className="card relative overflow-hidden">
-          <div className="absolute inset-x-0 top-0 h-1 bg-red-400" />
-          <div className="text-xs text-slate-400">Belum lapor</div>
-          <div className="mt-2 text-lg font-bold text-red-400">
+        <div className="card relative overflow-hidden border-red-400/15 bg-white/[0.04] p-4 sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-400 to-rose-200" />
+          <div className="text-xs font-semibold text-slate-400">Belum lapor</div>
+          <div className="mt-3 text-2xl font-extrabold tracking-tight text-red-400">
             {belum ?? "—"}
           </div>
         </div>

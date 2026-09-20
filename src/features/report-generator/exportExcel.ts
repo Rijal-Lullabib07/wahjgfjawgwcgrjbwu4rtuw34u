@@ -77,7 +77,7 @@ export async function exportExcel(
   XLSX.utils.book_append_sheet(wb, wsRekap, "Rekap Pelapor");
   XLSX.writeFile(
     wb,
-    "siplap-" +
+    "salam-presisi-" +
       (ctx.reguId === "all" ? "gabungan" : ctx.reguId) +
       "-" +
       ctx.range.from.toISOString().slice(0, 10) +
