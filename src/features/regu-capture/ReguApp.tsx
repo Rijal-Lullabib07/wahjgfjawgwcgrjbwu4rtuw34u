@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import type { QueuedLaporan, SessionUser } from "../../types";
-import { getCurrentCycle, type CycleInfo } from "../../lib/cycle";
+import type {
+  QueuedLaporan,
+  SessionUser,
+  TahapLaporan,
+} from "../../types";
 import { subscribeLaporan } from "../../lib/supabase/api";
 import { blobPut, queuePut, queueGetAll } from "../../lib/offline-sync/db";
 import {
   syncPendingLaporan,
   requestBackgroundSync,
 } from "../../lib/offline-sync/syncManager";
-import CaptureScreen from "./CaptureScreen";
+import LaporanForm, {
+  type LaporanFormResult,
+} from "./LaporanForm";
+import ThreadList from "./ThreadList";
 import QueueList from "./QueueList";
+import { usePosisiTracker } from "./usePosisiTracker";
 import PolresLogo from "../../components/PolresLogo";
 
 interface Props {
@@ -16,7 +23,7 @@ interface Props {
   onLogout: () => void;
 }
 
-type Screen = "capture" | "queue";
+type Screen = "lapor" | "rangkaian" | "queue";
 
 async function loadReguState(
   reguId: string | undefined,
@@ -27,14 +34,20 @@ async function loadReguState(
 }
 
 export default function ReguApp({ session, onLogout }: Props) {
-  const [screen, setScreen] = useState<Screen>("capture");
-  const [cycle, setCycle] = useState<CycleInfo>(() => getCurrentCycle());
+  const [screen, setScreen] = useState<Screen>("lapor");
   const [queueCount, setQueueCount] = useState(0);
-
-  useEffect(() => {
-    const t = setInterval(() => setCycle(getCurrentCycle()), 15000);
-    return () => clearInterval(t);
-  }, []);
+  const [sentMsg, setSentMsg] = useState<string | null>(null);
+  /** Tracker posisi: GPS → tabel `posisi` tiap 60 detik (peta personel). */
+  const posisi = usePosisiTracker(session, true);
+  /** Induk yang sedang dilanjutkan (null = laporan baru). */
+  const [parent, setParent] = useState<{
+    id: string;
+    kategori: "kegiatan" | "kejadian";
+    perihal?: string | null;
+    namaJenis?: string | null;
+    tahapBerikut: TahapLaporan;
+  } | null>(null);
+  const [refreshThreads, setRefreshThreads] = useState(0);
 
   const loadState = useCallback(async () => {
     await loadReguState(session.reguId, setQueueCount);
@@ -50,48 +63,49 @@ export default function ReguApp({ session, onLogout }: Props) {
       const r = await syncPendingLaporan();
       if (active && r.synced > 0) void loadState();
     })();
-    const unsub = subscribeLaporan(() => void loadState());
+    const unsub = subscribeLaporan(() => {
+      void loadState();
+      setRefreshThreads((k) => k + 1);
+    });
     return () => {
       active = false;
       unsub();
     };
   }, [loadState]);
 
-  const handleCaptureDone = useCallback(
-    async (
-      fotos: Array<{
-        blob: Blob;
-        lat: number | null;
-        lng: number | null;
-        ts: Date;
-      }>,
-      video: { blob: Blob; ts: Date; durationSeconds: number } | null,
-      catatan: string,
-    ) => {
+  /** Terima hasil form → masuk antrian offline → coba sync. */
+  const handleSubmit = useCallback(
+    async (result: LaporanFormResult) => {
       const localId = crypto.randomUUID();
       const entry: QueuedLaporan = {
         localId,
         reguId: session.reguId || "",
-        siklusKe: cycle.siklusKe,
+        siklusKe: 1,
         timestampKirim: new Date().toISOString(),
-        latitude: fotos[0]?.lat ?? null,
-        longitude: fotos[0]?.lng ?? null,
-        catatan,
-        fotos: fotos.map((f, i) => ({
+        latitude: result.latitude,
+        longitude: result.longitude,
+        catatan: result.teksLaporan,
+        kategori: result.kategori,
+        jenisId: result.jenis?.id ?? null,
+        jenisNama: result.jenis?.nama ?? parent?.namaJenis ?? null,
+        tahap: result.tahap,
+        parentId: result.parentId,
+        perihal: result.perihal,
+        fotos: result.fotos.map((f, i) => ({
           blobKey: localId + ":" + (i + 1),
           urutan: (i + 1) as 1 | 2 | 3 | 4,
           watermarkLat: f.lat,
           watermarkLng: f.lng,
           watermarkTimestamp: f.ts.toISOString(),
         })),
-        videos: video
+        videos: result.video
           ? [
               {
                 blobKey: localId + ":video",
-                watermarkLat: fotos[0]?.lat ?? null,
-                watermarkLng: fotos[0]?.lng ?? null,
-                watermarkTimestamp: video.ts.toISOString(),
-                durationSeconds: video.durationSeconds,
+                watermarkLat: result.latitude,
+                watermarkLng: result.longitude,
+                watermarkTimestamp: result.video.ts.toISOString(),
+                durationSeconds: result.video.durationSeconds,
               },
             ]
           : [],
@@ -99,18 +113,33 @@ export default function ReguApp({ session, onLogout }: Props) {
         attempts: 0,
       };
       for (let i = 0; i < entry.fotos.length; i++) {
-        await blobPut(entry.fotos[i].blobKey, fotos[i].blob);
+        await blobPut(entry.fotos[i].blobKey, result.fotos[i].blob);
       }
-      if (video && entry.videos.length > 0) {
-        await blobPut(entry.videos[0].blobKey, video.blob);
+      if (result.video && entry.videos.length > 0) {
+        await blobPut(entry.videos[0].blobKey, result.video.blob);
       }
       await queuePut(entry);
       const r = await syncPendingLaporan();
       if (r.synced > 0) await requestBackgroundSync();
       await loadState();
+      setRefreshThreads((k) => k + 1);
+      setSentMsg(
+        r.synced > 0
+          ? "Laporan berhasil terkirim. Terimakasih."
+          : "Laporan tersimpan di antrian — dikirim otomatis saat online.",
+      );
+      setParent(null);
+      setScreen("rangkaian");
+      window.setTimeout(() => setSentMsg(null), 5000);
     },
-    [session.reguId, cycle.siklusKe, loadState],
+    [session.reguId, loadState],
   );
+
+  const navItems: Array<[Screen, string, string, number | null]> = [
+    ["lapor", "📝", "Lapor", null],
+    ["rangkaian", "🧵", "Rangkaian", null],
+    ["queue", "📦", "Antrian", queueCount > 0 ? queueCount : null],
+  ];
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -134,51 +163,70 @@ export default function ReguApp({ session, onLogout }: Props) {
             Keluar
           </button>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-          <span className="badge border border-sky-400/20 bg-sky-400/10 text-sky-200">
-            {cycle.label}
-          </span>
-          <span className="truncate text-right text-slate-400">
-            Laporan bisa dikirim kapan saja
-          </span>
-        </div>
       </header>
 
       <main className="safe-bottom flex-1 pb-24">
-        {screen === "capture" ? (
-          <CaptureScreen cycle={cycle} onCaptureDone={handleCaptureDone} />
+        {/* Status pelacakan posisi — kecil, tidak mengganggu. */}
+        {(posisi.antrian > 0 || posisi.error) && (
+          <div className="mx-4 mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300 sm:mx-6">
+            {posisi.error
+              ? `⚠ GPS: ${posisi.error}`
+              : `📡 ${posisi.antrian} posisi tertahan — terkirim otomatis saat online`}
+          </div>
+        )}
+        {screen === "lapor" ? (
+          <>
+            {sentMsg && (
+              <div className="mx-4 mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300 sm:mx-6">
+                {sentMsg}
+              </div>
+            )}
+            <LaporanForm
+              key={parent?.id ?? "baru"}
+              mode={parent ? "turunan" : "baru"}
+              parent={parent}
+              onSubmit={handleSubmit}
+            />
+          </>
+        ) : screen === "rangkaian" ? (
+          <ThreadList
+            reguId={session.reguId ?? ""}
+            refreshKey={refreshThreads}
+            onLanjutkan={(p) => {
+              setParent(p);
+              setScreen("lapor");
+            }}
+            onLaporBaru={() => {
+              setParent(null);
+              setScreen("lapor");
+            }}
+          />
         ) : (
           <QueueList onQueueChanged={loadState} />
         )}
       </main>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 border-t border-navy-700/70 bg-navy-950/95 shadow-[0_-12px_32px_rgba(2,12,25,0.35)] backdrop-blur-xl">
-        <button
-          onClick={() => setScreen("capture")}
-          aria-current={screen === "capture" ? "page" : undefined}
-          className={
-            "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
-            (screen === "capture"
-              ? "text-gold-400"
-              : "text-slate-400 hover:text-white")
-          }
-        >
-          <span className="text-xl leading-none">📷</span>
-          <span>Kamera</span>
-        </button>
-        <button
-          onClick={() => setScreen("queue")}
-          aria-current={screen === "queue" ? "page" : undefined}
-          className={
-            "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
-            (screen === "queue"
-              ? "text-gold-400"
-              : "text-slate-400 hover:text-white")
-          }
-        >
-          <span className="text-xl leading-none">📦</span>
-          <span>Antrian{queueCount > 0 ? " (" + queueCount + ")" : ""}</span>
-        </button>
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-navy-700/70 bg-navy-950/95 shadow-[0_-12px_32px_rgba(2,12,25,0.35)] backdrop-blur-xl">
+        {navItems.map(([key, icon, label, badge]) => (
+          <button
+            key={key}
+            onClick={() => {
+              if (key === "lapor") setParent(null);
+              setScreen(key);
+            }}
+            aria-current={screen === key ? "page" : undefined}
+            className={
+              "relative flex min-h-16 flex-col items-center justify-center gap-1 py-2 text-xs font-semibold transition active:scale-95 " +
+              (screen === key ? "text-gold-400" : "text-slate-400 hover:text-white")
+            }
+          >
+            <span className="text-xl leading-none">{icon}</span>
+            <span>
+              {label}
+              {badge != null ? ` (${badge})` : ""}
+            </span>
+          </button>
+        ))}
       </nav>
     </div>
   );

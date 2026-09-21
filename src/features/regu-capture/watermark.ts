@@ -1,6 +1,10 @@
 /**
  * Watermark GPS & waktu di atas foto via <canvas>.
  * Dipanggil setelah capture dari getUserMedia stream.
+ *
+ * KOMPRESI: foto diturunkan ke maks 1280px & JPEG q0.72 → ±120–200 KB
+ * (dari ±400–600 KB). Penting untuk kuota storage Supabase — 632 personel
+ * × 4 foto/hari tanpa kompresi = ±5 GB/hari.
  */
 
 export interface WatermarkInfo {
@@ -12,6 +16,11 @@ export interface WatermarkInfo {
   accuracy?: number | null;
 }
 
+/** Dimensi maksimum foto tersimpan (px, sisi terpanjang). */
+const MAX_DIM = 1280;
+/** Kualitas JPEG hasil akhir. */
+const JPEG_QUALITY = 0.72;
+
 export async function applyWatermark(
   source: HTMLVideoElement | HTMLCanvasElement | ImageBitmap,
   info: WatermarkInfo,
@@ -19,13 +28,18 @@ export async function applyWatermark(
   const w = 'videoWidth' in source ? source.videoWidth : source.width;
   const h = 'videoHeight' in source ? source.videoHeight : source.height;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(source as CanvasImageSource, 0, 0);
+  // Skala turun bila melebihi MAX_DIM (rasio aspek dipertahankan).
+  const scaleDown = Math.min(1, MAX_DIM / Math.max(w, h));
+  const cw = Math.round(w * scaleDown);
+  const ch = Math.round(h * scaleDown);
 
-  const scale = Math.max(1, Math.round(w / 640));
+  const canvas = document.createElement('canvas');
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(source as CanvasImageSource, 0, 0, cw, ch);
+
+  const scale = Math.max(1, Math.round(cw / 640));
   const pad = 14 * scale;
   const fs = 13 * scale;
   const lh = fs * 1.35;
@@ -46,18 +60,18 @@ export async function applyWatermark(
     }),
   );
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(pad, h - boxH - pad, maxLineW + pad * 1.6, boxH);
+  ctx.fillRect(pad, ch - boxH - pad, maxLineW + pad * 1.6, boxH);
 
   ctx.font = `${fs}px monospace`;
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'top';
   lines.forEach((line, i) => {
-    ctx.fillText(line, pad + pad * 0.8, h - boxH - pad + pad * 0.7 + i * lh);
+    ctx.fillText(line, pad + pad * 0.8, ch - boxH - pad + pad * 0.7 + i * lh);
   });
 
   const blob = await new Promise<Blob | null>((res) =>
-    canvas.toBlob(res, 'image/jpeg', 0.85),
+    canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY),
   );
   if (!blob) throw new Error('Gagal memproses foto');
-  return { blob, width: w, height: h };
+  return { blob, width: cw, height: ch };
 }

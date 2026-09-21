@@ -1,4 +1,11 @@
-import type { Laporan, QueuedLaporan, Regu, SessionUser } from "../../types";
+import type {
+  JenisLaporan,
+  KategoriLaporan,
+  Laporan,
+  QueuedLaporan,
+  Regu,
+  SessionUser,
+} from "../../types";
 import { supabase } from "./client";
 
 /**
@@ -79,6 +86,8 @@ export async function loginRegu(
     reguId: regu.id,
     namaRegu: regu.nama_regu,
     kodeLogin: regu.kode_login,
+    unitKey: regu.unit_key,
+    wilayahKey: regu.wilayah_key,
   };
 }
 
@@ -99,10 +108,13 @@ export async function loginAdmin(
 
   const { data: admin, error: adminErr } = await client
     .from("admin_users")
-    .select("id, nama, email, role, username, access_level, scope_key")
+    .select("id, nama, email, role, username, access_level, scope_key, status_aktif")
     .or(`email.eq.${email},username.eq.${normalized}`)
     .single();
   if (adminErr || !admin) throw new Error("Bukan akun admin yang valid");
+  if (admin.status_aktif === false) {
+    throw new Error("Akun pemantau nonaktif. Hubungi admin.");
+  }
 
   return {
     role: admin.role,
@@ -132,6 +144,53 @@ export async function fetchReguList(): Promise<Regu[]> {
   return data ?? [];
 }
 
+// ---------- Master jenis laporan ----------
+
+/** Daftar pilihan jenis (Kegiatan = program kerja, Kejadian = temuan). */
+export async function fetchJenisLaporan(
+  kategori?: KategoriLaporan,
+  onlyActive = false,
+): Promise<JenisLaporan[]> {
+  const client = requireClient();
+  let query = client
+    .from("jenis_laporan")
+    .select("*")
+    .order("kategori")
+    .order("urutan")
+    .order("nama");
+  if (kategori) query = query.eq("kategori", kategori);
+  if (onlyActive) query = query.eq("aktif", true);
+  const { data, error } = await query;
+  if (error)
+    throw describeSupabaseError(error, "Gagal memuat daftar jenis laporan");
+  return data ?? [];
+}
+
+/** Tambah jenis baru (admin penuh saja — RLS menolak selain itu). */
+export async function createJenisLaporan(
+  kategori: KategoriLaporan,
+  nama: string,
+): Promise<void> {
+  const client = requireClient();
+  const { error } = await client
+    .from("jenis_laporan")
+    .insert({ kategori, nama: nama.trim() });
+  if (error) throw describeSupabaseError(error, "Gagal menambah jenis laporan");
+}
+
+/**
+ * Edit nama & status aktif jenis. TIDAK ADA hapus — jenis lama tetap
+ * valid untuk laporan yang sudah ada.
+ */
+export async function updateJenisLaporan(
+  id: string,
+  patch: { nama?: string; aktif?: boolean },
+): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("jenis_laporan").update(patch).eq("id", id);
+  if (error) throw describeSupabaseError(error, "Gagal mengubah jenis laporan");
+}
+
 // ---------- Laporan ----------
 
 export async function fetchLaporan(filter: {
@@ -139,16 +198,18 @@ export async function fetchLaporan(filter: {
   from?: Date;
   to?: Date;
   limit?: number;
+  kategori?: KategoriLaporan;
 }): Promise<Laporan[]> {
   const client = requireClient();
   let query = client
     .from("laporan")
     .select(
-      "*, regu:regu_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
+      "*, regu:regu_id(*), jenis:jenis_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
     )
     .order("timestamp_kirim", { ascending: false })
     .limit(filter.limit ?? 500);
   if (filter.reguId) query = query.eq("regu_id", filter.reguId);
+  if (filter.kategori) query = query.eq("kategori", filter.kategori);
   if (filter.from)
     query = query.gte("timestamp_kirim", filter.from.toISOString());
   if (filter.to) query = query.lte("timestamp_kirim", filter.to.toISOString());
@@ -222,6 +283,11 @@ export async function submitLaporan(
       longitude: q.longitude,
       status_sync: "synced",
       catatan: q.catatan ?? null,
+      kategori: q.kategori,
+      jenis_id: q.jenisId ?? null,
+      tahap: q.tahap,
+      parent_id: q.parentId ?? null,
+      perihal: q.perihal ?? null,
     })
     .select("id")
     .single();
@@ -274,6 +340,285 @@ export async function submitLaporan(
       throw new Error(`Gagal menyimpan metadata video: ${videoErr.message}`);
   }
   return laporan.id;
+}
+
+/**
+ * Rangkaian (thread) satu laporan awal: induk + semua turunannya
+ * urut waktu. RLS tetap berlaku — hanya rangkaian milik sendiri atau
+ * dalam cakupan yang bisa diambil.
+ */
+export async function fetchLaporanThread(rootId: string): Promise<Laporan[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("laporan")
+    .select(
+      "*, regu:regu_id(*), jenis:jenis_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
+    )
+    .or(`id.eq.${rootId},parent_id.eq.${rootId}`)
+    .order("timestamp_kirim", { ascending: true });
+  if (error) throw describeSupabaseError(error, "Gagal memuat rangkaian laporan");
+  return (data ?? []).map((row) => {
+    const r = row as Laporan;
+    return {
+      ...r,
+      fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
+      videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
+    } as Laporan;
+  });
+}
+
+/**
+ * Rangkaian milik pelapor yang masih terbuka (awal/update — belum
+ * lengkap) + yang sudah lengkap. Dipakai daftar "Rangkaian" di sisi
+ * pelapor. child_count = jumlah turunan terkirim.
+ */
+export async function fetchOpenThreads(
+  reguId: string,
+): Promise<Array<Laporan & { child_count: number }>> {
+  const client = requireClient();
+  // PostgREST tidak mendukung agregat count embedded, dan embed by nama FK
+  // (laporan_parent_id_fkey) gagal bila constraint-nya tidak ada di cache
+  // skema (PGRST200). Ambil induk + turunan terpisah, hitung di klien.
+  const { data, error } = await client
+    .from("laporan")
+    .select("*, jenis:jenis_id(*)")
+    .eq("regu_id", reguId)
+    .is("parent_id", null)
+    .order("timestamp_kirim", { ascending: false })
+    .limit(50);
+  if (error) throw describeSupabaseError(error, "Gagal memuat laporan berjalan");
+  const roots = (data ?? []) as Laporan[];
+
+  const childCounts = new Map<string, number>();
+  const rootIds = roots.map((r) => r.id);
+  if (rootIds.length > 0) {
+    const { data: children, error: childErr } = await client
+      .from("laporan")
+      .select("id, parent_id")
+      .in("parent_id", rootIds);
+    if (!childErr && children) {
+      for (const c of children as Array<{ id: string; parent_id: string | null }>) {
+        if (c.parent_id) {
+          childCounts.set(c.parent_id, (childCounts.get(c.parent_id) ?? 0) + 1);
+        }
+      }
+    }
+    // Gagal hitung turunan tidak boleh menggagalkan daftar — biarkan 0.
+  }
+
+  return roots.map((r) => ({
+    ...r,
+    child_count: childCounts.get(r.id) ?? 0,
+  }));
+}
+
+/** Ringkasan per wilayah/unit untuk dashboard & statistik. */
+export interface RingkasanKelompok {
+  key: string;
+  label: string;
+  jumlah: number;
+}
+
+/**
+ * Ringkasan laporan hari ini: total, per wilayah (polsek), per unit
+ * (satuan), per kategori (kegiatan/kejadian), foto+video.
+ * Data dihitung dari fetch laporan (RLS tetap berlaku).
+ */
+export async function fetchDashboardSummary(from: Date, to: Date) {
+  const rows = await fetchLaporan({ from, to, limit: 2000 });
+  const perWilayah = new Map<string, number>();
+  const perUnit = new Map<string, number>();
+  let kegiatan = 0;
+  let kejadian = 0;
+  let foto = 0;
+  let video = 0;
+  for (const l of rows) {
+    if (l.kategori === "kejadian") kejadian++;
+    else kegiatan++;
+    foto += l.fotos?.length ?? 0;
+    video += l.videos?.length ?? 0;
+    // Grafik wilayah/fungsi hanya dihitung dari LAPORAN AWAL (induk) agar
+    // satu rangkaian laporan (awal → update → lengkap) tidak dihitung
+    // berulang untuk tiap tahap turunannya. Induk ditandai parent_id NULL —
+    // JANGAN pakai `tahap = 'awal'`: tahap induk ikut berubah ('update'/'
+    // 'lengkap') lewat trigger sync_parent_tahap, dan laporan baru boleh
+    // langsung dibuat bertahap 'update'/'lengkap' (migration 0018).
+    if (l.parent_id) continue;
+    const regu = l.regu;
+    if (regu?.wilayah_key) {
+      const key = regu.wilayah_key.trim().toLowerCase();
+      perWilayah.set(key, (perWilayah.get(key) ?? 0) + 1);
+    } else if (regu?.unit_key) {
+      const key = regu.unit_key.trim().toLowerCase();
+      perUnit.set(key, (perUnit.get(key) ?? 0) + 1);
+    }
+  }
+  return {
+    total: rows.length,
+    kegiatan,
+    kejadian,
+    foto,
+    video,
+    pelaporAktif: new Set(rows.map((l) => l.regu_id)).size,
+    perWilayah: [...perWilayah.entries()]
+      .map(([key, jumlah]) => ({ key, label: wilayahLabel(key), jumlah }))
+      .sort((a, b) => b.jumlah - a.jumlah),
+    perUnit: [...perUnit.entries()]
+      .map(([key, jumlah]) => ({ key, label: unitLabel(key), jumlah }))
+      .sort((a, b) => b.jumlah - a.jumlah),
+    rows,
+  };
+}
+
+// ---------- Posisi realtime pelapor (peta personel) ----------
+
+/** Satu posisi GPS terkini per pelapor (tabel `posisi`, migration 0019). */
+export interface LokasiPelapor {
+  regu_id: string;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+  /** Waktu posisi terakhir diterima server. */
+  diupdate_pada: string;
+  nama_regu: string;
+  unit_key: string | null;
+  wilayah_key: string | null;
+}
+
+/**
+ * Posisi terkini SEMUA pelapor (untuk peta personel di dashboard).
+ * Satu baris per regu — tabel `posisi` selalu di-update pelapor.
+ * RLS: semua authenticated boleh baca; penyaringan cakupan pemantau
+ * dilakukan lewat can_read_laporan di klien.
+ */
+export async function fetchLokasiPelapor(): Promise<LokasiPelapor[]> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("posisi")
+    .select(
+      "regu_id, latitude, longitude, accuracy_m, diupdate_pada, regu:regu_id(nama_regu, unit_key, wilayah_key)",
+    )
+    .order("diupdate_pada", { ascending: false })
+    .limit(500);
+  if (error)
+    throw describeSupabaseError(error, "Gagal memuat posisi pelapor");
+
+  return ((data ?? []) as Array<{
+    regu_id: string;
+    latitude: number;
+    longitude: number;
+    accuracy_m: number | null;
+    diupdate_pada: string;
+    regu?: { nama_regu?: string; unit_key?: string | null; wilayah_key?: string | null } | null;
+  }>).map((row) => ({
+    regu_id: row.regu_id,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    accuracy_m: row.accuracy_m,
+    diupdate_pada: row.diupdate_pada,
+    nama_regu: row.regu?.nama_regu ?? "Pelapor",
+    unit_key: row.regu?.unit_key ?? null,
+    wilayah_key: row.regu?.wilayah_key ?? null,
+  }));
+}
+
+/**
+ * Kirim posisi GPS pelapor ke tabel `posisi` (upsert per regu).
+ * Dipanggil tracker lokasi di app pelapor tiap 60 detik selama app
+ * terbuka. Gagal (mis. offline) tidak dilempar — antrian offline yang
+ * menangani pengiriman ulang.
+ */
+export async function upsertPosisi(p: {
+  reguId: string;
+  latitude: number;
+  longitude: number;
+  accuracyM?: number | null;
+  kecepatanMps?: number | null;
+}): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from("posisi").upsert(
+    {
+      regu_id: p.reguId,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      accuracy_m: p.accuracyM ?? null,
+      kecepatan_mps: p.kecepatanMps ?? null,
+      diupdate_pada: new Date().toISOString(),
+    },
+    { onConflict: "regu_id" },
+  );
+  if (error) throw describeSupabaseError(error, "Gagal mengirim posisi");
+}
+
+/**
+ * Berlangganan perubahan tabel `posisi` (realtime) — dipakai peta
+ * dashboard agar marker personel bergerak tanpa reload.
+ */
+export function subscribePosisi(cb: () => void): () => void {
+  const client = requireClient();
+  const channel = client
+    .channel(`posisi-changes:${Math.random().toString(36).slice(2)}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "posisi" },
+      () => cb(),
+    )
+    .subscribe();
+  return () => {
+    void client.removeChannel(channel);
+  };
+}
+
+function wilayahLabel(key: string): string {
+  const map: Record<string, string> = {
+    kota: "Purwakarta Kota",
+    plered: "Plered",
+    jatiluhur: "Jatiluhur",
+    bungursari: "Bungursari",
+    campaka: "Campaka",
+    cibatu: "Cibatu",
+    pasawahan: "Pasawahan",
+    darangdan: "Darangdan",
+    wanayasa: "Wanayasa",
+    maniis: "Maniis",
+    sukatani: "Sukatani",
+    sukasari: "Sukasari",
+    kiarapedes: "Kiarapedes",
+    bojong: "Bojong",
+  };
+  return (
+    map[key] ??
+    key
+      .split(/[-_ ]+/)
+      .filter(Boolean)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(" ")
+  );
+}
+
+function unitLabel(key: string): string {
+  // Samakan dengan unitNames di src/lib/regu.ts — penamaan resmi satuan
+  // Polres (Satintelkam, Satreskrim, dst.) sesuai nama akun pelapor.
+  const map: Record<string, string> = {
+    intelkam: "Satintelkam",
+    reskrim: "Satreskrim",
+    narkoba: "Satresnarkoba",
+    binmas: "Satbinmas",
+    samapta: "Satsamapta",
+    pamobvit: "Pam Obvit Samapta",
+    lantas: "Satlantas",
+    polair: "Satpolairud",
+    tahti: "Sattahti",
+    spkt: "SPKT",
+  };
+  return (
+    map[key] ??
+    key
+      .split(/[-_ ]+/)
+      .filter(Boolean)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(" ")
+  );
 }
 
 /** URL publik foto dari Storage. */

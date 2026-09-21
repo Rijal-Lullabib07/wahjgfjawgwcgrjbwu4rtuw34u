@@ -37,6 +37,60 @@ import {
   videoUrl,
 } from "../../lib/supabase/api";
 import PlaceBadge from "../../components/PlaceBadge";
+import type { TahapLaporan } from "../../types";
+
+const TAHAP_LABEL: Record<TahapLaporan, string> = {
+  awal: "Laporan Awal",
+  update: "Update Situasi",
+  lengkap: "Laporan Lengkap",
+};
+
+const TAHAP_BADGE: Record<TahapLaporan, string> = {
+  awal: "bg-sky-500/15 text-sky-300",
+  update: "bg-amber-500/15 text-amber-300",
+  lengkap: "bg-emerald-500/15 text-emerald-300",
+};
+
+/** Badge kategori + tahap + jenis laporan. */
+function KategoriBadge({ item }: { item: FolderLaporanRow }) {
+  if (!item.kategori) return null;
+  const kategori = (
+    <span
+      className={
+        "badge " +
+        (item.kategori === "kejadian"
+          ? "bg-red-500/15 text-red-300"
+          : "bg-sky-500/15 text-sky-300")
+      }
+    >
+      {item.kategori === "kejadian" ? "⚡ Kejadian" : "📋 Kegiatan"}
+    </span>
+  );
+  const tahap = item.tahap ? (
+    <span className={"badge " + TAHAP_BADGE[item.tahap]}>
+      {TAHAP_LABEL[item.tahap]}
+    </span>
+  ) : null;
+  const jenis = item.jenis_nama ? (
+    <span className="badge bg-white/[0.06] text-slate-300">{item.jenis_nama}</span>
+  ) : null;
+  const lanjutan =
+    item.parent_id || (item.child_count ?? 0) > 0 ? (
+      <span className="badge bg-gold-400/15 text-gold-300">
+        {item.parent_id
+          ? "↳ lanjutan"
+          : `🧵 ${item.child_count} turunan`}
+      </span>
+    ) : null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {kategori}
+      {tahap}
+      {jenis}
+      {lanjutan}
+    </div>
+  );
+}
 
 interface Props {
   session: SessionUser;
@@ -205,6 +259,12 @@ function LaporanCard({ item }: { item: FolderLaporanRow }) {
         </div>
         <SyncBadge status={item.status_sync} />
       </div>
+      <KategoriBadge item={item} />
+      {item.perihal && (
+        <div className="mt-2 text-xs font-semibold text-slate-200">
+          {item.perihal}
+        </div>
+      )}
       {item.catatan && (
         <div className="mt-3 rounded-xl border border-white/5 bg-navy-950/50 px-3 py-2.5">
           <div className="flex items-start justify-between gap-3">

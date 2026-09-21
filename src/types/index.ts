@@ -1,9 +1,32 @@
-// Tipe data sesuai skema DB (supabase/migrations/0001_init.sql)
+// Tipe data sesuai skema DB (supabase/migrations/*)
 export type Role = "admin" | "pimpinan" | "regu";
+
+/** Kategori pelaporan: kegiatan (program kerja) atau kejadian (temuan). */
+export type KategoriLaporan = "kegiatan" | "kejadian";
+
+/** Tahapan rangkaian laporan: awal → update → lengkap. */
+export type TahapLaporan = "awal" | "update" | "lengkap";
+
+export const TAHAP_LABEL: Record<TahapLaporan, string> = {
+  awal: "Laporan Awal",
+  update: "Update Situasi",
+  lengkap: "Laporan Lengkap",
+};
+
+/** Master pilihan jenis laporan (dikelola admin, tanpa hapus). */
+export interface JenisLaporan {
+  id: string;
+  kategori: KategoriLaporan;
+  nama: string;
+  aktif: boolean;
+  urutan: number;
+  created_at?: string;
+}
 
 export interface Regu {
   id: string;
   nama_regu: string;
+  jabatan?: string | null;
   kode_login: string;
   status_aktif: boolean;
   unit_key?: string | null;
@@ -16,6 +39,7 @@ export interface AdminUser {
   nama: string;
   email: string;
   role: "admin" | "pimpinan";
+  status_aktif?: boolean;
   created_at?: string;
 }
 
@@ -30,9 +54,15 @@ export interface Laporan {
   longitude: number | null;
   status_sync: SyncStatus;
   catatan?: string | null;
+  kategori: KategoriLaporan;
+  jenis_id?: string | null;
+  tahap: TahapLaporan;
+  parent_id?: string | null;
+  perihal?: string | null;
   created_at?: string;
   // join
   regu?: Regu;
+  jenis?: JenisLaporan | null;
   fotos?: LaporanFoto[];
   videos?: LaporanVideo[];
 }
@@ -78,6 +108,12 @@ export interface QueuedLaporan {
   latitude: number | null;
   longitude: number | null;
   catatan?: string;
+  kategori: KategoriLaporan;
+  jenisId?: string | null;
+  jenisNama?: string | null;
+  tahap: TahapLaporan;
+  parentId?: string | null;
+  perihal?: string;
   fotos: Array<{
     blobKey: string; // kunci blob di object store fotos
     urutan: 1 | 2 | 3 | 4;
@@ -104,6 +140,8 @@ export interface SessionUser {
   reguId?: string;
   namaRegu?: string;
   kodeLogin?: string;
+  unitKey?: string | null;
+  wilayahKey?: string | null;
   // untuk admin/pemantau
   email?: string;
   monitorId?: string;

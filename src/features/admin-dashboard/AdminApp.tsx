@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SessionUser } from "../../types";
-import MonitoringScreen from "./MonitoringScreen";
-import OrganizationScreen from "./OrganizationScreen";
+import ManagementScreen from "./ManagementScreen";
+import BerandaScreen from "./BerandaScreen";
+import LaporanGiatScreen from "./LaporanGiatScreen";
+import StatistikScreen from "./StatistikScreen";
+import PetaScreen from "./PetaScreen";
 import ReportPopup, { type ReportPopupData } from "./ReportPopup";
-import ReportScreen from "../report-generator/ReportScreen";
-import PolresLogo from "../../components/PolresLogo";
 import { subscribeLaporan } from "../../lib/supabase/api";
 import { supabase } from "../../lib/supabase/client";
 import { folderKeyForRegu } from "../../lib/folders";
 import { playAlertSound, vibrateDevice } from "../../lib/notify";
+import PolresLogo from "../../components/PolresLogo";
 import {
   describePushBlocker,
   enablePush,
@@ -22,7 +24,22 @@ interface Props {
   onLogout: () => void;
 }
 
-type Tab = "monitoring" | "struktur" | "laporan";
+type Tab =
+  | "beranda"
+  | "laporan"
+  | "statistik"
+  | "peta"
+  | "rekap"
+  | "manajemen";
+
+const MENU: Array<{ key: Tab; icon: string; label: string; adminOnly?: boolean }> = [
+  { key: "beranda", icon: "🏠", label: "Beranda" },
+  { key: "laporan", icon: "📄", label: "Laporan Giat" },
+  { key: "statistik", icon: "📊", label: "Statistik" },
+  { key: "peta", icon: "📍", label: "Peta Kegiatan" },
+  { key: "rekap", icon: "⬇️", label: "Rekap & Unduh" },
+  { key: "manajemen", icon: "🗂️", label: "Manajemen Data", adminOnly: true },
+];
 
 /** Tombol "Aktifkan notifikasi" untuk pemantau (sekali saja, lalu aktif). */
 function NotificationButton({ session }: { session: SessionUser }) {
@@ -34,20 +51,10 @@ function NotificationButton({ session }: { session: SessionUser }) {
 
   useEffect(() => {
     if (!isMonitor || perm !== "granted") return;
-    // Re-bind endpoint ke akun pemantau yang sedang login (HP dipakai
-    // bergantian antar akun).
     void syncPushSubscription(undefined);
   }, [isMonitor, perm]);
 
-  if (!isMonitor || perm === "unsupported") return null;
-
-  if (perm === "granted") {
-    return (
-      <span className="badge hidden bg-emerald-500/15 text-emerald-300 sm:inline-flex">
-        🔔 Notifikasi aktif
-      </span>
-    );
-  }
+  if (!isMonitor || perm === "granted" || perm === "unsupported") return null;
 
   const blocker = getPushBlocker();
   return (
@@ -57,8 +64,6 @@ function NotificationButton({ session }: { session: SessionUser }) {
           setBusy(true);
           setMsg(null);
           try {
-            // Untuk pemantau, claim_push_subscription menautkan endpoint
-            // ke akun admin (monitor_id) di sisi server.
             await enablePush(undefined);
             setPerm(notificationPermission());
           } catch (e) {
@@ -68,12 +73,12 @@ function NotificationButton({ session }: { session: SessionUser }) {
           }
         }}
         disabled={busy}
-        className="rounded-xl border border-gold-400/50 bg-gold-400/10 px-3 py-2 text-sm font-semibold text-gold-300 transition hover:bg-gold-400/20 disabled:opacity-50"
+        className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
       >
         {busy ? "Mengaktifkan…" : "🔔 Aktifkan notifikasi"}
       </button>
       {(msg || blocker) && (
-        <span className="max-w-[16rem] text-right text-[11px] leading-tight text-red-300">
+        <span className="max-w-[16rem] text-right text-[11px] leading-tight text-red-500">
           {msg ?? describePushBlocker(blocker as Exclude<typeof blocker, null>)}
         </span>
       )}
@@ -81,12 +86,16 @@ function NotificationButton({ session }: { session: SessionUser }) {
   );
 }
 
-/** Dashboard Pemantau/Admin: tab utama 📊 Monitoring (folder + ringkasan). */
+/**
+ * Dashboard pemantau: sidebar kiri (desktop) + bottom nav (HP),
+ * tema terang sesuai mockup. Halaman: Beranda (summary), Laporan Giat,
+ * Statistik, Peta Kegiatan, Rekap & Unduh, Manajemen Data.
+ */
 export default function AdminApp({ session, onLogout }: Props) {
-  const [tab, setTab] = useState<Tab>("monitoring");
+  const [tab, setTab] = useState<Tab>("beranda");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [popup, setPopup] = useState<ReportPopupData | null>(null);
-  const [openFolderKey, setOpenFolderKey] = useState<string | null>(null);
   const shownIds = useRef(new Set<string>());
 
   const handleInsert = useCallback(
@@ -126,15 +135,11 @@ export default function AdminApp({ session, onLogout }: Props) {
   );
 
   useEffect(() => {
-    // Realtime menghormati RLS → pemantau hanya menerima laporan
-    // dalam cakupannya.
     const unsubscribe = subscribeLaporan(
       () => setRefreshKey((k) => k + 1),
       (row) => void handleInsert(row),
     );
 
-    // Push diterima saat app TERBUKA → sistem ditahan oleh service worker
-    // dan diteruskan ke sini sebagai pesan (tidak dobel dengan popup).
     const onMessage = (event: MessageEvent) => {
       const data = event.data as
         | {
@@ -170,82 +175,158 @@ export default function AdminApp({ session, onLogout }: Props) {
     };
   }, [handleInsert]);
 
-  const handleOpenFromPopup = useCallback((folderKey: string) => {
+  const menu = useMemo(
+    () => MENU.filter((m) => !m.adminOnly || session.role === "admin"),
+    [session.role],
+  );
+
+  const openFromPopup = () => {
     setPopup(null);
-    setTab("monitoring");
-    setOpenFolderKey(folderKey);
-  }, []);
+    setTab("laporan");
+  };
+
+  const page = (() => {
+    switch (tab) {
+      case "laporan":
+        return <LaporanGiatScreen refreshKey={refreshKey} />;
+      case "statistik":
+        return <StatistikScreen refreshKey={refreshKey} />;
+      case "peta":
+        return <PetaScreen refreshKey={refreshKey} />;
+      case "rekap":
+        return <RekapScreen />;
+      case "manajemen":
+        return session.role === "admin" ? <ManagementScreen /> : null;
+      default:
+        return <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} />;
+    }
+  })();
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="safe-top sticky top-0 z-10 border-b border-white/10 bg-[#0b1428]/90 px-4 py-3 shadow-[0_12px_40px_rgba(2,12,25,0.28)] backdrop-blur-2xl sm:px-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <PolresLogo className="h-12 w-36 sm:h-14 sm:w-44" />
-            <span className="status-live hidden sm:inline-flex">Live ops</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <NotificationButton session={session} />
-            <div className="hidden text-right md:block">
-              <div className="text-xs text-slate-500">Masuk sebagai</div>
-              <div className="text-sm font-semibold text-slate-200">
-                {session.nama}
-              </div>
+    <div className="dash flex min-h-dvh">
+      {/* ===== Sidebar (desktop) ===== */}
+      <aside
+        className={
+          "fixed inset-y-0 left-0 z-30 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform lg:translate-x-0 " +
+          (sidebarOpen ? "translate-x-0" : "-translate-x-full")
+        }
+      >
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+          <PolresLogo className="h-10 w-24 shrink-0" />
+          <div className="min-w-0">
+            <div className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-900">
+              POLRES PURWAKARTA
             </div>
-            <button
-              onClick={onLogout}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300 transition hover:border-red-400/40 hover:bg-red-400/10 hover:text-red-300"
-            >
-              Keluar
-            </button>
+            <div className="mt-0.5 text-[10px] leading-snug text-slate-500">
+              Sistem Pelaporan Giat
+            </div>
           </div>
         </div>
-        <nav className="mx-auto mt-4 flex max-w-6xl gap-2 overflow-x-auto pb-0.5">
-          {(
-            [
-              ["monitoring", "📊 Monitoring"],
-              ...(session.role === "admin"
-                ? ([["struktur", "🏢 Struktur"]] as Array<[Tab, string]>)
-                : []),
-              ["laporan", "📄 Laporan"],
-            ] as Array<[Tab, string]>
-          ).map(([key, label]) => (
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {menu.map((m) => (
             <button
-              key={key}
-              onClick={() => setTab(key)}
+              key={m.key}
+              onClick={() => {
+                setTab(m.key);
+                setSidebarOpen(false);
+              }}
               className={
-                "shrink-0 rounded-xl border px-3 py-2 text-xs font-bold transition sm:px-4 sm:text-sm " +
-                (tab === key
-                  ? "border-gold-300 bg-gold-400 text-navy-900 shadow-lg shadow-gold-400/10"
-                  : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-white")
+                "flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition " +
+                (tab === m.key
+                  ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900")
               }
             >
-              {label}
+              <span className="text-base">{m.icon}</span>
+              {m.label}
             </button>
           ))}
         </nav>
-      </header>
+        <div className="border-t border-slate-100 px-4 py-4">
+          <div className="text-xs font-semibold text-slate-700">{session.nama}</div>
+          <div className="text-[11px] text-slate-500">
+            {session.role === "admin" ? "Admin" : "Pimpinan"}
+          </div>
+          <button
+            onClick={onLogout}
+            className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+          >
+            Keluar
+          </button>
+        </div>
+      </aside>
 
-      <main className="safe-bottom mx-auto w-full max-w-6xl flex-1 px-4 py-6">
-        {tab === "monitoring" ? (
-          <MonitoringScreen
-            session={session}
-            refreshKey={refreshKey}
-            openFolderKey={openFolderKey}
-            onOpenHandled={() => setOpenFolderKey(null)}
-          />
-        ) : tab === "struktur" && session.role === "admin" ? (
-          <OrganizationScreen />
-        ) : (
-          <ReportScreen />
-        )}
-      </main>
+      {/* Backdrop mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* ===== Konten ===== */}
+      <div className="flex min-w-0 flex-1 flex-col lg:ml-72">
+        <header className="safe-top sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-slate-600 lg:hidden"
+                aria-label="Buka menu"
+              >
+                ☰
+              </button>
+              <div>
+                <div className="text-sm font-extrabold tracking-tight text-slate-900">
+                  Dashboard Pemantau
+                </div>
+                <div className="hidden text-[11px] text-slate-500 sm:block">
+                  Memantau seluruh laporan giat berdasarkan wilayah dan fungsi
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <NotificationButton session={session} />
+              <span className="badge hidden bg-blue-50 text-blue-700 sm:inline-flex">
+                🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6">
+          {page}
+        </main>
+
+        {/* Bottom nav (HP) */}
+        <nav className="dash-bottom-nav safe-bottom fixed inset-x-0 bottom-0 z-10 flex overflow-x-auto border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
+          {menu.map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setTab(m.key)}
+              className={
+                "flex min-h-14 min-w-[76px] shrink-0 flex-col items-center justify-center gap-0.5 px-1.5 py-1.5 text-[10px] font-semibold transition " +
+                (tab === m.key ? "text-blue-600" : "text-slate-500")
+              }
+            >
+              <span className="text-lg leading-none">{m.icon}</span>
+              <span className="max-w-full truncate px-0.5">{m.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="h-16 lg:hidden" />
+      </div>
 
       <ReportPopup
         popup={popup}
-        onOpen={handleOpenFromPopup}
+        onOpen={openFromPopup}
         onClose={() => setPopup(null)}
       />
     </div>
   );
+}
+
+/** Rekap & Unduh — alias ringkas dari generator laporan (PDF/Excel). */
+function RekapScreen() {
+  return <LaporanGiatScreen refreshKey={0} rekapMode />;
 }

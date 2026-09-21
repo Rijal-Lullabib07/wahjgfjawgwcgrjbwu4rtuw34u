@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Laporan } from "../../types";
+import type { KategoriLaporan, Laporan, TahapLaporan } from "../../types";
 import { fetchLaporan, fetchReguList } from "../../lib/supabase/api";
 import { formatWaktu } from "../../lib/cycle";
 import { exportPdf } from "./exportPdf";
@@ -9,6 +9,12 @@ import { reguDisplayName } from "../../lib/regu";
 import PlaceBadge from "../../components/PlaceBadge";
 
 type Preset = "harian" | "mingguan" | "bulanan" | "custom";
+
+const TAHAP_SINGKAT: Record<TahapLaporan, string> = {
+  awal: "Awal",
+  update: "Update",
+  lengkap: "Lengkap",
+};
 
 function presetRange(
   preset: Preset,
@@ -42,6 +48,7 @@ export default function ReportScreen() {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState<string>("all"); // 'all' = gabungan
+  const [kategori, setKategori] = useState<KategoriLaporan | "all">("all");
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +60,13 @@ export default function ReportScreen() {
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
 
   const { data: laporan = [], isFetching } = useQuery({
-    queryKey: ["laporan-report", preset, custom, reguId],
+    queryKey: ["laporan-report", preset, custom, reguId, kategori],
     queryFn: () =>
       fetchLaporan({
         from: range.from,
         to: range.to,
         reguId: reguId === "all" ? undefined : reguId,
+        kategori: kategori === "all" ? undefined : kategori,
         limit: 2000,
       }),
   });
@@ -177,10 +185,39 @@ export default function ReportScreen() {
           </div>
         )}
 
+        {/* Jenis pelaporan: kegiatan / kejadian */}
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-300">
+            Jenis pelaporan
+          </label>
+          <div className="flex gap-2">
+            {(
+              [
+                ["all", "Semua"],
+                ["kegiatan", "📋 Kegiatan"],
+                ["kejadian", "⚡ Kejadian"],
+              ] as Array<[KategoriLaporan | "all", string]>
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setKategori(key)}
+                className={
+                  "rounded-lg px-3.5 py-2 text-sm font-semibold transition " +
+                  (kategori === key
+                    ? "bg-gold-400 text-navy-900"
+                    : "bg-navy-900 text-slate-300 hover:text-white")
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Kategori (pelapor) */}
         <div>
           <label className="mb-2 block text-sm font-medium text-slate-300">
-            Kategori
+            Pelapor
           </label>
           <select
             className="input"
@@ -329,6 +366,21 @@ function PreviewTable({
             >
               <td className="px-4 py-2.5 whitespace-nowrap">
                 {formatWaktu(l.timestamp_kirim)}
+                <span
+                  className={
+                    "badge ml-1 " +
+                    (l.kategori === "kejadian"
+                      ? "bg-red-500/15 text-red-300"
+                      : "bg-sky-500/15 text-sky-300")
+                  }
+                >
+                  {l.kategori === "kejadian" ? "⚡" : "📋"}
+                </span>
+                {l.tahap && (
+                  <span className="badge ml-1 bg-white/[0.06] text-slate-400">
+                    {TAHAP_SINGKAT[l.tahap as TahapLaporan] ?? ""}
+                  </span>
+                )}
               </td>
               <td className="px-4 py-2.5">
                 {l.regu

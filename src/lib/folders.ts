@@ -49,6 +49,12 @@ export interface FolderLaporanRow {
   longitude: number | null;
   status_sync: "pending" | "synced" | "failed";
   catatan: string | null;
+  kategori?: "kegiatan" | "kejadian" | null;
+  tahap?: "awal" | "update" | "lengkap" | null;
+  perihal?: string | null;
+  jenis_nama?: string | null;
+  parent_id?: string | null;
+  child_count?: number | null;
   nama_regu: string;
   fotos: FolderFoto[];
   videos: FolderVideo[];
