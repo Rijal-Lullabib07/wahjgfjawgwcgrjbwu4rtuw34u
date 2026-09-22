@@ -812,21 +812,41 @@ select {
   justify-content: center;
   border: 1px solid rgba(245, 185, 66, 0.25);
   border-radius: 0.9rem;
-  background: linear-gradient(135deg, rgba(245, 185, 66, 0.1), rgba(8, 33, 60, 0.35));
+  background: linear-gradient(135deg, rgba(245, 185, 66, 0.08), rgba(8, 33, 60, 0.72));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 20px rgba(2, 12, 25, 0.18);
 }
 .sidebar-logo-panel {
-  min-width: 7rem;
-  padding: 0.35rem 0.45rem;
+  min-width: 9rem;
+  padding: 0.45rem 0.55rem;
 }
 .regu-logo-panel {
-  min-width: 8.5rem;
-  padding: 0.35rem 0.55rem;
+  min-width: 10.75rem;
+  padding: 0.45rem 0.65rem;
 }
 .dash-light .sidebar-logo-panel {
   border-color: rgba(31, 77, 133, 0.2);
-  background: linear-gradient(135deg, #fff8e5, #edf5fd);
-  box-shadow: 0 6px 16px rgba(15, 42, 72, 0.1);
+  background: linear-gradient(135deg, rgba(245, 185, 66, 0.14), rgba(8, 33, 60, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 16px rgba(15, 42, 72, 0.16);
+}
+@media (max-width: 480px) {
+  .regu-logo-panel {
+    min-width: 8.25rem;
+    padding: 0.35rem 0.45rem;
+  }
+  .regu-logo-panel .polres-logo-image {
+    height: 2.75rem;
+    width: 9.5rem;
+  }
+  .regu-app header > div {
+    gap: 0.5rem;
+  }
+  .regu-app header .text-xs {
+    font-size: 0.58rem;
+  }
+  .regu-app header .text-sm {
+    max-width: 5rem;
+    font-size: 0.72rem;
+  }
 }
 
 /* Dashboard memakai palet yang sama dengan halaman login: navy, gold, dan ice blue. */

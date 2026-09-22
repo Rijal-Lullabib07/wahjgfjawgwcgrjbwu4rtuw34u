@@ -227,7 +227,7 @@ export default function AdminApp({ session, onLogout }: Props) {
       >
         <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
           <div className="sidebar-logo-panel shrink-0">
-            <PolresLogo className="h-9 w-24" />
+            <PolresLogo className="h-11 w-32" />
           </div>
           <div className="min-w-0">
             <div className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-900">

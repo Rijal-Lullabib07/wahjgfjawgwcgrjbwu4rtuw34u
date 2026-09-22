@@ -147,7 +147,7 @@ export default function ReguApp({ session, onLogout }: Props) {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="regu-logo-panel shrink-0">
-              <PolresLogo className="h-10 w-32 sm:h-11 sm:w-36" />
+              <PolresLogo className="h-12 w-40 sm:h-14 sm:w-48" />
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-400">
