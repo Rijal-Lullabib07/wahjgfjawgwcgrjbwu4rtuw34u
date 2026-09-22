@@ -87,11 +87,13 @@ $$;
 
 -- Replace the broad report read rule with role- and scope-aware access.
 drop policy if exists "regu select own laporan" on public.laporan;
+drop policy if exists "regu select scoped laporan" on public.laporan;
 create policy "regu select scoped laporan"
 on public.laporan for select to authenticated
 using (public.can_read_laporan(regu_id));
 
 drop policy if exists "admin_users readable by admin" on public.admin_users;
+drop policy if exists "monitor reads own account" on public.admin_users;
 create policy "monitor reads own account"
 on public.admin_users for select to authenticated
 using (
@@ -101,6 +103,7 @@ using (
 );
 
 drop policy if exists "foto select via laporan" on public.laporan_foto;
+drop policy if exists "foto select via scoped laporan" on public.laporan_foto;
 create policy "foto select via scoped laporan"
 on public.laporan_foto for select to authenticated
 using (exists (
@@ -110,6 +113,7 @@ using (exists (
 
 -- Monitoring accounts may read the reporter directory, but only fields needed by UI.
 drop policy if exists "regu readable by authenticated" on public.regu;
+drop policy if exists "accounts readable by authenticated" on public.regu;
 create policy "accounts readable by authenticated"
 on public.regu for select to authenticated using (true);
 

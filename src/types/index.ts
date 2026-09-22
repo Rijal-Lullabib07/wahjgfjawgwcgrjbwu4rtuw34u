@@ -54,7 +54,7 @@ export interface Laporan {
   longitude: number | null;
   status_sync: SyncStatus;
   catatan?: string | null;
-  /** NRP pelapor yang diinput saat membuat laporan (migration 0021). */
+  /** NRP pelapor yang diinput saat membuat laporan (migration 0020). */
   nrp_pelapor?: string | null;
   kategori: KategoriLaporan;
   jenis_id?: string | null;
@@ -116,8 +116,9 @@ export interface QueuedLaporan {
   tahap: TahapLaporan;
   parentId?: string | null;
   perihal?: string;
-  /** NRP pelapor — dikirim bersama laporan agar pemantau tahu siapa pelapornya. */
-  nrp?: string | null;
+  /** Daftar NRP pelapor (satu unit bisa >1 personel) — dikirim bersama
+   *  laporan agar pemantau tahu siapa saja pelapornya. */
+  nrpList?: string[];
   fotos: Array<{
     blobKey: string; // kunci blob di object store fotos
     urutan: 1 | 2 | 3 | 4;

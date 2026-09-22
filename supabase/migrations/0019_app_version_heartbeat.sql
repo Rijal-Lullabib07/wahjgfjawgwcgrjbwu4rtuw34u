@@ -26,7 +26,7 @@ comment on column public.regu.versi_dikirim_pada is
 
 -- 2) RLS ----------------------------------------------------------
 -- Kolom baru mengikuti kebijakan RLS tabel regu yang sudah ada:
---   - update milik sendiri sudah diizinkan migration 0013
+--   - update milik sendiri sudah diizinkan migration 0012
 --     ("regu own profile" / "allow regu own profile").
 --   - admin membaca seluruh regu lewat can_read_monitor_scope.
 -- Tidak ada policy baru yang diperlukan; kolom hanya ikut select/update.

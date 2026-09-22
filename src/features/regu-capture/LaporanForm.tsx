@@ -18,8 +18,9 @@ export interface LaporanFormResult {
   parentId: string | null;
   perihal: string;
   isi: string;
-  /** NRP pelapor yang diinput — pemantau memakai ini mengenali pelapor. */
-  nrp: string;
+  /** Daftar NRP pelapor (satu unit bisa >1 personel) — pemantau memakai ini
+   *  mengenali siapa saja pelapornya. */
+  nrpList: string[];
   /** Teks laporan resmi hasil perakitan otomatis (disimpan sebagai catatan). */
   teksLaporan: string;
   fotos: Array<{ blob: Blob; lat: number | null; lng: number | null; ts: Date }>;
@@ -49,6 +50,13 @@ function tanggalOtomatis(): string {
     month: "long",
     year: "numeric",
   });
+}
+
+/** Format detik perekaman → "0:42". */
+function formatRecTime(total: number): string {
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 /** Jam otomatis: "14.30 WIB". */
@@ -103,8 +111,48 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   const [jenisOpen, setJenisOpen] = useState(false);
   const [perihal, setPerihal] = useState("");
   const [isi, setIsi] = useState("");
-  /** NRP pelapor — diingat di localStorage agar tidak ketik ulang tiap laporan. */
-  const [nrp, setNrp] = useState(() => localStorage.getItem("siplap_nrp") ?? "");
+  /** Daftar NRP pelapor — diingat di localStorage agar tidak ketik ulang.
+   *  Tombol + menambah baris NRP (satu laporan bisa berisi banyak personel). */
+  const [nrpList, setNrpList] = useState<string[]>(() => {
+    const saved = localStorage.getItem("siplap_nrp_list");
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved) as unknown;
+        if (Array.isArray(arr) && arr.length > 0) {
+          return arr
+            .filter((n): n is string => typeof n === "string")
+            .map((n) => n.replace(/[^0-9]/g, "").slice(0, 20));
+        }
+      } catch {
+        /* localStorage rusak → mulai dari kosong. */
+      }
+    }
+    // Versi lama menyimpan satu NRP polos — pindahkan ke daftar.
+    const legacy = localStorage.getItem("siplap_nrp");
+    return legacy ? [legacy.replace(/[^0-9]/g, "").slice(0, 20)] : [""];
+  });
+  const setNrpAt = (index: number, raw: string) => {
+    // Hanya angka, maksimal 20 digit per NRP.
+    const v = raw.replace(/[^0-9]/g, "").slice(0, 20);
+    setNrpList((list) => list.map((n, i) => (i === index ? v : n)));
+  };
+  const tambahNrp = () => setNrpList((list) => [...list, ""]);
+  const hapusNrp = (index: number) =>
+    setNrpList((list) =>
+      list.length > 1 ? list.filter((_, i) => i !== index) : list,
+    );
+  /** Daftar NRP siap kirim: buang baris kosong & duplikat, pertahankan urutan. */
+  const nrpBersih = useMemo(() => {
+    const seen = new Set<string>();
+    for (const n of nrpList) {
+      const v = n.trim();
+      if (v && !seen.has(v)) seen.add(v);
+    }
+    return [...seen];
+  }, [nrpList]);
+  useEffect(() => {
+    localStorage.setItem("siplap_nrp_list", JSON.stringify(nrpBersih));
+  }, [nrpBersih]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,6 +218,8 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   } | null>(null);
   const [mediaMode, setMediaMode] = useState<"foto" | "video">("foto");
   const [recording, setRecording] = useState(false);
+  /** Detik berjalan selama perekaman — dipakai badge REC + hint tombol. */
+  const [recSeconds, setRecSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const flashRef = useRef<HTMLDivElement>(null);
@@ -181,6 +231,19 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
     return () => camera.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Timer perekaman: hitung detik sejak recordStartRef; reset saat berhenti. */
+  useEffect(() => {
+    if (!recording) {
+      setRecSeconds(0);
+      return;
+    }
+    const started = recordStartRef.current;
+    const tick = () => setRecSeconds(Math.floor((Date.now() - started) / 1000));
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [recording]);
 
   const changeMode = async (next: "foto" | "video") => {
     if (next === "video" && videoShot) return;
@@ -305,13 +368,15 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
   const handleSubmit = async () => {
     if (sending) return;
-    if (!nrp.trim()) {
+    if (nrpBersih.length === 0) {
       setError("NRP wajib diisi — pemantau memakainya mengenali pelapor.");
       return;
     }
-    if (!/^[0-9]{6,20}$/.test(nrp.trim())) {
-      setError("NRP harus angka 6–20 digit tanpa spasi/huruf.");
-      return;
+    for (const n of nrpBersih) {
+      if (!/^[0-9]{6,20}$/.test(n)) {
+        setError(`NRP ${n || "(kosong)"} tidak valid — harus angka 6–20 digit tanpa spasi/huruf.`);
+        return;
+      }
     }
     if (!perihal.trim()) {
       setError("Perihal laporan wajib diisi.");
@@ -340,7 +405,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         parentId: parent?.id ?? null,
         perihal: perihal.trim(),
         isi: isi.trim(),
-        nrp: nrp.trim(),
+        nrpList: nrpBersih,
         teksLaporan,
         fotos: shots.map((s) => ({
           blob: s.blob,
@@ -506,24 +571,47 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
           <label className="eyebrow" htmlFor="nrp-pelapor">
             NRP pelapor
           </label>
-          <input
-            id="nrp-pelapor"
-            className="input mt-2"
-            value={nrp}
-            onChange={(e) => {
-              // Hanya angka, maksimal 20 digit.
-              const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 20);
-              setNrp(v);
-              localStorage.setItem("siplap_nrp", v);
-            }}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="Tulis NRP Anda, mis. 75001234"
-            required
-          />
+          <div className="mt-2 space-y-2">
+            {nrpList.map((n, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  id={i === 0 ? "nrp-pelapor" : undefined}
+                  className="input"
+                  value={n}
+                  onChange={(e) => setNrpAt(i, e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder={
+                    i === 0
+                      ? "Tulis NRP Anda, mis. 75001234"
+                      : "NRP personel lain…"
+                  }
+                  required
+                />
+                {nrpList.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => hapusNrp(i)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-red-500/40 bg-red-500/10 text-lg font-bold text-red-300 transition hover:bg-red-500/20 active:scale-90"
+                    aria-label={`Hapus NRP ke-${i + 1}`}
+                    title="Hapus NRP ini"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={tambahNrp}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gold-400/50 bg-gold-400/[0.06] px-3 py-2.5 text-sm font-bold text-gold-300 transition hover:bg-gold-400/[0.12] active:scale-[0.98]"
+          >
+            <span className="text-lg leading-none">+</span> Tambah personel
+          </button>
           <p className="mt-1 text-[11px] text-slate-500">
-            NRP disimpan di perangkat ini — cukup diisi sekali, laporan
-            berikutnya terisi otomatis.
+            Satu unit bisa berisi banyak personel — ketuk + untuk menambah NRP.
+            Daftar disimpan di perangkat ini, laporan berikutnya terisi otomatis.
           </p>
         </div>
 
@@ -608,6 +696,25 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
             className="pointer-events-none absolute inset-0 bg-white opacity-0 transition-opacity duration-100"
           />
 
+          {/* Badge REC merah berdenyut + timer detik saat merekam video */}
+          {recording && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
+              <div className="flex items-center gap-2 rounded-full border border-red-500/40 bg-black/70 px-3.5 py-1.5 backdrop-blur">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
+                </span>
+                <span className="text-[12px] font-extrabold tracking-widest text-red-400">
+                  REC
+                </span>
+                <span className="mono text-[12px] font-bold tabular-nums text-white">
+                  {formatRecTime(recSeconds)}
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400">/ 1:00</span>
+              </div>
+            </div>
+          )}
+
           {camera.error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
               <span className="text-4xl">📷</span>
@@ -669,7 +776,12 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
               capturing ||
               (mediaMode === "foto" ? shots.length >= 4 : Boolean(videoShot))
             }
-            className="shutter-button flex h-16 w-16 items-center justify-center rounded-full border-4 border-gold-400 bg-navy-800 text-2xl shadow-[0_0_0_7px_rgba(245,185,66,0.12)] transition active:scale-90 disabled:opacity-30"
+            className={
+              "shutter-button flex h-16 w-16 items-center justify-center rounded-full border-4 bg-navy-800 text-2xl transition active:scale-90 disabled:opacity-30 " +
+              (recording
+                ? "border-red-500 shadow-[0_0_0_7px_rgba(239,68,68,0.18)]"
+                : "border-gold-400 shadow-[0_0_0_7px_rgba(245,185,66,0.12)]")
+            }
             aria-label={
               mediaMode === "foto"
                 ? "Ambil foto"
@@ -686,7 +798,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
             {mediaMode === "foto"
               ? `Foto ${shots.length + 1} dari 4 (opsional)`
               : recording
-                ? "Merekam… ketuk untuk berhenti"
+                ? `Merekam… ${formatRecTime(recSeconds)} / 1:00 — ketuk untuk berhenti`
                 : videoShot
                   ? "Video sudah ditambahkan"
                   : "Rekam maksimal 60 detik"}
@@ -755,7 +867,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
       <button
         onClick={() => void handleSubmit()}
-        disabled={sending || !perihal.trim() || !isi.trim() || !nrp.trim()}
+        disabled={sending || !perihal.trim() || !isi.trim() || nrpBersih.length === 0}
         className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-gold-300/70 bg-gradient-to-r from-gold-400 via-amber-300 to-gold-400 px-5 py-4 text-base font-extrabold text-navy-950 shadow-[0_10px_28px_rgba(245,185,66,0.22)] transition hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-950/10 text-lg">

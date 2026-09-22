@@ -102,6 +102,8 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
   const [pin, setPin] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPin, setShowPin] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -120,24 +122,25 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
   };
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-navy-950">
+    <div className="login-page relative min-h-dvh overflow-hidden bg-navy-950">
       {/* Dekorasi latar: glow & grid halus */}
       <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-navy-600/20 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-40 -right-24 h-[28rem] w-[28rem] rounded-full bg-gold-400/5 blur-3xl" />
+      <div className="login-orbit pointer-events-none absolute left-[12%] top-[18%] h-2 w-2 rounded-full bg-gold-400 shadow-[0_0_24px_8px_rgba(245,185,66,.25)]" />
+      <div className="pointer-events-none absolute right-[12%] top-[12%] h-40 w-40 rounded-full border border-gold-400/10" />
+      <div className="pointer-events-none absolute right-[16%] top-[16%] h-24 w-24 rounded-full border border-sky-400/10" />
 
       <div className="mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-10 px-4 py-10 lg:grid-cols-2 lg:gap-6 lg:py-0">
         {/* Kolom kiri: hero animatif */}
         <div className="anim-rise order-1 hidden lg:order-none lg:block">
-          <div className="-mt-8 mb-8 flex items-center gap-4">
+          <div className="-mt-8 mb-8 flex flex-col items-center gap-4">
             <PolresLogo className="h-24 w-80 shrink-0 drop-shadow-lg" />
-            <div className="min-w-0">
-              <h1 className="text-3xl font-extrabold tracking-tight text-white">
-                SALAM PRESISI
-              </h1>
-              <p className="max-w-sm text-sm leading-relaxed text-slate-400">
-                Sistem Informasi Pelaporan Giat Lapangan
-              </p>
-            </div>
+            <h1 className="max-w-md text-center text-3xl font-extrabold leading-tight tracking-tight text-white">
+              <span className="block">Sistem Integrasi Pelaporan</span>
+              <span className="mt-1 block bg-gradient-to-r from-gold-300 via-gold-400 to-amber-200 bg-clip-text text-transparent">
+                Polres Purwakarta
+              </span>
+            </h1>
           </div>
           <LoginHero />
         </div>
@@ -147,15 +150,15 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
           {/* Logo versi mobile */}
           <div className="mb-8 text-center lg:hidden">
             <PolresLogo className="anim-float-soft mx-auto mb-3 h-32 w-96 drop-shadow-lg" />
-            <h1 className="text-2xl font-extrabold tracking-tight">
-              SALAM PRESISI
+            <h1 className="text-2xl font-extrabold leading-tight tracking-tight">
+              <span className="block">Sistem Integrasi Pelaporan</span>
+              <span className="mt-1 block bg-gradient-to-r from-gold-300 via-gold-400 to-amber-200 bg-clip-text text-transparent">
+                Polres Purwakarta
+              </span>
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Sistem Informasi Pelaporan Giat Lapangan Polres
-            </p>
           </div>
 
-          <div className="card">
+          <div className="card login-form-card">
             {/* Tab switcher */}
             <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-navy-900 p-1">
               {(["regu", "admin"] as Tab[]).map((t) => (
@@ -166,13 +169,13 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     setTab(t);
                     setError(null);
                   }}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                  className={`login-tab rounded-lg px-3 py-2 text-sm font-semibold transition ${
                     tab === t
-                      ? "bg-gold-400 text-navy-900"
+                      ? "login-tab-active bg-gold-400 text-navy-900"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  {t === "regu" ? "👤 Pelapor" : "🛡️ Pemantau"}
+                  {t === "regu" ? "👤 Lapor" : "🛡️ Pantau"}
                 </button>
               ))}
             </div>
@@ -182,7 +185,7 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                 <>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-300">
-                      Kode Pelapor
+                      Username Pelapor
                     </label>
                     <input
                       className="input"
@@ -199,16 +202,27 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     <label className="mb-1 block text-sm font-medium text-slate-300">
                       Password
                     </label>
-                    <input
-                      className="input"
-                      type="password"
-                      inputMode="text"
-                      placeholder="Password pelapor"
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        className="input pr-20"
+                        type={showPin ? "text" : "password"}
+                        inputMode="text"
+                        placeholder="Password pelapor"
+                        value={pin}
+                        onChange={(e) => setPin(e.target.value)}
+                        autoComplete="current-password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-3 text-xs font-semibold text-gold-400 transition hover:text-gold-300"
+                        onClick={() => setShowPin((visible) => !visible)}
+                        aria-label={showPin ? "Sembunyikan password" : "Tampilkan password"}
+                        aria-pressed={showPin}
+                      >
+                        {showPin ? "Sembunyikan" : "Lihat"}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -231,15 +245,26 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                     <label className="mb-1 block text-sm font-medium text-slate-300">
                       Password
                     </label>
-                    <input
-                      className="input"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        className="input pr-20"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="current-password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-3 text-xs font-semibold text-gold-400 transition hover:text-gold-300"
+                        onClick={() => setShowPassword((visible) => !visible)}
+                        aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                        aria-pressed={showPassword}
+                      >
+                        {showPassword ? "Sembunyikan" : "Lihat"}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -252,7 +277,7 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
 
               <button
                 type="submit"
-                className="btn-primary w-full py-3.5"
+                className="btn-primary login-submit w-full py-3.5"
                 disabled={busy}
               >
                 {busy ? "Memproses…" : "Masuk"}
@@ -261,15 +286,6 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
           </div>
 
           <div className="mt-6 rounded-2xl border border-navy-600/60 bg-navy-800/50 px-4 py-3">
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
-              <span aria-hidden>📱</span>
-              <span>
-                <b className="font-semibold text-white">
-                  Satu smartphone = satu akun.
-                </b>{" "}
-                Sesi login tersimpan permanen di perangkat ini.
-              </span>
-            </p>
             <p className="mt-2 flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
               <span aria-hidden>📲</span>
               <span>

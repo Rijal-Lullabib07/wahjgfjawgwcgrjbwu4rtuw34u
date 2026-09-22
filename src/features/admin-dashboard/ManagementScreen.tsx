@@ -439,7 +439,7 @@ export default function ManagementScreen() {
       const raw = e instanceof Error ? e.message : String(e);
       if (raw.includes("status_aktif")) {
         setError(
-          "Kolom status_aktif belum ada. Jalankan migration 0016_manajemen_personel.sql di Supabase SQL Editor dulu.",
+          "Kolom status_aktif belum ada. Jalankan migration 0015_manajemen_personel.sql di Supabase SQL Editor dulu.",
         );
       } else {
         setError(pesanError(e, "Gagal memuat data personel."));
@@ -579,7 +579,7 @@ export default function ManagementScreen() {
       if (err) throw err;
       await load();
     } catch (e) {
-      setError(pesanError(e, "Gagal mengubah status. Pastikan migration 0016 sudah dijalankan."));
+      setError(pesanError(e, "Gagal mengubah status. Pastikan migration 0015 sudah dijalankan."));
     } finally {
       setBusyId(null);
     }

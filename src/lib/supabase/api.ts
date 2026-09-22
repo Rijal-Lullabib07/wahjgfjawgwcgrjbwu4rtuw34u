@@ -220,8 +220,15 @@ export async function fetchLaporan(filter: {
   // agar pemakaian `(l.videos ?? []).map(...)` tidak meledak.
   const normalized = (data ?? []).map((row) => {
     const r = row as Laporan;
+    // Kolom nrp_pelapor di DB sudah text[] (migration 0021) — rapikan jadi
+    // teks "NRP1, NRP2" agar UI & export versi ini tetap tampil normal.
+    const nrpDb = r.nrp_pelapor as unknown;
+    const nrpText = Array.isArray(nrpDb)
+      ? nrpDb.filter(Boolean).join(", ") || null
+      : ((nrpDb as string | null) ?? null);
     return {
       ...r,
+      nrp_pelapor: nrpText,
       fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
       videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
     } as Laporan;
@@ -273,27 +280,59 @@ export async function submitLaporan(
 ): Promise<string> {
   const client = requireClient();
 
-  const { data: laporan, error } = await client
-    .from("laporan")
-    .insert({
-      regu_id: q.reguId,
-      timestamp_kirim: q.timestampKirim,
-      siklus_ke: q.siklusKe,
-      latitude: q.latitude,
-      longitude: q.longitude,
-      status_sync: "synced",
-      catatan: q.catatan ?? null,
-      kategori: q.kategori,
-      jenis_id: q.jenisId ?? null,
-      tahap: q.tahap,
-      parent_id: q.parentId ?? null,
-      perihal: q.perihal ?? null,
-      nrp_pelapor: q.nrp ?? null,
-    })
-    .select("id")
-    .single();
-  if (error) {
-    throw new Error(`Gagal membuat laporan: ${error.message}`);
+  // Daftar NRP pelapor (migration 0021: kolom DB text[]) — buang kosong &
+  // duplikat, pertahankan urutan input. Antrian offline versi lama menyimpan
+  // satu NRP di q.nrp — ikutkan agar tidak hilang saat sync.
+  const nrpLama = (q as { nrp?: string | null }).nrp?.trim() ?? "";
+  const nrpList = Array.from(
+    new Set(
+      [...(q.nrpList ?? []), nrpLama]
+        .map((n) => n.trim())
+        .filter(Boolean),
+    ),
+  );
+  const insertLaporan = async (
+    nrpValue: string[] | string | null,
+  ): Promise<{ id: string }> => {
+    const { data, error } = await client
+      .from("laporan")
+      .insert({
+        regu_id: q.reguId,
+        timestamp_kirim: q.timestampKirim,
+        siklus_ke: q.siklusKe,
+        latitude: q.latitude,
+        longitude: q.longitude,
+        status_sync: "synced",
+        catatan: q.catatan ?? null,
+        kategori: q.kategori,
+        jenis_id: q.jenisId ?? null,
+        tahap: q.tahap,
+        parent_id: q.parentId ?? null,
+        perihal: q.perihal ?? null,
+        nrp_pelapor: nrpValue,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      throw new Error(`Gagal membuat laporan: ${error.message}`);
+    }
+    return data;
+  };
+
+  let laporan: { id: string };
+  try {
+    // Kolom nrp_pelapor sudah text[] (migration 0021) — kirim seluruh daftar.
+    laporan = await insertLaporan(nrpList.length > 0 ? nrpList : null);
+  } catch (firstErr) {
+    // Fallback: bila DB masih skema lama (kolom text), gabungkan daftar jadi
+    // satu string — hanya untuk error konversi tipe, bukan error lain.
+    const msg = firstErr instanceof Error ? firstErr.message : "";
+    if (
+      nrpList.length === 0 ||
+      !/array|invalid input syntax|22P02/i.test(msg)
+    )
+      throw firstErr;
+    laporan = await insertLaporan(nrpList.join(", "));
   }
 
   for (let i = 0; i < q.fotos.length; i++) {
@@ -360,8 +399,13 @@ export async function fetchLaporanThread(rootId: string): Promise<Laporan[]> {
   if (error) throw describeSupabaseError(error, "Gagal memuat rangkaian laporan");
   return (data ?? []).map((row) => {
     const r = row as Laporan;
+    const nrpDb = r.nrp_pelapor as unknown;
+    const nrpText = Array.isArray(nrpDb)
+      ? nrpDb.filter(Boolean).join(", ") || null
+      : ((nrpDb as string | null) ?? null);
     return {
       ...r,
+      nrp_pelapor: nrpText,
       fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
       videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
     } as Laporan;
@@ -447,7 +491,7 @@ export async function fetchDashboardSummary(from: Date, to: Date) {
     // berulang untuk tiap tahap turunannya. Induk ditandai parent_id NULL —
     // JANGAN pakai `tahap = 'awal'`: tahap induk ikut berubah ('update'/'
     // 'lengkap') lewat trigger sync_parent_tahap, dan laporan baru boleh
-    // langsung dibuat bertahap 'update'/'lengkap' (migration 0018).
+    // langsung dibuat bertahap 'update'/'lengkap' (migration 0017).
     if (l.parent_id) continue;
     const regu = l.regu;
     if (regu?.wilayah_key) {
@@ -477,7 +521,7 @@ export async function fetchDashboardSummary(from: Date, to: Date) {
 
 // ---------- Posisi realtime pelapor (peta personel) ----------
 
-/** Satu posisi GPS terkini per pelapor (tabel `posisi`, migration 0019). */
+/** Satu posisi GPS terkini per pelapor (tabel `posisi`, migration 0018). */
 export interface LokasiPelapor {
   regu_id: string;
   latitude: number;
