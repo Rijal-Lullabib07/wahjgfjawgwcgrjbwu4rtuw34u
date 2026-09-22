@@ -76,6 +76,35 @@ export default function ThreadList({
     if (threads !== null) setMemuat(false);
   }, [threads]);
 
+  /**
+   * Hasil pencarian: semua kata kunci harus muncul di salah satu
+   * field laporan (jenis, kategori, perihal, waktu, status).
+   *
+   * PENTING: hook ini harus dipanggil SEBELUM early return
+   * `if (openThreadId)` di bawah — jumlah hook harus selalu sama
+   * di setiap render (React error #300 bila tidak).
+   */
+  const threadsTersaring = useMemo(() => {
+    const query = cari.trim().toLocaleLowerCase("id-ID");
+    if (!query) return threads ?? [];
+    const terms = query.split(/\s+/).filter(Boolean);
+    return (threads ?? []).filter((t) => {
+      const searchable = [
+        t.jenis?.nama ?? "",
+        t.kategori === "kejadian" ? "kejadian" : "kegiatan",
+        t.perihal ?? "",
+        t.catatan ?? "",
+        TAHAP_LABEL[t.tahap],
+        formatWaktu(t.timestamp_kirim),
+        t.timestamp_kirim,
+      ]
+        .filter((v) => v !== null && v !== undefined && v !== "")
+        .join(" ")
+        .toLocaleLowerCase("id-ID");
+      return terms.every((term) => searchable.includes(term));
+    });
+  }, [threads, cari]);
+
   // Tampilan detail formal — menimpa daftar selama terbuka.
   if (openThreadId) {
     return (
@@ -102,31 +131,6 @@ export default function ThreadList({
       />
     );
   }
-
-  /**
-   * Hasil pencarian: semua kata kunci harus muncul di salah satu
-   * field laporan (jenis, kategori, perihal, waktu, status).
-   */
-  const threadsTersaring = useMemo(() => {
-    const query = cari.trim().toLocaleLowerCase("id-ID");
-    if (!query) return threads ?? [];
-    const terms = query.split(/\s+/).filter(Boolean);
-    return (threads ?? []).filter((t) => {
-      const searchable = [
-        t.jenis?.nama ?? "",
-        t.kategori === "kejadian" ? "kejadian" : "kegiatan",
-        t.perihal ?? "",
-        t.catatan ?? "",
-        TAHAP_LABEL[t.tahap],
-        formatWaktu(t.timestamp_kirim),
-        t.timestamp_kirim,
-      ]
-        .filter((v) => v !== null && v !== undefined && v !== "")
-        .join(" ")
-        .toLocaleLowerCase("id-ID");
-      return terms.every((term) => searchable.includes(term));
-    });
-  }, [threads, cari]);
 
   const terbuka = threadsTersaring.filter((t) => t.tahap !== "lengkap");
   const selesai = threadsTersaring.filter((t) => t.tahap === "lengkap");
