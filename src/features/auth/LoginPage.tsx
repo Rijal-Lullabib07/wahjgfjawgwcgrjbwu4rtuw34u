@@ -189,8 +189,9 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
                       placeholder="Contoh: reskrim.banit03"
                       value={kode}
                       onChange={(e) => setKode(e.target.value)}
-                      autoCapitalize="characters"
-                      autoComplete="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       required
                     />
                   </div>

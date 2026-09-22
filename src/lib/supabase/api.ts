@@ -371,9 +371,13 @@ export async function fetchLaporanThread(rootId: string): Promise<Laporan[]> {
  * Rangkaian milik pelapor yang masih terbuka (awal/update — belum
  * lengkap) + yang sudah lengkap. Dipakai daftar "Rangkaian" di sisi
  * pelapor. child_count = jumlah turunan terkirim.
+ *
+ * @param limit batas jumlah laporan awal yang diambil (default 50,
+ *              dinaikkan bertahap lewat tombol "Muat lebih banyak").
  */
 export async function fetchOpenThreads(
   reguId: string,
+  limit = 50,
 ): Promise<Array<Laporan & { child_count: number }>> {
   const client = requireClient();
   // PostgREST tidak mendukung agregat count embedded, dan embed by nama FK
@@ -385,7 +389,7 @@ export async function fetchOpenThreads(
     .eq("regu_id", reguId)
     .is("parent_id", null)
     .order("timestamp_kirim", { ascending: false })
-    .limit(50);
+    .limit(limit);
   if (error) throw describeSupabaseError(error, "Gagal memuat laporan berjalan");
   const roots = (data ?? []) as Laporan[];
 

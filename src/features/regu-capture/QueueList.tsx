@@ -78,7 +78,7 @@ export default function QueueList({ onQueueChanged }: Props) {
   }
 
   return (
-    <div className="space-y-3 px-4 py-4">
+    <div className="space-y-3 px-4 py-4 pb-32">
       <button
         onClick={() => void handleSync()}
         className="btn-primary w-full py-3.5"

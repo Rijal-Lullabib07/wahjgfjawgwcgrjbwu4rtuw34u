@@ -833,10 +833,48 @@ select {
 .dash-bottom-nav {
   border-color: rgba(127, 169, 216, 0.22);
   background: rgba(8, 33, 60, 0.96);
+  justify-content: stretch;
+}
+.dash-bottom-nav button {
+  min-width: 0;
+  flex: 1 1 0;
+  white-space: nowrap;
+}
+.dash main h1,
+.dash main h2,
+.dash main p,
+.dash main td,
+.dash main th {
+  overflow-wrap: anywhere;
+}
+.dash main section {
+  min-width: 0;
 }
 .dash-bottom-nav button.text-blue-600 {
   color: #f5b942;
 }
 .dash-bottom-nav button.text-blue-600::before {
   background: #f5b942;
+}
+.regu-app {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+.regu-app main {
+  min-width: 0;
+  overflow-x: hidden;
+  padding-bottom: 9rem;
+}
+.regu-bottom-nav {
+  min-height: 4.5rem;
+  padding-bottom: max(0.4rem, env(safe-area-inset-bottom, 0px));
+}
+.regu-bottom-nav button {
+  min-width: 0;
+  overflow: visible;
+  white-space: nowrap;
+}
+.regu-app .card {
+  min-width: 0;
+  overflow: visible;
 }

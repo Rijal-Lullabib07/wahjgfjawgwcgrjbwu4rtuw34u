@@ -40,6 +40,7 @@ const MENU: Array<{ key: Tab; icon: string; label: string; adminOnly?: boolean }
   { key: "rekap", icon: "⬇️", label: "Rekap & Unduh" },
   { key: "manajemen", icon: "🗂️", label: "Manajemen Data", adminOnly: true },
 ];
+const MOBILE_MENU: Tab[] = ["beranda", "laporan", "statistik"];
 
 /** Tombol "Aktifkan notifikasi" untuk pemantau (sekali saja, lalu aktif). */
 function NotificationButton({ session }: { session: SessionUser }) {
@@ -294,13 +295,15 @@ export default function AdminApp({ session, onLogout }: Props) {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 pb-24 sm:px-6 lg:pb-5">
           {page}
         </main>
 
-        {/* Bottom nav (HP) */}
+        {/* Navigasi inti di bawah; fitur tambahan tetap tersedia melalui menu hamburger. */}
         <nav className="dash-bottom-nav safe-bottom fixed inset-x-0 bottom-0 z-10 flex overflow-x-auto border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
-          {menu.map((m) => (
+          {menu
+            .filter((m) => MOBILE_MENU.includes(m.key))
+            .map((m) => (
             <button
               key={m.key}
               onClick={() => setTab(m.key)}
@@ -310,11 +313,10 @@ export default function AdminApp({ session, onLogout }: Props) {
               }
             >
               <span className="text-lg leading-none">{m.icon}</span>
-              <span className="max-w-full truncate px-0.5">{m.label}</span>
+              <span className="whitespace-nowrap px-0.5">{m.label}</span>
             </button>
-          ))}
+            ))}
         </nav>
-        <div className="h-16 lg:hidden" />
       </div>
 
       <ReportPopup

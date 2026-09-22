@@ -10,6 +10,10 @@
 //   { "action": "buat",  nama, jabatan, kode_login, pin,
 //     unit_key?, wilayah_key?, access_level? }
 //   { "action": "reset_pin", kode_login, pin_baru }
+//   { "action": "update", regu_id, nama?, jabatan?,
+//     kode_login_baru?, pin_baru?, status_aktif? }
+//   { "action": "hapus",  regu_id }  → hapus permanen personel
+//     (akun auth + baris regu + laporan/foto terkait, cascade)
 //
 // Keamanan: pemanggil wajib membawa JWT admin penuh (is_admin()),
 // diverifikasi di sisi server lewat query admin_users — token user
@@ -39,7 +43,22 @@ interface ResetPayload {
   pin_baru: string;
 }
 
-type Payload = BuatPayload | ResetPayload;
+interface UpdatePayload {
+  action: "update";
+  regu_id: string;
+  nama?: string;
+  jabatan?: string;
+  kode_login_baru?: string;
+  pin_baru?: string;
+  status_aktif?: boolean;
+}
+
+interface HapusPayload {
+  action: "hapus";
+  regu_id: string;
+}
+
+type Payload = BuatPayload | ResetPayload | UpdatePayload | HapusPayload;
 
 /** Kunci service-role, mendukung model API key lama & baru. */
 function resolveAdminKey(): string {
@@ -269,6 +288,204 @@ Deno.serve(async (req) => {
       if (updErr) return json({ error: updErr.message }, 500);
 
       return json({ ok: true, kode_login: kode, pin: pinBaru });
+    }
+
+    // ===== EDIT DATA PERSONEL (nama, jabatan, username/kode, PIN) =====
+    if (payload.action === "update") {
+      const reguId = (payload.regu_id ?? "").trim();
+      if (!reguId) return json({ error: "regu_id wajib diisi." }, 400);
+
+      const { data: regu, error: reguErr } = await admin
+        .from("regu")
+        .select("id, nama_regu, jabatan, kode_login, auth_user_id")
+        .eq("id", reguId)
+        .maybeSingle();
+      if (reguErr) return json({ error: reguErr.message }, 500);
+      if (!regu) return json({ error: "Personel tidak ditemukan." }, 404);
+
+      // --- Validasi input baru ---
+      const nama = (payload.nama ?? "").trim();
+      if (!nama) return json({ error: "Nama wajib diisi." }, 400);
+
+      const jabatan = (payload.jabatan ?? "").trim() || null;
+
+      const kodeBaru = (payload.kode_login_baru ?? "")
+        .trim()
+        .toLowerCase();
+      if (kodeBaru && kodeBaru !== regu.kode_login) {
+        // Username baru harus unik di antara personel lain.
+        const { data: dup } = await admin
+          .from("regu")
+          .select("id")
+          .eq("kode_login", kodeBaru)
+          .neq("id", regu.id)
+          .maybeSingle();
+        if (dup) {
+          return json(
+            { error: `Kode login "${kodeBaru}" sudah dipakai personel lain.` },
+            409,
+          );
+        }
+      }
+
+      const pinBaru = (payload.pin_baru ?? "").trim();
+      if (pinBaru && pinBaru.length < 4) {
+        return json({ error: "PIN minimal 4 karakter." }, 400);
+      }
+
+      // --- Cari akun auth (untuk sinkron email/username & password) ---
+      let authUserId = regu.auth_user_id as string | null;
+      if (!authUserId) {
+        const emailLama = `${regu.kode_login}@regu.siplap.id`;
+        const { data: users } = await admin.auth.admin.listUsers();
+        const match = users?.users?.find(
+          (u) => (u.email ?? "").toLowerCase() === emailLama,
+        );
+        if (match) {
+          authUserId = match.id;
+          await admin
+            .from("regu")
+            .update({ auth_user_id: authUserId })
+            .eq("id", regu.id);
+        }
+      }
+
+      // --- Cegah duplikat email auth bila username diganti ---
+      if (
+        kodeBaru &&
+        kodeBaru !== regu.kode_login &&
+        authUserId
+      ) {
+        const emailBaru = `${kodeBaru}@regu.siplap.id`;
+        const { data: users } = await admin.auth.admin.listUsers();
+        const dipakai = users?.users?.some(
+          (u) =>
+            (u.email ?? "").toLowerCase() === emailBaru &&
+            u.id !== authUserId,
+        );
+        if (dipakai) {
+          return json(
+            { error: `Username "${kodeBaru}" tidak bisa dipakai (email auth sudah terdaftar).` },
+            409,
+          );
+        }
+      }
+
+      // --- Update tabel regu ---
+      const { error: updErr } = await admin
+        .from("regu")
+        .update({
+          nama_regu: nama,
+          jabatan,
+          ...(kodeBaru && kodeBaru !== regu.kode_login
+            ? { kode_login: kodeBaru }
+            : {}),
+          ...(typeof payload.status_aktif === "boolean"
+            ? { status_aktif: payload.status_aktif }
+            : {}),
+        })
+        .eq("id", regu.id);
+      if (updErr) return json({ error: updErr.message }, 500);
+
+      // --- Sinkron akun auth ---
+      const authAttrs: {
+        password?: string;
+        email?: string;
+        user_metadata?: Record<string, unknown>;
+      } = {};
+      if (pinBaru) authAttrs.password = pinBaru;
+      if (kodeBaru && kodeBaru !== regu.kode_login) {
+        authAttrs.email = `${kodeBaru}@regu.siplap.id`;
+        authAttrs.user_metadata = { username: kodeBaru }; // metadata username ikut sinkron
+      }
+      if (authUserId && Object.keys(authAttrs).length > 0) {
+        const { error: authErr } = await admin.auth.admin.updateUserById(
+          authUserId,
+          authAttrs,
+        );
+        if (authErr) {
+          return json(
+            {
+              error:
+                `Data regu tersimpan, tapi gagal sinkron akun auth: ${authErr.message}. ` +
+                `Login personel mungkin masih memakai username/PIN lama.`,
+            },
+            500,
+          );
+        }
+      }
+
+      return json({
+        ok: true,
+        regu_id: regu.id,
+        kode_login: kodeBaru || regu.kode_login,
+        ...(pinBaru ? { pin: pinBaru } : {}),
+      });
+    }
+
+    // ===== HAPUS PERMANEN PERSONEL =====
+    if (payload.action === "hapus") {
+      const reguId = (payload.regu_id ?? "").trim();
+      if (!reguId) return json({ error: "regu_id wajib diisi." }, 400);
+
+      const { data: regu, error: reguErr } = await admin
+        .from("regu")
+        .select("id, kode_login, auth_user_id")
+        .eq("id", reguId)
+        .maybeSingle();
+      if (reguErr) return json({ error: reguErr.message }, 500);
+      if (!regu) return json({ error: "Personel tidak ditemukan." }, 404);
+
+      // Cari akun auth bila tautan belum ada.
+      let authUserId = regu.auth_user_id as string | null;
+      if (!authUserId) {
+        const email = `${regu.kode_login}@regu.siplap.id`;
+        const { data: users } = await admin.auth.admin.listUsers();
+        const match = users?.users?.find(
+          (u) => (u.email ?? "").toLowerCase() === email,
+        );
+        if (match) authUserId = match.id;
+      }
+
+      // 1) Hapus foto laporan personel ini dari storage (sebelum row
+      //    regu hilang, supaya path-nya masih bisa dihitung).
+      const { data: fotoPaths } = await admin
+        .from("laporan_foto")
+        .select("storage_path")
+        .eq("laporan.regu_id", regu.id);
+      if (fotoPaths && fotoPaths.length > 0) {
+        await admin.storage
+          .from("laporan-foto")
+          .remove(fotoPaths.map((f) => f.storage_path as string));
+      }
+
+      // 2) Hapus baris regu — laporan, foto row, push_subscriptions
+      //    ikut terhapus otomatis (FK on delete cascade).
+      const { error: delErr } = await admin
+        .from("regu")
+        .delete()
+        .eq("id", regu.id);
+      if (delErr) return json({ error: delErr.message }, 500);
+
+      // 3) Hapus akun auth terakhir (setelah regu sukses dihapus).
+      if (authUserId) {
+        const { error: delUserErr } = await admin.auth.admin.deleteUser(
+          authUserId,
+        );
+        if (delUserErr) {
+          return json(
+            {
+              ok: true,
+              warning:
+                `Personel terhapus, tapi akun auth gagal dihapus: ${delUserErr.message}. ` +
+                `Kode login ${regu.kode_login} sebaiknya tidak dipakai ulang.`,
+            },
+            200,
+          );
+        }
+      }
+
+      return json({ ok: true, regu_id: regu.id });
     }
 
     return json({ error: `Aksi tidak dikenal.` }, 400);

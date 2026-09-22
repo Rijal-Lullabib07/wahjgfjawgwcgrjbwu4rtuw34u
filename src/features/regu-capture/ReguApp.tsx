@@ -142,7 +142,7 @@ export default function ReguApp({ session, onLogout }: Props) {
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="regu-app flex min-h-dvh flex-col">
       <header className="safe-top sticky top-0 z-10 border-b border-white/10 bg-[#0b1428]/90 px-4 py-3 shadow-[0_12px_40px_rgba(2,12,25,0.28)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -165,7 +165,7 @@ export default function ReguApp({ session, onLogout }: Props) {
         </div>
       </header>
 
-      <main className="safe-bottom flex-1 pb-24">
+      <main className="safe-bottom flex-1 pb-[7.5rem]">
         {/* Status pelacakan posisi — kecil, tidak mengganggu. */}
         {(posisi.antrian > 0 || posisi.error) && (
           <div className="mx-4 mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300 sm:mx-6">
@@ -206,7 +206,7 @@ export default function ReguApp({ session, onLogout }: Props) {
         )}
       </main>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-10 grid grid-cols-3 border-t border-navy-700/70 bg-navy-950/95 shadow-[0_-12px_32px_rgba(2,12,25,0.35)] backdrop-blur-xl">
+      <nav className="regu-bottom-nav safe-bottom fixed inset-x-0 bottom-0 z-50 grid grid-cols-3 border-t border-navy-700/70 bg-navy-950/95 shadow-[0_-12px_32px_rgba(2,12,25,0.35)] backdrop-blur-xl">
         {navItems.map(([key, icon, label, badge]) => (
           <button
             key={key}
