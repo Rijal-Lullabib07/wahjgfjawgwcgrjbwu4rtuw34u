@@ -100,6 +100,7 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
           l.regu?.wilayah_key ?? "",
           l.perihal,
           l.catatan,
+          l.nrp_pelapor ?? "",
           l.jenis?.nama ?? "",
           l.kategori,
           l.tahap,
@@ -346,6 +347,7 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
                     {l.regu ? reguDisplayName(l.regu).split(" — ")[0] : l.regu_id}
                   </div>
                   <div className="text-xs text-slate-500">
+                    {l.nrp_pelapor ? `NRP ${l.nrp_pelapor} · ` : ""}
                     {l.regu?.wilayah_key
                       ? `Polsek ${l.regu.wilayah_key}`
                       : (l.regu?.unit_key ?? "")}
@@ -525,6 +527,11 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
               <b className="text-slate-700">
                 {preview.regu ? reguDisplayName(preview.regu) : preview.regu_id}
               </b>
+              {preview.nrp_pelapor && (
+                <span className="ml-2">
+                  · NRP <b className="text-slate-700">{preview.nrp_pelapor}</b>
+                </span>
+              )}
             </div>
             <div className="mt-1 text-xs text-slate-500">
               <PlaceBadge lat={preview.latitude} lng={preview.longitude} />

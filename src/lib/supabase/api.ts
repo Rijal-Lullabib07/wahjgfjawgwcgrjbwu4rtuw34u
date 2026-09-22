@@ -288,6 +288,7 @@ export async function submitLaporan(
       tahap: q.tahap,
       parent_id: q.parentId ?? null,
       perihal: q.perihal ?? null,
+      nrp_pelapor: q.nrp ?? null,
     })
     .select("id")
     .single();

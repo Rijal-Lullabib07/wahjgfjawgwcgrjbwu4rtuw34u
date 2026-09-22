@@ -18,6 +18,8 @@ export interface LaporanFormResult {
   parentId: string | null;
   perihal: string;
   isi: string;
+  /** NRP pelapor yang diinput — pemantau memakai ini mengenali pelapor. */
+  nrp: string;
   /** Teks laporan resmi hasil perakitan otomatis (disimpan sebagai catatan). */
   teksLaporan: string;
   fotos: Array<{ blob: Blob; lat: number | null; lng: number | null; ts: Date }>;
@@ -101,6 +103,8 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   const [jenisOpen, setJenisOpen] = useState(false);
   const [perihal, setPerihal] = useState("");
   const [isi, setIsi] = useState("");
+  /** NRP pelapor — diingat di localStorage agar tidak ketik ulang tiap laporan. */
+  const [nrp, setNrp] = useState(() => localStorage.getItem("siplap_nrp") ?? "");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -301,6 +305,14 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
   const handleSubmit = async () => {
     if (sending) return;
+    if (!nrp.trim()) {
+      setError("NRP wajib diisi — pemantau memakainya mengenali pelapor.");
+      return;
+    }
+    if (!/^[0-9]{6,20}$/.test(nrp.trim())) {
+      setError("NRP harus angka 6–20 digit tanpa spasi/huruf.");
+      return;
+    }
     if (!perihal.trim()) {
       setError("Perihal laporan wajib diisi.");
       return;
@@ -328,6 +340,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         parentId: parent?.id ?? null,
         perihal: perihal.trim(),
         isi: isi.trim(),
+        nrp: nrp.trim(),
         teksLaporan,
         fotos: shots.map((s) => ({
           blob: s.blob,
@@ -489,6 +502,31 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
       {/* ---------- 3) Kotak laporan terformat ---------- */}
       <section className="card space-y-4">
+        <div>
+          <label className="eyebrow" htmlFor="nrp-pelapor">
+            NRP pelapor
+          </label>
+          <input
+            id="nrp-pelapor"
+            className="input mt-2"
+            value={nrp}
+            onChange={(e) => {
+              // Hanya angka, maksimal 20 digit.
+              const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 20);
+              setNrp(v);
+              localStorage.setItem("siplap_nrp", v);
+            }}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="Tulis NRP Anda, mis. 75001234"
+            required
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            NRP disimpan di perangkat ini — cukup diisi sekali, laporan
+            berikutnya terisi otomatis.
+          </p>
+        </div>
+
         <div>
           <div className="eyebrow">Perihal laporan pada tgl {tanggal}</div>
           <div className="mono mt-2 rounded-xl border border-white/10 bg-navy-950/60 px-3 py-2 text-xs text-gold-300">
@@ -717,7 +755,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
       <button
         onClick={() => void handleSubmit()}
-        disabled={sending || !perihal.trim() || !isi.trim()}
+        disabled={sending || !perihal.trim() || !isi.trim() || !nrp.trim()}
         className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-gold-300/70 bg-gradient-to-r from-gold-400 via-amber-300 to-gold-400 px-5 py-4 text-base font-extrabold text-navy-950 shadow-[0_10px_28px_rgba(245,185,66,0.22)] transition hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-950/10 text-lg">

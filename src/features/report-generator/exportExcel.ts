@@ -18,6 +18,7 @@ export async function exportExcel(
   const rows = laporan.map((l) => ({
     Waktu: new Date(l.timestamp_kirim).toLocaleString("id-ID"),
     Pelapor: l.regu ? reguDisplayName(l.regu) : l.regu_id,
+    NRP: l.nrp_pelapor ?? "",
     Keterangan: l.catatan ?? "",
     Latitude: l.latitude ?? "",
     Longitude: l.longitude ?? "",

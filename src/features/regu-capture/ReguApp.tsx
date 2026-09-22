@@ -91,6 +91,7 @@ export default function ReguApp({ session, onLogout }: Props) {
         tahap: result.tahap,
         parentId: result.parentId,
         perihal: result.perihal,
+        nrp: result.nrp,
         fotos: result.fotos.map((f, i) => ({
           blobKey: localId + ":" + (i + 1),
           urutan: (i + 1) as 1 | 2 | 3 | 4,
