@@ -314,6 +314,8 @@ export default function ManagementScreen() {
   const [pemantau, setPemantau] = useState<AdminRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** Kata kunci pencarian — menyaring daftar personel & pemantau sekaligus. */
+  const [cari, setCari] = useState("");
   const [adding, setAdding] = useState(false);
   const [pinBaru, setPinBaru] = useState<{
     kode: string;
@@ -503,6 +505,31 @@ export default function ManagementScreen() {
     }
   };
 
+  // ===== Filter pencarian (client-side, tanpa query tambahan ke Supabase) =====
+  const q = cari.trim().toLowerCase();
+  const pelaporTersaring = q
+    ? (pelapor ?? []).filter((r) =>
+        [
+          r.nama_regu,
+          r.jabatan ?? "",
+          r.kode_login,
+          r.wilayah_key ?? "",
+          r.unit_key ?? "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      )
+    : (pelapor ?? []);
+  const pemantauTersaring = q
+    ? (pemantau ?? []).filter((r) =>
+        [r.nama, r.role, r.username ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      )
+    : (pemantau ?? []);
+
   const toggleAdmin = async (row: AdminRow) => {
     setBusyId(row.id);
     setError(null);
@@ -558,6 +585,40 @@ export default function ManagementScreen() {
           Kelola akun personel lapangan & pemantau. Hapus permanen hanya untuk
           personel; untuk pemantau gunakan status nonaktif.
         </p>
+
+        {/* ===== Pencarian personel ===== */}
+        <div className="relative mt-4 max-w-md">
+          <span
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"
+            aria-hidden
+          >
+            🔍
+          </span>
+          <input
+            className="input pl-9 pr-9"
+            type="search"
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama, jabatan, kode login…"
+            aria-label="Cari personel"
+          />
+          {cari && (
+            <button
+              type="button"
+              onClick={() => setCari("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full px-1.5 text-sm leading-none text-slate-400 hover:text-slate-600"
+              title="Hapus pencarian"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        {q && (
+          <p className="mt-2 text-xs text-slate-500">
+            {pelaporTersaring.length + pemantauTersaring.length} hasil untuk{" "}
+            <b className="text-slate-700">“{cari.trim()}”</b>
+          </p>
+        )}
       </section>
 
       {error && (
@@ -662,11 +723,13 @@ export default function ManagementScreen() {
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h3 className="font-bold text-slate-800">Personel lapangan</h3>
           <span className="badge bg-sky-50 text-sky-700">
-            {pelapor?.length ?? "…"} akun
+            {q
+              ? `${pelaporTersaring.length}/${pelapor?.length ?? 0}`
+              : (pelapor?.length ?? "…")} akun
           </span>
         </div>
         <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">
-          {(pelapor ?? []).map((row) => (
+          {pelaporTersaring.map((row) => (
             <div
               key={row.id}
               className="flex items-center justify-between gap-3 px-4 py-3"
@@ -714,9 +777,11 @@ export default function ManagementScreen() {
               </div>
             </div>
           ))}
-          {pelapor?.length === 0 && (
+          {pelaporTersaring.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
-              Belum ada akun pelapor.
+              {q
+                ? `Tidak ada personel yang cocok dengan “${cari.trim()}”.`
+                : "Belum ada akun pelapor."}
             </div>
           )}
         </div>
@@ -727,11 +792,13 @@ export default function ManagementScreen() {
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h3 className="font-bold text-slate-800">Pemantau / pimpinan</h3>
           <span className="badge bg-amber-50 text-amber-700">
-            {pemantau?.length ?? "…"} akun
+            {q
+              ? `${pemantauTersaring.length}/${pemantau?.length ?? 0}`
+              : (pemantau?.length ?? "…")} akun
           </span>
         </div>
         <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
-          {(pemantau ?? []).map((row) => (
+          {pemantauTersaring.map((row) => (
             <div
               key={row.id}
               className="flex items-center justify-between gap-3 px-4 py-3"
@@ -752,14 +819,16 @@ export default function ManagementScreen() {
               />
             </div>
           ))}
-          {pemantau === null && (
+          {pemantau === null && pemantauTersaring.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               Memuat…
             </div>
           )}
-          {pemantau?.length === 0 && (
+          {pemantau !== null && pemantauTersaring.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
-              Tidak ada data pemantau dalam cakupan Anda.
+              {q
+                ? `Tidak ada pemantau yang cocok dengan “${cari.trim()}”.`
+                : "Tidak ada data pemantau dalam cakupan Anda."}
             </div>
           )}
         </div>
