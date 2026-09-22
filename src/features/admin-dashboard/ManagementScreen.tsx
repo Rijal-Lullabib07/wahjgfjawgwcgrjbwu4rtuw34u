@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase/client";
 
 /** Panggil Edge Function manage-personel dengan sesi admin saat ini. */
@@ -48,6 +48,8 @@ interface ReguRow {
   status_aktif: boolean;
   unit_key: string | null;
   wilayah_key: string | null;
+  app_version: string | null;
+  versi_dikirim_pada: string | null;
 }
 
 interface AdminRow {
@@ -144,6 +146,65 @@ function PinReveal({
         Sudah saya catat
       </button>
     </div>
+  );
+}
+
+/**
+ * Status versi app personel: bandingkan versi yang dilaporkan device-nya
+ * dengan versi build TERBARU yang diketahui server.
+ *
+ * `versiTerbaru` = versi build dari deployment terkini — dihitung klien
+ * sebagai MAX(app_version) semua personel. Personel yang app-nya dibuka
+ * setelah deploy terakhir pasti melaporkan versi itu; sisanya "versi lama".
+ */
+function StatusVersiBadge({
+  row,
+  versiTerbaru,
+}: {
+  row: Pick<ReguRow, "app_version" | "versi_dikirim_pada" | "status_aktif">;
+  versiTerbaru: string | null;
+}) {
+  if (!row.app_version || !row.versi_dikirim_pada) {
+    return (
+      <span
+        className="badge bg-slate-100 text-slate-400"
+        title="App belum pernah melaporkan versi — belum buka app sejak fitur ini aktif"
+      >
+        ? belum lapor
+      </span>
+    );
+  }
+  const samaDenganTerbaru =
+    versiTerbaru !== null && row.app_version === versiTerbaru;
+  const umurJam =
+    (Date.now() - new Date(row.versi_dikirim_pada).getTime()) / 3_600_000;
+  // Lebih dari 48 jam tidak melaporkan diri → app jarang/ tidak dibuka.
+  const tidakAktif = umurJam > 48;
+
+  if (!samaDenganTerbaru) {
+    return (
+      <span
+        className="badge bg-red-50 text-red-600"
+        title={`Versi device: ${row.app_version}\nTerbaru: ${versiTerbaru ?? "?"}\nLapor terakhir: ${new Date(row.versi_dikirim_pada).toLocaleString("id-ID")}`}
+      >
+        ⬆ versi lama
+      </span>
+    );
+  }
+  if (tidakAktif) {
+    return (
+      <span
+        className="badge bg-amber-50 text-amber-700"
+        title={`Terbaru, tapi app tidak dibuka ${Math.floor(umurJam / 24)} hari`}
+      >
+        ~ jarang dibuka
+      </span>
+    );
+  }
+  return (
+    <span className="badge bg-emerald-50 text-emerald-700" title="App versi terbaru">
+      ✓ terbaru
+    </span>
   );
 }
 
@@ -324,6 +385,25 @@ export default function ManagementScreen() {
   } | null>(null);
   /** Personel yang sedang diedit di modal. */
   const [editRow, setEditRow] = useState<ReguRow | null>(null);
+  /** Versi build terbaru yang diketahui = yang paling banyak dilaporkan personel. */
+  const versiTerbaru = useMemo<string | null>(() => {
+    const hitung = new Map<string, number>();
+    for (const r of pelapor ?? []) {
+      if (r.app_version) hitung.set(r.app_version, (hitung.get(r.app_version) ?? 0) + 1);
+    }
+    if (hitung.size === 0) return null;
+    // Versi dengan laporan TERBANYAK = versi deploy terkini (yang belum
+    // update jauh lebih sedikit daripada yang sudah).
+    let best: string | null = null;
+    let bestCount = -1;
+    for (const [v, c] of hitung) {
+      if (c > bestCount) {
+        best = v;
+        bestCount = c;
+      }
+    }
+    return best;
+  }, [pelapor]);
   const [form, setForm] = useState({
     nama: "",
     jabatan: "",
@@ -342,7 +422,7 @@ export default function ManagementScreen() {
           client
             .from("regu")
             .select(
-              "id, nama_regu, jabatan, kode_login, status_aktif, unit_key, wilayah_key",
+              "id, nama_regu, jabatan, kode_login, status_aktif, unit_key, wilayah_key, app_version, versi_dikirim_pada",
             )
             .order("nama_regu"),
           client
@@ -718,6 +798,29 @@ export default function ManagementScreen() {
         </div>
       </section>
 
+      {/* Ringkasan update versi */}
+      {pelapor !== null && pelapor.length > 0 && (
+        <section className="card">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+            <span className="font-bold text-slate-700">Status update app:</span>
+            <span className="text-emerald-700">
+              ✓ {pelapor.filter((r) => r.app_version && r.app_version === versiTerbaru).length} versi terbaru
+            </span>
+            <span className="text-red-600">
+              ⬆ {pelapor.filter((r) => r.app_version && versiTerbaru && r.app_version !== versiTerbaru).length} perlu update
+            </span>
+            <span className="text-slate-400">
+              ? {pelapor.filter((r) => !r.app_version).length} belum lapor
+            </span>
+            {versiTerbaru && (
+              <span className="ml-auto font-mono text-[11px] text-slate-400">
+                build terbaru: {versiTerbaru}
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ===== Daftar pelapor ===== */}
       <section className="card p-0">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -735,8 +838,11 @@ export default function ManagementScreen() {
               className="flex items-center justify-between gap-3 px-4 py-3"
             >
               <div className="min-w-0">
-                <div className="truncate text-sm font-bold text-slate-800">
-                  {row.nama_regu}
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-bold text-slate-800">
+                    {row.nama_regu}
+                  </span>
+                  <StatusVersiBadge row={row} versiTerbaru={versiTerbaru} />
                 </div>
                 <div className="truncate text-xs text-slate-500">
                   {row.jabatan ? `${row.jabatan} · ` : ""}

@@ -22,6 +22,8 @@
  * Referensi: https://vite-pwa-org.netlify.app/guide/service-worker.html
  */
 
+import { laporkanVersiApp } from '../supabase/api';
+
 type Listener = (sudahSiap: boolean) => void;
 
 let registration: ServiceWorkerRegistration | null = null;
@@ -142,6 +144,25 @@ function amatiRegistration(reg: ServiceWorkerRegistration): void {
   });
 }
 
+// ---------- Heartbeat versi (untuk dashboard "siapa yang belum update") ----------
+
+/**
+ * Laporkan versi build app ke server (tabel regu) bila user adalah pelapor.
+ * Dipanggil dari initAppUpdate pada momen alami: app dibuka, kembali ke
+ * foreground, dan online kembali. Gagal diam-diam.
+ */
+function kirimHeartbeatVersi(): void {
+  try {
+    const sesi = JSON.parse(
+      localStorage.getItem('siplap_session_v1') ?? 'null',
+    ) as { role?: string; reguId?: string } | null;
+    if (!sesi || sesi.role !== 'regu' || !sesi.reguId) return;
+    void laporkanVersiApp(sesi.reguId, __BUILD_TIME__);
+  } catch {
+    /* sesi tidak valid — abaikan */
+  }
+}
+
 /**
  * Pasang semua mekanisme update. Dipanggil sekali dari App useEffect.
  * Aman dipanggil di environment tanpa SW (browser lama).
@@ -151,15 +172,27 @@ export function initAppUpdate(): void {
 
   void navigator.serviceWorker.ready.then(amatiRegistration);
 
+  // Heartbeat versi: sekali saat app dibuka + tiap trigger update cek.
+  // (Ditandai di trigger visibility/online agar tidak spam; server hanya
+  // menyimpan versi + waktu terakhir, jadi lebih sering juga tidak masalah.)
+  window.addEventListener('load', kirimHeartbeatVersi);
+  kirimHeartbeatVersi();
+
   // 1) Cek saat app dibuka.
   window.addEventListener('load', () => void cekUpdateSekarang());
 
   // 2) Cek setiap app kembali ke foreground (dari standby!) — inilah kasus
   //    utama user yang tidak pernah "memuat ulang" app-nya.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void cekUpdateSekarang();
+    if (document.visibilityState === 'visible') {
+      void cekUpdateSekarang();
+      kirimHeartbeatVersi();
+    }
   });
 
   // 3) Koneksi kembali online — momen alami untuk sinkron versi.
-  window.addEventListener('online', () => void cekUpdateSekarang());
+  window.addEventListener('online', () => {
+    void cekUpdateSekarang();
+    kirimHeartbeatVersi();
+  });
 }

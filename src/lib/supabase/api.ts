@@ -573,6 +573,28 @@ export function subscribePosisi(cb: () => void): () => void {
   };
 }
 
+// ---------- Heartbeat versi app pelapor ----------
+
+/**
+ * Kirim versi build app pelapor ke tabel `regu` (heartbeat).
+ * Dipanggil saat app dibuka, kembali ke foreground, dan tiap kirim
+ * posisi — supaya dashboard tahu personel mana yang app-nya belum
+ * di-update (badge "Versi lama" di Manajemen Personel).
+ * Gagal diam-diam: heartbeat tidak boleh mengganggu pemakaian app.
+ */
+export async function laporkanVersiApp(reguId: string, versi: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client
+    .from("regu")
+    .update({
+      app_version: versi,
+      versi_dikirim_pada: new Date().toISOString(),
+    })
+    .eq("id", reguId);
+  // RLS membatasi update ke baris sendiri — cukup diam bila gagal.
+  if (error) console.debug("laporkanVersiApp:", error.message);
+}
+
 function wilayahLabel(key: string): string {
   const map: Record<string, string> = {
     kota: "Purwakarta Kota",
