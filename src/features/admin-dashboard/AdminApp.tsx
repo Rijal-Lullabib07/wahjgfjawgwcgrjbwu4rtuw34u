@@ -31,6 +31,7 @@ type Tab =
   | "peta"
   | "rekap"
   | "manajemen";
+type DashboardTheme = "dark" | "light";
 
 const MENU: Array<{ key: Tab; icon: string; label: string; adminOnly?: boolean }> = [
   { key: "beranda", icon: "🏠", label: "Beranda" },
@@ -94,6 +95,10 @@ function NotificationButton({ session }: { session: SessionUser }) {
  */
 export default function AdminApp({ session, onLogout }: Props) {
   const [tab, setTab] = useState<Tab>("beranda");
+  const [theme, setTheme] = useState<DashboardTheme>(() => {
+    const saved = localStorage.getItem("siplap-admin-theme");
+    return saved === "light" ? "light" : "dark";
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [popup, setPopup] = useState<ReportPopupData | null>(null);
@@ -186,6 +191,14 @@ export default function AdminApp({ session, onLogout }: Props) {
     setTab("laporan");
   };
 
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      localStorage.setItem("siplap-admin-theme", next);
+      return next;
+    });
+  };
+
   const page = (() => {
     switch (tab) {
       case "laporan":
@@ -204,7 +217,7 @@ export default function AdminApp({ session, onLogout }: Props) {
   })();
 
   return (
-    <div className="dash flex min-h-dvh">
+    <div className={"dash dash-" + theme + " flex min-h-dvh"}>
       {/* ===== Sidebar (desktop) ===== */}
       <aside
         className={
@@ -213,7 +226,9 @@ export default function AdminApp({ session, onLogout }: Props) {
         }
       >
         <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-          <PolresLogo className="h-10 w-24 shrink-0" />
+          <div className="sidebar-logo-panel shrink-0">
+            <PolresLogo className="h-9 w-24" />
+          </div>
           <div className="min-w-0">
             <div className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-900">
               POLRES PURWAKARTA
@@ -288,6 +303,15 @@ export default function AdminApp({ session, onLogout }: Props) {
             </div>
             <div className="flex items-center gap-3">
               <NotificationButton session={session} />
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="theme-toggle rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold transition"
+                aria-label={theme === "dark" ? "Aktifkan mode terang" : "Aktifkan mode gelap"}
+                title={theme === "dark" ? "Mode terang" : "Mode gelap"}
+              >
+                {theme === "dark" ? "☀️ Terang" : "🌙 Gelap"}
+              </button>
               <span className="badge hidden bg-blue-50 text-blue-700 sm:inline-flex">
                 🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
               </span>

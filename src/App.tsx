@@ -4,6 +4,8 @@ import type { SessionUser } from './types';
 import { clearSession, loadSession, saveSession } from './lib/session';
 import { loginAdmin, loginRegu, logout } from './lib/supabase/api';
 import { installOnlineListener } from './lib/offline-sync/syncManager';
+import { initAppUpdate } from './lib/pwa/appUpdate';
+import UpdateToast from './features/pwa/UpdateToast';
 import LoginPage from './features/auth/LoginPage';
 import InstallGate from './features/auth/InstallGate';
 import SplashScreen from './features/splash/SplashScreen';
@@ -21,6 +23,10 @@ export default function App() {
   const [booting, setBooting] = useState(true);
 
   useEffect(() => installOnlineListener(), []);
+
+  // Pemantau update PWA: paksa cek sw.js saat app dibuka & tiap kembali ke
+  // foreground, lalu tampilkan toast "Versi baru tersedia" bila ada.
+  useEffect(() => initAppUpdate(), []);
 
   useEffect(() => {
     // beri waktu register SW / restore sesi
@@ -52,6 +58,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <UpdateToast />
       <Routes>
         <Route
           path="/login"

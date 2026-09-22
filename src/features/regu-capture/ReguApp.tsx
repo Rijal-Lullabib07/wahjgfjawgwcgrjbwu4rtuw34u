@@ -146,7 +146,9 @@ export default function ReguApp({ session, onLogout }: Props) {
       <header className="safe-top sticky top-0 z-10 border-b border-white/10 bg-[#0b1428]/90 px-4 py-3 shadow-[0_12px_40px_rgba(2,12,25,0.28)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <PolresLogo className="h-11 w-36 sm:h-12 sm:w-40" />
+            <div className="regu-logo-panel shrink-0">
+              <PolresLogo className="h-10 w-32 sm:h-11 sm:w-36" />
+            </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-400">
                 Pelapor lapangan

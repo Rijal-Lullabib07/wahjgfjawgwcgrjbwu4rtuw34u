@@ -281,6 +281,11 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
               </span>
             </p>
           </div>
+
+          {/* Versi build — dipakai untuk memverifikasi app sudah ke-update. */}
+          <p className="mt-4 text-center text-[11px] tracking-wide text-slate-500">
+            Versi build {__BUILD_TIME__}
+          </p>
         </div>
       </div>
     </div>

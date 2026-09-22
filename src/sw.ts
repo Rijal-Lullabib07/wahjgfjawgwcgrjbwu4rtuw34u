@@ -15,6 +15,34 @@ setCacheNameDetails({ prefix: 'siplap', suffix: 'v1' });
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
+// ---------- Update PWA: aktivasi SW baru dikendalikan tombol "Perbarui" ----------
+//
+// SW baru TIDAK otomatis aktif setelah install (registerType "prompt"): ia
+// menunggu di state `waiting` sementara toast "Versi baru tersedia" tampil di
+// halaman. Ketika user menekan tombol Perbarui, appUpdate.ts mengirim pesan
+// SKIP_WAITING ke SW yang menunggu — BARU di sini skipWaiting() dipanggil.
+// clients.claim() pada event activate membuat SW baru mengambil kendali
+// halaman yang sudah terbuka → controllerchange terpicu → halaman reload dan
+// memuat versi terbaru. Alur ini bekerja di Android maupun iOS home-screen
+// PWA tanpa install ulang / add-to-home-screen ulang.
+self.addEventListener('message', (event) => {
+  const msgEvent = event as ExtendableEvent & { data?: unknown };
+  if (msgEvent.data === 'TRIGGER_SYNC') {
+    msgEvent.waitUntil?.(syncFromSW());
+    return;
+  }
+  const pesan = msgEvent.data as { type?: string } | null | undefined;
+  if (pesan && typeof pesan === 'object' && pesan.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Setelah aktif, ambil kendali semua client yang sudah terbuka agar halaman
+// tahu versi baru sudah berjalan (memunculkan controllerchange di halaman).
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Supabase API & storage: NetworkFirst agar data segar, fallback cache saat offline
 registerRoute(
   ({ url }) => url.hostname.endsWith('.supabase.co'),
@@ -149,10 +177,4 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Pesan dari halaman: minta SW memicu sync segera (fallback iOS)
-self.addEventListener('message', (event) => {
-  const msgEvent = event as ExtendableEvent & { data?: unknown };
-  if (msgEvent.data === 'TRIGGER_SYNC') {
-    msgEvent.waitUntil?.(syncFromSW());
-  }
-});
+

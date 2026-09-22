@@ -39,6 +39,11 @@ const securityHeadersPlugin: Plugin = {
 };
 
 export default defineConfig({
+  // Tanda waktu build — disuntikkan sebagai konstanta global `__BUILD_TIME__`
+  // (dipakai di LoginPage untuk verifikasi visual "app sudah ke-update").
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC"),
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -48,7 +53,10 @@ export default defineConfig({
       strategies: "injectManifest",
       srcDir: "src",
       filename: "sw.ts",
-      registerType: "autoUpdate",
+      // "prompt" = SW baru menunggu sampai user menekan tombol Perbarui di
+      // UpdateToast (pesan SKIP_WAITING dari appUpdate.ts). "autoUpdate" salah
+      // untuk alur tombol karena SW baru langsung aktif sendiri di tengah sesi.
+      registerType: "prompt",
       injectRegister: "script-defer",
       manifest: {
         name: "SALAM PRESISI — Pelaporan Giat Polres",

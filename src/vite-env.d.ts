@@ -10,3 +10,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Tanda waktu build, disuntikkan lewat `define` di vite.config.ts. */
+declare const __BUILD_TIME__: string;

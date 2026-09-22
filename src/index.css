@@ -795,6 +795,39 @@ select {
   height: 100%;
   width: 100%;
 }
+.polres-logo {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+}
+.polres-logo-image {
+  display: block;
+  max-width: 100%;
+}
+.sidebar-logo-panel,
+.regu-logo-panel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(245, 185, 66, 0.25);
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, rgba(245, 185, 66, 0.1), rgba(8, 33, 60, 0.35));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 20px rgba(2, 12, 25, 0.18);
+}
+.sidebar-logo-panel {
+  min-width: 7rem;
+  padding: 0.35rem 0.45rem;
+}
+.regu-logo-panel {
+  min-width: 8.5rem;
+  padding: 0.35rem 0.55rem;
+}
+.dash-light .sidebar-logo-panel {
+  border-color: rgba(31, 77, 133, 0.2);
+  background: linear-gradient(135deg, #fff8e5, #edf5fd);
+  box-shadow: 0 6px 16px rgba(15, 42, 72, 0.1);
+}
 
 /* Dashboard memakai palet yang sama dengan halaman login: navy, gold, dan ice blue. */
 .dash .input {
@@ -814,6 +847,15 @@ select {
 .dash .btn-secondary:hover {
   background: rgba(31, 77, 133, 0.75);
 }
+.dash .theme-toggle {
+  border-color: rgba(127, 169, 216, 0.3);
+  background: rgba(15, 61, 110, 0.55);
+  color: #f5d889;
+}
+.dash .theme-toggle:hover {
+  border-color: rgba(245, 185, 66, 0.55);
+  background: rgba(245, 185, 66, 0.12);
+}
 .dash header .text-slate-900 {
   color: #f8fafc;
 }
@@ -829,6 +871,188 @@ select {
   border: 1px solid rgba(245, 185, 66, 0.24);
   background: #102d50;
   color: #f5d889;
+}
+.dash-light {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(31, 77, 133, 0.1), transparent 28rem),
+    #f3f6fa;
+  color: #172b46;
+}
+.dash-light aside {
+  background: linear-gradient(180deg, #0f3d6e, #08213c);
+}
+.dash-light header {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #dbe4ef;
+}
+.dash-light main .text-slate-900,
+.dash-light main .text-slate-800,
+.dash-light main .text-slate-700 {
+  color: #172b46;
+}
+.dash-light main .text-slate-600 {
+  color: #526b87;
+}
+.dash-light main .text-slate-500,
+.dash-light main .text-slate-400 {
+  color: #71859d;
+}
+.dash-light main .text-white,
+.dash-light main .text-slate-100,
+.dash-light main .text-slate-200,
+.dash-light main .text-slate-300 {
+  color: #253b56;
+}
+.dash-light main .placeholder\:text-slate-400::placeholder {
+  color: #8ba0b7;
+}
+.dash-light main .text-sky-300,
+.dash-light main .text-sky-400,
+.dash-light main .text-cyan-300 {
+  color: #1769aa;
+}
+.dash-light main .text-emerald-300,
+.dash-light main .text-emerald-400 {
+  color: #087f5b;
+}
+.dash-light main .text-amber-300,
+.dash-light main .text-amber-400 {
+  color: #a15c00;
+}
+.dash-light main .text-red-300,
+.dash-light main .text-red-400 {
+  color: #b42318;
+}
+.dash-light main .text-blue-600,
+.dash-light main .text-blue-700 {
+  color: #1f4d85;
+}
+.dash-light main .bg-sky-500\/15,
+.dash-light main .bg-emerald-500\/15,
+.dash-light main .bg-amber-500\/15,
+.dash-light main .bg-red-500\/15 {
+  border: 1px solid currentColor;
+  background-color: transparent;
+}
+.dash-light main .bg-red-500\/10,
+.dash-light main .bg-amber-500\/10,
+.dash-light main .bg-emerald-500\/10 {
+  background-color: color-mix(in srgb, currentColor 8%, white);
+}
+.dash-light main .btn-primary {
+  color: #08213c;
+}
+.dash-light main select option {
+  background: #fff;
+  color: #172b46;
+}
+.dash-light .card {
+  border-color: #dbe4ef;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 42, 72, 0.07);
+}
+.dash-light .dash-page-heading {
+  border-color: #c5d9ef;
+  background: linear-gradient(110deg, #eaf3fc, #fff);
+}
+.dash-light .dash-page-heading::after {
+  background: rgba(31, 77, 133, 0.09);
+}
+.dash-light .bg-white,
+.dash-light .bg-white\/95 {
+  background-color: rgba(255, 255, 255, 0.95);
+}
+.dash-light .bg-slate-50 {
+  background-color: #f8fafc;
+}
+.dash-light .bg-slate-100 {
+  background-color: #eef3f8;
+}
+.dash-light .border-slate-200,
+.dash-light .border-slate-300,
+.dash-light .border-slate-100 {
+  border-color: #dbe4ef;
+}
+.dash-light .theme-toggle {
+  border-color: #c5d9ef;
+  background: #edf5fd;
+  color: #0f3d6e;
+}
+.dash-light .theme-toggle:hover {
+  background: #dcecfb;
+}
+.dash-light table tbody tr {
+  border-color: #edf2f7;
+}
+.dash-light table tbody tr:hover {
+  background: #f8fafc;
+}
+.dash-light .wilayah-value,
+.dash-light .stat-vbar-value {
+  border-color: #dbe4ef;
+  background: #f8fbff;
+  color: #0f3d6e;
+}
+.dash-light .stat-vbar-label,
+.dash-light .trend-label {
+  color: #526b87;
+}
+.dash-light .trend-grid-line,
+.dash-light .stat-vbar-track,
+.dash-light .wilayah-bar-track {
+  border-color: #dbe4ef;
+}
+.dash-light .dash-bottom-nav {
+  border-color: #dbe4ef;
+  background: rgba(255, 255, 255, 0.96);
+}
+.dash-light .dash-bottom-nav button:not(.text-blue-600) {
+  color: #71859d;
+}
+.dash-light header {
+  color: #172b46;
+}
+.dash-light header .text-slate-900,
+.dash-light header .text-slate-800,
+.dash-light header .text-slate-700 {
+  color: #172b46;
+}
+.dash-light header .text-slate-500,
+.dash-light header .text-slate-400 {
+  color: #526b87;
+}
+.dash-light header .bg-blue-50 {
+  background: #edf5fd;
+}
+.dash-light header .text-blue-700,
+.dash-light header .text-blue-600 {
+  color: #1f4d85;
+}
+.dash-light header button.border-slate-200 {
+  border-color: #c5d9ef;
+  background: #f8fbff;
+  color: #1f4d85;
+}
+.dash-light header button.border-slate-200:hover {
+  background: #edf5fd;
+}
+.dash-light main .card h1,
+.dash-light main .card h2,
+.dash-light main .card h3,
+.dash-light main .card strong,
+.dash-light main .card b {
+  color: #172b46;
+}
+.dash-light main input,
+.dash-light main select,
+.dash-light main textarea {
+  border-color: #c5d9ef;
+  background: #fff;
+  color: #172b46;
+}
+.dash-light main input::placeholder,
+.dash-light main textarea::placeholder {
+  color: #8ba0b7;
 }
 .dash-bottom-nav {
   border-color: rgba(127, 169, 216, 0.22);
