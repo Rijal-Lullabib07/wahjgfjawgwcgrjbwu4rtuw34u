@@ -1,103 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PolresLogo from "../../components/PolresLogo";
+import { ConnectionBadge, InstallBanner, PasswordInput, RoleTabs } from "./LoginParts";
 
 interface Props {
   onLoginRegu: (kode: string, pin: string) => Promise<void>;
   onLoginAdmin: (email: string, password: string) => Promise<void>;
 }
-
 type Tab = "regu" | "admin";
 
-/** Ilustrasi hero: kartu laporan mengambang di atas gelombang, foto giat di layar. */
-function LoginHero() {
-  return (
-    <div className="relative mx-auto w-full max-w-[420px]">
-      {/* Glow latar */}
-      <div className="absolute left-1/2 top-1/2 -z-10 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold-400/10 blur-3xl" />
-      <div className="absolute -right-6 -top-6 -z-10 h-40 w-40 rounded-full bg-navy-500/20 blur-2xl" />
-
-      {/* Kartu utama: preview laporan */}
-      <div className="anim-float relative mx-auto w-64 rotate-[-4deg] rounded-3xl border border-navy-600/70 bg-gradient-to-b from-navy-800 to-navy-900 p-4 shadow-2xl shadow-navy-950/80">
-        {/* Header kartu */}
-        <div className="mb-3 flex min-w-0 items-center gap-2">
-          <PolresLogo className="h-9 w-28 shrink-0" />
-          <div className="min-w-0">
-            <div className="text-[11px] font-bold tracking-wide text-white">
-              SALAM PRESISI
-            </div>
-            <div className="text-[9px] text-slate-400">
-              Laporan Giat Pelapor 05
-            </div>
-          </div>
-          <span className="anim-pulse-dot ml-auto inline-block h-2 w-2 rounded-full bg-emerald-400" />
-        </div>
-
-        {/* "Foto" giat: ilustrasi petugas di lapangan */}
-        <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-sky-700 via-navy-600 to-navy-800">
-          {/* Langit + matahari */}
-          <div className="absolute right-4 top-3 h-8 w-8 rounded-full bg-gold-400/90 blur-[1px]" />
-          {/* Awan */}
-          <div className="absolute left-5 top-5 h-2.5 w-14 rounded-full bg-white/25" />
-          <div className="absolute left-10 top-9 h-2 w-10 rounded-full bg-white/15" />
-          {/* Jalan */}
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-b from-slate-500 to-slate-600" />
-          <div className="absolute bottom-8 left-1/2 h-1 w-10 -translate-x-1/2 rotate-90 bg-white/30" />
-          {/* Petugas melambai (ilustrasi sederhana) */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-            <div className="mx-auto h-7 w-7 rounded-full bg-slate-200" />
-            <div className="mx-auto mt-0.5 h-10 w-9 rounded-t-xl bg-navy-900" />
-            <div className="absolute -top-3 left-8 h-8 w-1.5 rotate-[30deg] rounded-full bg-slate-200" />
-          </div>
-          {/* Watermark GPS */}
-          <div className="absolute inset-x-2 bottom-2 rounded-lg bg-black/55 px-2 py-1 font-mono text-[8px] leading-tight text-white">
-            📍 -6.91472, 107.38041 · 14:02 WIB · SALAM PRESISI
-          </div>
-        </div>
-
-        <div className="mt-3 text-right text-[9px] text-slate-400">
-          Pelaporan tersedia 24 jam
-        </div>
-      </div>
-
-      {/* Kartu sekunder: statistik */}
-      <div className="anim-float-soft absolute -left-2 top-10 w-36 rotate-[5deg] rounded-2xl border border-navy-600/70 bg-navy-800/95 p-3 shadow-xl backdrop-blur sm:-left-8">
-        <div className="text-[10px] text-slate-400">Pelapor hari ini</div>
-        <div className="text-xl font-bold text-gold-400">24 jam</div>
-      </div>
-
-      {/* Kartu sekunder: push notification */}
-      <div
-        className="anim-float-soft absolute -right-1 bottom-8 w-40 rotate-[-3deg] rounded-2xl border border-navy-600/70 bg-navy-800/95 p-3 shadow-xl backdrop-blur sm:-right-6"
-        style={{ animationDelay: "1.2s" }}
-      >
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-white">
-          🔔 Notifikasi
-        </div>
-        <div className="mt-1 text-[9px] leading-snug text-slate-400">
-          Laporan baru langsung diberitahukan ke pemantau.
-        </div>
-      </div>
-
-      {/* Gelombang bawah */}
-      <div className="pointer-events-none absolute -bottom-2 left-0 h-10 w-[200%] overflow-hidden">
-        <svg
-          viewBox="0 0 1200 40"
-          preserveAspectRatio="none"
-          className="wave-drift h-full w-full"
-        >
-          <path
-            d="M0 20 Q 75 0 150 20 T 300 20 T 450 20 T 600 20 T 750 20 T 900 20 T 1050 20 T 1200 20 V40 H0 Z"
-            fill="rgba(245,185,66,0.18)"
-          />
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-/** Halaman login dua kolom: kiri hero animatif, kanan form. Mobile: hero di atas. */
 export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
-  const [tab, setTab] = useState<Tab>("regu");
+  const [tab, setTab] = useState<Tab>(() => (localStorage.getItem("jawara-login-tab") as Tab) || "regu");
   const [kode, setKode] = useState("");
   const [pin, setPin] = useState("");
   const [email, setEmail] = useState("");
@@ -106,204 +18,88 @@ export default function LoginPage({ onLoginRegu, onLoginAdmin }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [failures, setFailures] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    usernameRef.current?.focus();
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setInterval(() => setCooldown((n) => Math.max(0, n - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldown]);
+
+  const changeTab = (next: Tab) => {
+    setTab(next);
+    localStorage.setItem("jawara-login-tab", next);
+    setError(null);
+  };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy || !online || cooldown > 0) return;
     setError(null);
     setBusy(true);
     try {
       if (tab === "regu") await onLoginRegu(kode.trim(), pin);
       else await onLoginAdmin(email.trim(), password);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login gagal");
+      setFailures(0);
+    } catch {
+      const nextFailures = failures + 1;
+      setFailures(nextFailures);
+      if (nextFailures >= 3) setCooldown(Math.min(30, 5 * (nextFailures - 2)));
+      setError("Username atau password salah. Periksa kembali lalu coba lagi.");
+      window.setTimeout(() => errorRef.current?.focus(), 0);
     } finally {
       setBusy(false);
     }
   };
 
+  const currentUsername = tab === "regu" ? kode : email;
+  const setUsername = tab === "regu" ? setKode : setEmail;
   return (
-    <div className="login-page relative min-h-dvh overflow-hidden bg-navy-950">
-      {/* Dekorasi latar: glow & grid halus */}
-      <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-navy-600/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -right-24 h-[28rem] w-[28rem] rounded-full bg-gold-400/5 blur-3xl" />
-      <div className="login-orbit pointer-events-none absolute left-[12%] top-[18%] h-2 w-2 rounded-full bg-gold-400 shadow-[0_0_24px_8px_rgba(245,185,66,.25)]" />
-      <div className="pointer-events-none absolute right-[12%] top-[12%] h-40 w-40 rounded-full border border-gold-400/10" />
-      <div className="pointer-events-none absolute right-[16%] top-[16%] h-24 w-24 rounded-full border border-sky-400/10" />
-
-      <div className="mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-10 px-4 py-10 lg:grid-cols-2 lg:gap-6 lg:py-0">
-        {/* Kolom kiri: hero animatif */}
-        <div className="anim-rise order-1 hidden lg:order-none lg:block">
-          <div className="-mt-8 mb-8 flex flex-col items-center gap-4">
-            <PolresLogo className="h-24 w-80 shrink-0 drop-shadow-lg" />
-            <h1 className="max-w-md text-center text-3xl font-extrabold leading-tight tracking-tight text-white">
-              <span className="block">Sistem Integrasi Pelaporan</span>
-              <span className="mt-1 block bg-gradient-to-r from-gold-300 via-gold-400 to-amber-200 bg-clip-text text-transparent">
-                Polres Purwakarta
-              </span>
-            </h1>
+    <main className="login-page min-h-dvh">
+      <div className="login-shell">
+        <section className="login-brand-panel" aria-labelledby="login-title">
+          <div className="login-logo-stage">
+            <span className="login-logo-aura" aria-hidden />
+            <span className="login-logo-shine" aria-hidden />
+            <PolresLogo className="login-brand-logo" />
           </div>
-          <LoginHero />
-        </div>
+          <p className="login-kicker">SISTEM INTEGRASI PELAPORAN</p>
+          <h1 id="login-title">Polres Purwakarta</h1>
+          <p className="login-brand-copy">Pelaporan giat lapangan yang cepat, presisi, dan terhubung.</p>
+        </section>
 
-        {/* Kolom kanan: form login */}
-        <div className="anim-rise order-2 mx-auto w-full max-w-sm lg:order-none">
-          {/* Logo versi mobile */}
-          <div className="mb-8 text-center lg:hidden">
-            <PolresLogo className="anim-float-soft mx-auto mb-3 h-32 w-96 drop-shadow-lg" />
-            <h1 className="text-2xl font-extrabold leading-tight tracking-tight">
-              <span className="block">Sistem Integrasi Pelaporan</span>
-              <span className="mt-1 block bg-gradient-to-r from-gold-300 via-gold-400 to-amber-200 bg-clip-text text-transparent">
-                Polres Purwakarta
-              </span>
-            </h1>
-          </div>
-
-          <div className="card login-form-card">
-            {/* Tab switcher */}
-            <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-navy-900 p-1">
-              {(["regu", "admin"] as Tab[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setTab(t);
-                    setError(null);
-                  }}
-                  className={`login-tab rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                    tab === t
-                      ? "login-tab-active bg-gold-400 text-navy-900"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  {t === "regu" ? "👤 Lapor" : "🛡️ Pantau"}
-                </button>
-              ))}
-            </div>
-
-            <form onSubmit={submit} className="space-y-4">
-              {tab === "regu" ? (
-                <>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-300">
-                      Username Pelapor
-                    </label>
-                    <input
-                      className="input"
-                      placeholder="Contoh: reskrim.banit03"
-                      value={kode}
-                      onChange={(e) => setKode(e.target.value)}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-300">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        className="input pr-20"
-                        type={showPin ? "text" : "password"}
-                        inputMode="text"
-                        placeholder="Password pelapor"
-                        value={pin}
-                        onChange={(e) => setPin(e.target.value)}
-                        autoComplete="current-password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="absolute inset-y-0 right-3 text-xs font-semibold text-gold-400 transition hover:text-gold-300"
-                        onClick={() => setShowPin((visible) => !visible)}
-                        aria-label={showPin ? "Sembunyikan password" : "Tampilkan password"}
-                        aria-pressed={showPin}
-                      >
-                        {showPin ? "Sembunyikan" : "Lihat"}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-300">
-                      Username pemantau
-                    </label>
-                    <input
-                      className="input"
-                      type="text"
-                      placeholder="Contoh: reskrim.kasat"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoComplete="username"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-300">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        className="input pr-20"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        autoComplete="current-password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="absolute inset-y-0 right-3 text-xs font-semibold text-gold-400 transition hover:text-gold-300"
-                        onClick={() => setShowPassword((visible) => !visible)}
-                        aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
-                        aria-pressed={showPassword}
-                      >
-                        {showPassword ? "Sembunyikan" : "Lihat"}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {error && (
-                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="btn-primary login-submit w-full py-3.5"
-                disabled={busy}
-              >
-                {busy ? "Memproses…" : "Masuk"}
-              </button>
+        <section className="login-card-column">
+          <div className="login-card login-form-card">
+            <div className="login-card-heading"><div><h2>Masuk ke JAWARA</h2><p>Pilih akses dan masukkan akun Anda.</p></div><ConnectionBadge online={online} /></div>
+            <RoleTabs value={tab} onChange={changeTab} />
+            <form onSubmit={submit} className="login-form" noValidate>
+              <div className="login-field">
+                <label htmlFor="login-username">{tab === "regu" ? "Username pelapor" : "Username pemantau"}</label>
+                <div className="login-input-wrap"><span className="login-input-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 20c.8-3.5 3.1-5.5 7-5.5s6.2 2 7 5.5" /></svg></span><input ref={usernameRef} id="login-username" className="login-input" value={currentUsername} onChange={(e) => setUsername(e.target.value)} placeholder={tab === "regu" ? "Contoh: unit.reskrim" : "Contoh: kasat.reskrim"} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required /></div>
+              </div>
+              <PasswordInput id="login-password" label="Password" value={tab === "regu" ? pin : password} onChange={tab === "regu" ? setPin : setPassword} visible={tab === "regu" ? showPin : showPassword} onToggle={() => tab === "regu" ? setShowPin((v) => !v) : setShowPassword((v) => !v)} />
+              {error && <div ref={errorRef} className="login-error" tabIndex={-1} role="alert" aria-live="polite">{error}</div>}
+              {!online && <div className="login-offline-message" role="status">Koneksi offline. Sambungkan internet untuk masuk.</div>}
+              <button type="submit" className="login-submit-button" disabled={busy || !online || cooldown > 0 || !currentUsername.trim() || !(tab === "regu" ? pin : password)}>{busy ? <><span className="login-spinner" /> Memverifikasi...</> : cooldown > 0 ? `Coba lagi dalam ${cooldown} dtk` : "Masuk"}</button>
             </form>
+            <InstallBanner />
           </div>
-
-          <div className="mt-6 rounded-2xl border border-navy-600/60 bg-navy-800/50 px-4 py-3">
-            <p className="mt-2 flex items-start gap-2 text-[13px] leading-relaxed text-slate-300">
-              <span aria-hidden>📲</span>
-              <span>
-                <b className="font-semibold text-white">
-                  Pelapor wajib pasang ke homescreen
-                </b>{" "}
-                agar notifikasi &amp; kirim laporan otomatis saat online
-                berjalan optimal.
-              </span>
-            </p>
-          </div>
-
-          {/* Versi build — dipakai untuk memverifikasi app sudah ke-update. */}
-          <p className="mt-4 text-center text-[11px] tracking-wide text-slate-500">
-            Versi build {__BUILD_TIME__}
-          </p>
-        </div>
+          <footer className="login-footer">v2026.09.23 · Polres Purwakarta</footer>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

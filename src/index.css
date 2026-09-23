@@ -55,33 +55,7 @@ select {
   font-family: "DM Mono", ui-monospace, monospace;
 }
 
-/* ===== Animasi login hero ===== */
-@keyframes float-y {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-12px);
-  }
-}
-@keyframes float-y-soft {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-@keyframes wave-drift {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
+/* ===== Animasi umum (dipakai lintas fitur) ===== */
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -90,11 +64,6 @@ select {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-@keyframes spin-slow {
-  to {
-    transform: rotate(360deg);
   }
 }
 @keyframes pulse-dot {
@@ -108,139 +77,14 @@ select {
     transform: scale(1.25);
   }
 }
-@keyframes login-shimmer {
-  0% { transform: translateX(-120%) skewX(-18deg); }
-  55%, 100% { transform: translateX(220%) skewX(-18deg); }
-}
-@keyframes login-orbit {
-  from { transform: rotate(0deg) translateX(18px) rotate(0deg); }
-  to { transform: rotate(360deg) translateX(18px) rotate(-360deg); }
-}
-@keyframes login-glow {
-  0%, 100% { opacity: .35; transform: scale(1); }
-  50% { opacity: .65; transform: scale(1.08); }
-}
-
-.anim-float {
-  animation: float-y 5s ease-in-out infinite;
-}
-.anim-float-soft {
-  animation: float-y-soft 6s ease-in-out infinite;
-}
 .anim-rise {
   animation: rise-in 0.6s ease-out both;
 }
-.anim-spin-slow {
-  animation: spin-slow 14s linear infinite;
-}
-.anim-pulse-dot {
-  animation: pulse-dot 1.6s ease-in-out infinite;
-}
-.wave-drift {
-  animation: wave-drift 9s linear infinite;
-}
-.login-tab {
-  position: relative;
-  overflow: hidden;
-}
-.login-tab::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,.25) 50%, transparent 75%);
-  transform: translateX(-130%);
-  transition: transform .55s ease;
-}
-.login-tab:hover::after,
-.login-tab-active::after {
-  transform: translateX(130%);
-}
-.login-tab-active {
-  box-shadow: 0 8px 20px rgba(245,185,66,.18);
-}
-.login-form-card {
-  position: relative;
-  isolation: isolate;
-  animation: login-glow 7s ease-in-out infinite;
-  border-color: #5d91c2;
-  background: linear-gradient(145deg, #3f78aa 0%, #2e6295 100%);
-  box-shadow: 0 20px 50px rgba(2, 12, 25, 0.32);
-  backdrop-filter: none;
-}
-.login-page {
-  background:
-    radial-gradient(circle at 12% 8%, rgba(116, 174, 226, 0.34), transparent 30rem),
-    radial-gradient(circle at 86% 22%, rgba(245, 185, 66, 0.16), transparent 25rem),
-    linear-gradient(135deg, #29486a 0%, #1e3858 52%, #1c304d 100%);
-}
-.login-page .input {
-  border-color: #9bbce0;
-  background: #dbeafe;
-  color: #102f50;
-  box-shadow: inset 0 1px 2px rgba(8, 33, 60, 0.12);
-}
-.login-page .input:focus {
-  border-color: #f5b942;
-  background: #eff6ff;
-  box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.22);
-}
-.login-page .input::placeholder {
-  color: #5d7390;
-}
-.login-page .login-form-card > .mb-5 {
-  background: #24527f;
-}
-.login-page .login-form-card label {
-  color: #dbeafe;
-}
-.login-page > .mx-auto > .mt-6 {
-  border-color: #5d91c2;
-  background: #285a88;
-  backdrop-filter: none;
-}
-.login-form-card::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  z-index: -1;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgba(245,185,66,.3), transparent 35%, rgba(74,127,189,.22));
-  opacity: .5;
-  pointer-events: none;
-}
-.login-submit {
-  position: relative;
-  overflow: hidden;
-}
-.login-submit::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 35%;
-  background: rgba(255,255,255,.24);
-  animation: login-shimmer 3.8s ease-in-out infinite;
-  pointer-events: none;
-}
-.login-orbit {
-  animation: login-orbit 18s linear infinite;
-}
 @media (prefers-reduced-motion: reduce) {
-  .anim-float,
-  .anim-float-soft,
-  .anim-rise,
-  .anim-spin-slow,
-  .anim-pulse-dot,
-  .wave-drift,
-  .login-form-card,
-  .login-orbit,
-  .login-submit::after {
+  .anim-rise {
     animation: none;
   }
-  .login-tab::after {
-    transition: none;
-  }
 }
-
 /* ===== Splash screen ===== */
 @keyframes splash-pop {
   0% {
@@ -946,6 +790,113 @@ select {
     min-width: 8.25rem;
     padding: 0.35rem 0.45rem;
   }
+
+}
+
+/* ===== JAWARA login: command-center visual system (geometry + layout) =====
+   Semua WARNA login diatur oleh "Skin login final" di akhir file agar selalu
+   seirama dengan dashboard (.dash). Blok ini hanya menata struktur. */
+:root {
+  --login-ink: #091a33;
+  --login-gold: #f5b942;
+  --login-muted: #a9bdd6;
+  --login-radius: 22px;
+}
+.login-page {
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  min-height: 100dvh;
+}
+.login-page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 30rem;
+  height: 30rem;
+  top: -10rem;
+  right: -8rem;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: login-orb 11s ease-in-out infinite;
+}
+.login-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  align-items: center;
+  gap: clamp(2rem, 7vw, 7rem);
+  width: min(980px, calc(100% - 40px));
+  min-height: 100dvh;
+  margin: auto;
+  padding: 36px 0;
+}
+.login-brand-panel { max-width: 410px; animation: login-enter .55s ease-out both; }
+.login-logo-stage { position: relative; display: inline-flex; width: min(100%, 360px); align-items: center; justify-content: center; }
+.login-brand-logo { position: relative; z-index: 1; width: 100%; height: auto; animation: login-logo-float 4.5s ease-in-out infinite; }
+.login-logo-aura { position: absolute; inset: 18% 8%; border-radius: 50%; filter: blur(28px); animation: login-logo-glow 3.8s ease-in-out infinite; }
+.login-logo-shine { position: absolute; z-index: 2; top: 4%; bottom: 4%; left: -25%; width: 18%; transform: skewX(-18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); filter: blur(3px); pointer-events: none; animation: login-logo-shine 5.5s ease-in-out infinite; }
+.login-kicker { font-size: 11px; font-weight: 800; letter-spacing: .18em; }
+.login-brand-panel h1 { margin-top: 8px; font-size: clamp(1.8rem, 3vw, 2.5rem); font-weight: 800; letter-spacing: -.025em; line-height: 1.05; }
+.login-brand-panel h1 span { display: inline; }
+.login-brand-copy { max-width: 25rem; margin-top: 10px; font-size: 14px; line-height: 1.65; }
+.login-card-column { width: 100%; animation: login-enter .55s ease-out .12s both; }
+.login-card { border-radius: var(--login-radius); box-shadow: 0 28px 80px rgba(2,12,25,.3); padding: clamp(22px, 4vw, 32px); }
+.login-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.login-card-heading h2 { margin-top: 7px; font-size: 22px; font-weight: 800; letter-spacing: -.03em; }
+.login-card-heading p:last-child { margin-top: 4px; font-size: 13px; }
+.login-connection { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border-radius: 999px; padding: 7px 10px; font-size: 11px; font-weight: 700; }
+.login-role-tabs { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 21px 0 20px; padding: 4px; border-radius: 14px; }
+.login-role-indicator { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 6px); border-radius: 10px; transition: transform .22s ease; }
+.login-role-indicator-admin { transform: translateX(100%); }
+.login-role-tab { position: relative; z-index: 1; display: flex; min-height: 48px; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; font-size: 14px; font-weight: 700; transition: color .2s ease; }
+.login-form { display: grid; gap: 17px; }
+.login-field label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; }
+.login-input-wrap { position: relative; }
+.login-input { width: 100%; height: 52px; border-radius: 13px; outline: 0; padding: 0 15px 0 46px; font-size: 16px; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; }
+.login-input-icon { position: absolute; z-index: 1; top: 16px; left: 15px; pointer-events: none; }
+.login-input-password { padding-right: 48px; }
+.login-eye-button { position: absolute; top: 0; right: 0; display: grid; width: 48px; height: 52px; place-items: center; }
+.login-submit-button { display: flex; min-height: 52px; align-items: center; justify-content: center; gap: 9px; border-radius: 13px; font-size: 15px; font-weight: 800; transition: transform .18s ease, filter .18s ease, box-shadow .18s ease; }
+.login-submit-button:hover:not(:disabled) { filter: brightness(1.06); }
+.login-submit-button:active:not(:disabled) { transform: scale(.98); }
+.login-submit-button:disabled { cursor: not-allowed; opacity: .55; }
+.login-spinner { width: 17px; height: 17px; border: 2px solid rgba(9,32,61,.3); border-top-color: #09203d; border-radius: 50%; animation: login-spin .7s linear infinite; }
+.login-error, .login-offline-message { border-radius: 11px; padding: 11px 13px; font-size: 12px; line-height: 1.5; }
+.login-install-banner { display: flex; align-items: center; gap: 11px; margin-top: 18px; border-radius: 14px; padding: 13px; }
+.login-install-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 10px; }
+.login-install-banner strong { display: block; font-size: 12px; }
+.login-install-banner p { margin-top: 3px; font-size: 11px; line-height: 1.4; }
+.login-install-button { min-height: 40px; border-radius: 10px; padding: 0 12px; font-size: 12px; font-weight: 800; }
+.login-install-hint { font-size: 11px; font-weight: 700; white-space: nowrap; }
+.login-install-close { align-self: flex-start; font-size: 20px; line-height: 1; }
+.login-footer { margin-top: 15px; text-align: center; font: 10px "DM Mono", monospace; }
+@keyframes login-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes login-spin { to { transform: rotate(360deg); } }
+@keyframes login-logo-float { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-5px) scale(1.012); } }
+@keyframes login-logo-glow { 0%,100% { opacity: .55; transform: scale(.92); } 50% { opacity: .95; transform: scale(1.06); } }
+@keyframes login-logo-shine { 0%,55% { transform: translateX(0) skewX(-18deg); opacity: 0; } 68% { opacity: .9; } 86%,100% { transform: translateX(720%) skewX(-18deg); opacity: 0; } }
+@keyframes login-orb { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(-2.5rem,2rem,0) scale(1.08); } }
+@media (max-width: 767px) {
+  .login-shell { display: block; width: min(100% - 32px, 460px); padding: max(24px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom)); }
+  .login-brand-panel { max-width: none; text-align: center; }
+  .login-logo-stage { width: min(86vw, 320px); }
+  .login-brand-panel .login-kicker { margin-top: 14px; }
+  .login-brand-panel h1 { font-size: 22px; }
+  .login-brand-copy { margin: 12px auto 0; font-size: 13px; }
+  .login-card-column { margin-top: 22px; }
+  .login-card { padding: 20px 16px; border-radius: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-page::before,
+  .login-brand-panel,
+  .login-card-column,
+  .login-role-indicator,
+  .login-spinner,
+  .login-brand-logo,
+  .login-logo-aura,
+  .login-logo-shine { animation: none; }
+}
+@media (max-width: 480px) {
   .regu-logo-panel .polres-logo-image {
     height: 2.75rem;
     width: 9.5rem;
@@ -962,6 +913,9 @@ select {
   }
 }
 
+
+
+/* ===== Blok dashboard & regu-app (dipulihkan) ===== */
 /* Dashboard memakai palet yang sama dengan halaman login: navy, gold, dan ice blue. */
 .dash .input {
   border-color: rgba(127, 169, 216, 0.34);
@@ -1234,4 +1188,175 @@ select {
 .regu-app .card {
   min-width: 0;
   overflow: visible;
+}
+
+/* ===== Skin login final: "Command Center" — satu palet dengan dashboard
+   pemantau (.dash): kanvas navy #0b1428, kartu #12314f, aksen emas #f5b942.
+   Ditulis paling akhir agar menimpa semua skin login sebelumnya. ===== */
+.login-page {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(31, 77, 133, 0.42), transparent 30rem),
+    radial-gradient(circle at 92% 10%, rgba(245, 185, 66, 0.11), transparent 25rem),
+    #0b1428;
+  color: #e8eef8;
+}
+/* Orb cahaya navy mengambang — versi senyap dari kanvas dashboard */
+.login-page::before {
+  background: radial-gradient(circle, rgba(74, 127, 189, 0.18), transparent 65%);
+  opacity: 1;
+}
+.login-logo-stage {
+  filter: none;
+}
+.login-brand-logo {
+  filter: drop-shadow(0 14px 24px rgba(1, 16, 36, 0.45));
+}
+.login-logo-aura {
+  background: rgba(245, 185, 66, 0.16);
+  filter: blur(30px);
+}
+.login-kicker,
+.login-brand-panel .login-kicker {
+  color: #f5b942;
+}
+.login-brand-panel h1 {
+  color: #f5f8fc;
+  text-shadow: none;
+}
+.login-brand-copy {
+  color: #b8cee5;
+}
+/* Kartu login: sama persis dengan .dash .card */
+.login-card,
+.login-form-card {
+  border-color: rgba(127, 169, 216, 0.2);
+  background: linear-gradient(145deg, rgba(18, 49, 88, 0.95), rgba(11, 33, 62, 0.95));
+  box-shadow: 0 16px 36px rgba(2, 12, 25, 0.24);
+  backdrop-filter: blur(14px);
+}
+.login-form-card {
+  animation: none;
+}
+.login-card-heading h2 {
+  color: #ffffff;
+  text-shadow: none;
+}
+.login-card-heading p:last-child {
+  color: #b9cee3;
+}
+.login-connection-online {
+  border: 1px solid rgba(52, 211, 129, 0.25);
+  background: rgba(52, 211, 129, 0.12);
+  color: #6ee7b7;
+}
+.login-connection-offline {
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+.login-role-tabs {
+  border: 1px solid rgba(127, 169, 216, 0.2);
+  background: rgba(8, 33, 60, 0.86);
+  box-shadow: none;
+}
+.login-role-indicator {
+  background: linear-gradient(135deg, #f5b942, #e5a625);
+  box-shadow: 0 7px 18px rgba(245, 185, 66, 0.2);
+}
+.login-role-tab {
+  color: #b8cae0;
+}
+.login-role-tab[aria-selected="true"] {
+  color: #0b2140;
+}
+.login-field label {
+  color: #e9f2fb;
+}
+/* Input: sama dengan .dash .input */
+.login-input {
+  border-color: rgba(127, 169, 216, 0.34);
+  background: rgba(8, 33, 60, 0.82);
+  color: #f8fafc;
+  box-shadow: none;
+  text-shadow: none;
+}
+.login-input::placeholder {
+  color: #8fa4bd;
+}
+.login-input:focus,
+.login-input:focus-visible {
+  border-color: #f5b942;
+  background: rgba(8, 33, 60, 0.92);
+  box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.14);
+}
+.login-input-icon,
+.login-eye-button {
+  color: #7fa9d8;
+}
+.login-eye-button:hover,
+.login-eye-button:hover:not(:disabled),
+.login-eye-button:focus-visible {
+  color: #f5d889;
+}
+/* Tombol utama emas — identik dengan aksi primer dashboard (.dash .bg-blue-600) */
+.login-submit-button {
+  background: linear-gradient(135deg, #f5b942, #e5a625);
+  color: #08213c;
+  text-shadow: none;
+  box-shadow: 0 10px 22px rgba(245, 185, 66, 0.18);
+}
+.login-submit-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffd166, #f5b942);
+  box-shadow: 0 13px 28px rgba(245, 185, 66, 0.28);
+}
+.login-error {
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.25);
+  color: #fecaca;
+}
+.login-offline-message {
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(146, 64, 14, 0.2);
+  color: #fde68a;
+}
+.login-install-banner {
+  border: 1px solid rgba(127, 169, 216, 0.2);
+  background: rgba(8, 33, 60, 0.6);
+  box-shadow: none;
+}
+.login-install-banner strong {
+  color: #f2f7fc;
+}
+.login-install-banner p {
+  color: #aec7df;
+}
+.login-install-icon {
+  border: 1px solid rgba(245, 185, 66, 0.28);
+  background: rgba(245, 185, 66, 0.14);
+  color: #f5b942;
+}
+.login-install-button {
+  background: linear-gradient(135deg, #f5b942, #e5a625);
+  color: #08213c;
+  box-shadow: 0 6px 14px rgba(245, 185, 66, 0.2);
+}
+.login-install-hint {
+  color: #f5b942;
+}
+.login-install-close {
+  color: #9bb0c9;
+}
+.login-footer {
+  color: #91a7c1;
+}
+
+@media (max-width: 767px) {
+  .login-page {
+    background:
+      radial-gradient(circle at 50% -8%, rgba(45, 111, 177, 0.35), transparent 26rem),
+      #0b1428;
+  }
+  .login-card {
+    background: linear-gradient(145deg, rgba(18, 49, 88, 0.96), rgba(11, 33, 62, 0.96));
+  }
 }
