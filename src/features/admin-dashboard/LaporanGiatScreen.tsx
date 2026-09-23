@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Laporan } from "../../types";
-import { fetchLaporan, fetchReguList, fotoUrl } from "../../lib/supabase/api";
+import {
+  fetchLaporan,
+  fetchReguList,
+  fotoUrl,
+  namaFileUnduhan,
+  unduhFileStorage,
+} from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
 import PlaceBadge from "../../components/PlaceBadge";
 import { exportPdf } from "../report-generator/exportPdf";
@@ -57,6 +63,104 @@ const TAHAP_LABEL: Record<string, string> = {
  * urutan, paginasi, dan kolom Nomor/Waktu/Pelapor/Perihal/Jenis/Lokasi/
  * Dokumentasi/Aksi + preview baris.
  */
+
+/** Tombol unduh foto/video dari Storage via blob agar muncul dialog simpan.
+ *  `full` = gaya blok penuh di bawah thumbnail/video dalam modal preview. */
+function UnduhMediaButton({
+  storagePath,
+  full,
+}: {
+  storagePath: string;
+  full?: boolean;
+}) {
+  const [state, setState] = useState<"idle" | "proses" | "gagal">("idle");
+
+  const unduh = async () => {
+    setState("proses");
+    try {
+      await unduhFileStorage(storagePath, namaFileUnduhan(storagePath));
+      setState("idle");
+    } catch {
+      setState("gagal");
+      window.setTimeout(() => setState("idle"), 2000);
+    }
+  };
+
+  if (full) {
+    return (
+      <button
+        type="button"
+        disabled={state === "proses"}
+        onClick={() => void unduh()}
+        className="block w-full border-t border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-60"
+      >
+        {state === "proses"
+          ? "⏳ Mengunduh…"
+          : state === "gagal"
+            ? "⚠ Gagal — coba lagi"
+            : "⬇ Unduh"}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={state === "proses"}
+      onClick={() => void unduh()}
+      className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:opacity-60"
+    >
+      {state === "proses" ? "⏳ Mengunduh…" : state === "gagal" ? "⚠ Gagal" : "⬇ Unduh"}
+    </button>
+  );
+}
+
+/** Tombol salin teks keterangan laporan (clipboard API + fallback lama). */
+function CopyTeksButton({ teks }: { teks: string }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const copy = async () => {
+    setFailed(false);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(teks);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = teks;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand("copy");
+        textarea.remove();
+        if (!ok) throw new Error("copy gagal");
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+      window.setTimeout(() => setFailed(false), 2000);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className={
+        "rounded-lg border px-3 py-1.5 text-xs font-semibold transition " +
+        (copied
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : failed
+            ? "border-red-200 bg-red-50 text-red-600"
+            : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100")
+      }
+    >
+      {copied ? "Tersalin ✓" : failed ? "Gagal salin" : "📋 Salin keterangan"}
+    </button>
+  );
+}
 export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
@@ -611,6 +715,11 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
             <p className="mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
               {preview.catatan ?? "—"}
             </p>
+            {preview.catatan && (
+              <div className="mt-2 flex justify-end">
+                <CopyTeksButton teks={preview.catatan} />
+              </div>
+            )}
 
             <div className="mt-3 text-xs text-slate-500">
               Pelapor:{" "}
@@ -630,31 +739,41 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
             {(preview.fotos?.length ?? 0) > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {preview.fotos!.map((f) => (
-                  <a
+                  <div
                     key={f.id}
-                    href={fotoUrl(f.storage_path)}
-                    target="_blank"
-                    rel="noreferrer"
+                    className="overflow-hidden rounded-xl border border-slate-200"
                   >
-                    <img
-                      src={fotoUrl(f.storage_path)}
-                      alt="foto laporan"
-                      loading="lazy"
-                      className="aspect-square w-full rounded-xl border border-slate-200 object-cover"
-                    />
-                  </a>
+                    <a
+                      href={fotoUrl(f.storage_path)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <img
+                        src={fotoUrl(f.storage_path)}
+                        alt="foto laporan"
+                        loading="lazy"
+                        className="aspect-square w-full object-cover"
+                      />
+                    </a>
+                    <UnduhMediaButton storagePath={f.storage_path} full />
+                  </div>
                 ))}
               </div>
             )}
             {(preview.videos?.length ?? 0) > 0 && (
               <div className="mt-3 space-y-2">
                 {preview.videos!.map((v) => (
-                  <video
+                  <div
                     key={v.id}
-                    src={fotoUrl(v.storage_path)}
-                    controls
-                    className="w-full rounded-xl border border-slate-200"
-                  />
+                    className="overflow-hidden rounded-xl border border-slate-200"
+                  >
+                    <video
+                      src={fotoUrl(v.storage_path)}
+                      controls
+                      className="w-full"
+                    />
+                    <UnduhMediaButton storagePath={v.storage_path} full />
+                  </div>
                 ))}
               </div>
             )}

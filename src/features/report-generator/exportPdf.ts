@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Laporan, Regu } from "../../types";
-import { formatWaktu } from "../../lib/cycle";
+import { formatTanggal, formatWaktu } from "../../lib/cycle";
 import { fotoUrl } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
 
@@ -160,16 +160,20 @@ export async function exportPdf(
       y += lines.length * 4 + 2;
     }
 
-    for (const f of l.fotos ?? []) {
+    const fotos = l.fotos ?? [];
+    let fotoTampil = 0;
+    for (let i = 0; i < fotos.length; i++) {
       if (fotoCount >= maxFoto) break;
-      // Setiap baris thumbnail butuh 52 mm — cek SEBELUM menggambar agar
-      // foto tidak tergambar di luar kanvas halaman (penyebab foto "hilang").
-      if (y + 52 > 282) {
+      const f = fotos[i];
+      const col = i % 3;
+      // Setiap baris thumbnail butuh 52 mm — cek SEBELUM menggambar baris
+      // baru agar foto tidak tergambar melewati batas halaman.
+      if (col === 0 && y + 52 > 282) {
         doc.addPage();
         y = 16;
       }
       const dataUrl = await mediaDataUrl(f.storage_path);
-      const x = 14 + (fotoCount % 3) * 62;
+      const x = 14 + col * 62;
       if (dataUrl) {
         // Format dideteksi dari data URL (foto bisa JPEG atau PNG hasil
         // watermark) — pemaksaan "JPEG" membuat jsPDF melempar error dan
@@ -199,46 +203,56 @@ export async function exportPdf(
         y + 48,
       );
       fotoCount++;
-      if (fotoCount % 3 === 0) y += 56;
+      fotoTampil++;
+      if (col === 2) y += 56; // pindah baris setelah kolom ke-3
     }
-    if ((l.fotos?.length ?? 0) % 3 !== 0) y += 56;
+    if (fotoTampil % 3 !== 0) y += 56;
 
+    // Video — keterangan jelas: judul + kotak berisi nomor, durasi,
+    // tanggal/jam, koordinat, dan cara membuka berkasnya.
     const videoList = Array.isArray(l.videos) ? l.videos : [];
-    if (videoList.length > 0) {
-      y += 4;
+    if (videoList.length > 0 && videoCount < maxVideo) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      ensureSpace(8);
+      doc.text(`Lampiran Video (${videoList.length} berkas):`, 14, y + 4);
+      doc.setFont("helvetica", "normal");
+      y += 6;
+
       for (let i = 0; i < videoList.length; i++) {
-        const v = videoList[i];
         if (videoCount >= maxVideo) break;
-        if (y + 52 > 282) {
+        const v = videoList[i];
+        if (y + 16 > 282) {
           doc.addPage();
           y = 16;
         }
-        const x = 14 + (videoCount % 3) * 62;
+        const durasi =
+          v.duration_seconds != null ? `${v.duration_seconds} detik` : "—";
+        const tanggal = `${formatTanggal(v.watermark_timestamp)}, ${formatWaktu(
+          v.watermark_timestamp,
+        )} WIB`;
         doc.setDrawColor(80, 140, 190);
         doc.setFillColor(235, 245, 255);
-        doc.rect(x, y, 58, 44, "FD");
-        doc.setFontSize(8);
+        doc.rect(14, y, 182, 12, "FD");
         doc.setTextColor(15, 61, 110);
-        doc.text("VIDEO TERSEDIA", x + 8, y + 19);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text(`VIDEO ${i + 1} — durasi ${durasi}`, 17, y + 5);
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
-        doc.text("Buka dari Monitoring", x + 8, y + 26);
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(9);
-        doc.setFontSize(6.5);
         doc.text(
-          "Video " +
-            String(i + 1) +
-            " · " +
-            (v.duration_seconds ?? 0) +
-            " detik · " +
-            formatWaktu(v.watermark_timestamp),
-          x,
-          y + 48,
+          `${tanggal} · ${koordinatPresisi(v.watermark_lat, v.watermark_lng)}`,
+          17,
+          y + 9.5,
         );
+        doc.setTextColor(0, 0, 0);
+        doc.text("Buka melalui aplikasi (menu Monitoring)", 193, y + 9.5, {
+          align: "right",
+        });
         videoCount++;
-        if (videoCount % 3 === 0) y += 56;
+        y += 15;
       }
-      if (videoList.length % 3 !== 0) y += 56;
+      y += 2;
     }
 
     y += 4;

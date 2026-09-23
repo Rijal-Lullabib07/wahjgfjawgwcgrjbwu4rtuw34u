@@ -26,6 +26,18 @@ async function mediaDataUrl(storagePath: string): Promise<string | null> {
   }
 }
 
+/** Dimensi gambar dari dataURL — dipakai agar rasio aspek foto dipertahankan
+ *  (pemaksaan w×h tetap membuat foto gepeng/melar). */
+function imageSize(dataUrl: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () =>
+      resolve({ w: img.naturalWidth || 0, h: img.naturalHeight || 0 });
+    img.onerror = () => resolve({ w: 0, h: 0 });
+    img.src = dataUrl;
+  });
+}
+
 /** Koordinat 6 desimal untuk dokumen resmi; "—" bila kosong. */
 function koordinat(lat: number | null, lng: number | null): string {
   return lat == null || lng == null ? "—" : `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
@@ -152,31 +164,47 @@ export async function exportThreadPdf(
       y += lines.length * 4 + 3;
     }
 
-    // Foto (maks 12 per tahap agar PDF ringan)
+    // Foto — grid 2 kolom (2 di atas, 2 di bawah), maks 12 foto per tahap.
+    // Gambar di-fit ke dalam sel sesuai rasio aspek asli → tidak gepeng.
     const fotos = (l.fotos ?? []).slice(0, 12);
-    let col = 0;
-    for (const f of fotos) {
-      if (y + 52 > 282) {
+    const CELL_W = 88; // 2 × 88 + jarak 6 = 182 (lebar area konten)
+    const CELL_H = 64; // tinggi maksimum gambar dalam sel
+    const ROW_H = CELL_H + 10; // sel + keterangan di bawahnya
+    for (let i = 0; i < fotos.length; i++) {
+      const col = i % 2;
+      // Cek ruang SEBELUM menggambar baris baru agar foto tidak melewati
+      // batas halaman (penyebab foto kepotong).
+      if (col === 0 && y + ROW_H > 282) {
         doc.addPage();
         y = 16;
       }
-      const x = M + col * 62;
+      const f = fotos[i];
+      const x = M + col * (CELL_W + 6);
       const dataUrl = await mediaDataUrl(f.storage_path);
       if (dataUrl) {
+        // Hitung ukuran gambar dari dimensi aslinya agar rasio dipertahankan.
+        const dim = await imageSize(dataUrl);
+        let drawW = CELL_W;
+        let drawH = CELL_H;
+        if (dim.w > 0 && dim.h > 0) {
+          const scale = Math.min(CELL_W / dim.w, CELL_H / dim.h);
+          drawW = dim.w * scale;
+          drawH = dim.h * scale;
+        }
         try {
-          doc.addImage(dataUrl, x, y, 58, 44);
+          doc.addImage(dataUrl, x + (CELL_W - drawW) / 2, y, drawW, drawH);
         } catch {
           doc.setDrawColor(200);
-          doc.rect(x, y, 58, 44);
+          doc.rect(x, y, CELL_W, CELL_H);
           doc.setFontSize(7);
-          doc.text("foto gagal dimuat", x + 4, y + 23);
+          doc.text("foto gagal dimuat", x + 4, y + 32);
           doc.setFontSize(8);
         }
       } else {
         doc.setDrawColor(200);
-        doc.rect(x, y, 58, 44);
+        doc.rect(x, y, CELL_W, CELL_H);
         doc.setFontSize(7);
-        doc.text("foto tidak tersedia", x + 4, y + 23);
+        doc.text("foto tidak tersedia", x + 4, y + 32);
         doc.setFontSize(8);
       }
       doc.setFontSize(6.5);
@@ -185,23 +213,56 @@ export async function exportThreadPdf(
           " · " +
           formatWaktu(f.watermark_timestamp),
         x,
-        y + 48,
+        y + CELL_H + 4,
       );
       doc.setFontSize(8);
-      col++;
-      if (col % 3 === 0) y += 56;
+      if (col === 1) y += ROW_H; // pindah baris setelah kolom ke-2
     }
-    if (fotos.length % 3 !== 0) y += 56;
+    if (fotos.length % 2 !== 0) y += ROW_H;
 
-    if ((l.videos?.length ?? 0) > 0) {
-      ensureSpace(10);
-      doc.setFontSize(7.5);
-      doc.text(
-        `Lampiran video: ${(l.videos ?? []).length} berkas (dapat dibuka melalui aplikasi)`,
-        M,
-        y,
-      );
+    // Video — keterangan jelas: kotak berisi nomor, durasi, tanggal/jam,
+    // koordinat, dan cara membuka berkasnya.
+    const videoList = Array.isArray(l.videos) ? l.videos : [];
+    if (videoList.length > 0) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      ensureSpace(8);
+      doc.text(`Lampiran Video (${videoList.length} berkas):`, M, y + 4);
+      doc.setFont("helvetica", "normal");
       y += 6;
+
+      for (let i = 0; i < videoList.length; i++) {
+        const v = videoList[i];
+        if (y + 16 > 282) {
+          doc.addPage();
+          y = 16;
+        }
+        const durasi =
+          v.duration_seconds != null ? `${v.duration_seconds} detik` : "—";
+        const tanggal = `${formatTanggal(v.watermark_timestamp)}, ${formatWaktu(
+          v.watermark_timestamp,
+        )} WIB`;
+        doc.setDrawColor(80, 140, 190);
+        doc.setFillColor(235, 245, 255);
+        doc.rect(M, y, W, 12, "FD");
+        doc.setTextColor(15, 61, 110);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text(`VIDEO ${i + 1} — durasi ${durasi}`, M + 3, y + 5);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text(
+          `${tanggal} · ${koordinat(v.watermark_lat, v.watermark_lng)}`,
+          M + 3,
+          y + 9.5,
+        );
+        doc.setTextColor(0, 0, 0);
+        doc.text("Buka melalui aplikasi (menu Monitoring)", M + W - 3, y + 9.5, {
+          align: "right",
+        });
+        y += 15;
+      }
+      y += 2;
     }
 
     y += 4;
