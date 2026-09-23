@@ -534,7 +534,6 @@ export default function ManagementScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   /** Kata kunci pencarian — menyaring daftar personel & pemantau sekaligus. */
   const [cari, setCari] = useState("");
-  const [adding, setAdding] = useState(false);
   const [pinBaru, setPinBaru] = useState<{
     kode: string;
     pin: string;
@@ -568,15 +567,6 @@ export default function ManagementScreen() {
     }
     return best;
   }, [pelapor]);
-  const [form, setForm] = useState({
-    nama: "",
-    jabatan: "",
-    kode: "",
-    pin: "",
-    unitKey: "",
-    wilayahKey: "",
-    level: "pelapor-level-1" as "pelapor-level-1" | "pelapor-level-2",
-  });
 
   const load = useCallback(async () => {
     try {
@@ -619,50 +609,6 @@ export default function ManagementScreen() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  /** Tambah akun personel via RPC (auth + regu). */
-  const addPelapor = async () => {
-    if (!form.nama.trim() || !form.kode.trim()) {
-      setError("Nama dan kode login wajib diisi.");
-      return;
-    }
-    if (form.pin.trim().length < 4) {
-      setError("PIN minimal 4 karakter.");
-      return;
-    }
-    setAdding(true);
-    setError(null);
-    try {
-      const hasil = await callManagePersonel({
-        action: "buat",
-        nama: form.nama.trim(),
-        jabatan: form.jabatan.trim(),
-        kode_login: form.kode.trim().toLowerCase(),
-        pin: form.pin.trim(),
-        unit_key: form.unitKey.trim().toLowerCase() || null,
-        wilayah_key: form.wilayahKey.trim().toLowerCase() || null,
-        access_level: form.level,
-      });
-      setPinBaru({
-        kode: (hasil as { kode_login?: string }).kode_login ?? form.kode.trim().toLowerCase(),
-        pin: (hasil as { pin?: string }).pin ?? form.pin.trim(),
-      });
-      setForm({
-        nama: "",
-        jabatan: "",
-        kode: "",
-        pin: "",
-        unitKey: "",
-        wilayahKey: "",
-        level: "pelapor-level-1",
-      });
-      await load();
-    } catch (e) {
-      setError(pesanError(e, "Gagal menambah personel. Pastikan edge function manage-personel sudah dideploy."));
-    } finally {
-      setAdding(false);
-    }
-  };
 
   /** Simpan hasil modal edit personel (nama, jabatan, username, PIN, status). */
   const simpanEdit = async (row: ReguRow, nilai: {
@@ -1022,79 +968,6 @@ export default function ManagementScreen() {
           onSave={(nilai) => simpanEditPemantau(editAdminRow, nilai)}
         />
       )}
-
-      {/* ===== Tambah akun ===== */}
-      <section className="card">
-        <div className="eyebrow">Tambah akun personel</div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="text-xs font-semibold text-slate-500">
-            Nama lengkap
-            <input
-              className="input mt-1"
-              value={form.nama}
-              onChange={(e) => setForm((f) => ({ ...f, nama: e.target.value }))}
-              placeholder="mis. Agung Setiawan"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-500">
-            Jabatan
-            <input
-              className="input mt-1"
-              value={form.jabatan}
-              onChange={(e) => setForm((f) => ({ ...f, jabatan: e.target.value }))}
-              placeholder="mis. Aiptu — Anggota Regu 2"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-500">
-            Kode login
-            <input
-              className="input mt-1"
-              value={form.kode}
-              onChange={(e) => setForm((f) => ({ ...f, kode: e.target.value }))}
-              placeholder="mis. agung.reskrimpolres"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-500">
-            PIN awal (min. 4 karakter)
-            <input
-              className="input mt-1"
-              value={form.pin}
-              onChange={(e) => setForm((f) => ({ ...f, pin: e.target.value }))}
-              placeholder="mis. 1234"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-500">
-            Wilayah key (Polsek — kosongkan bila satuan)
-            <input
-              className="input mt-1"
-              value={form.wilayahKey}
-              onChange={(e) => setForm((f) => ({ ...f, wilayahKey: e.target.value }))}
-              placeholder="mis. plered"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-500">
-            Unit key (satuan — kosongkan bila polsek)
-            <input
-              className="input mt-1"
-              value={form.unitKey}
-              onChange={(e) => setForm((f) => ({ ...f, unitKey: e.target.value }))}
-              placeholder="mis. reskrim"
-            />
-          </label>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            className="btn-primary"
-            disabled={adding}
-            onClick={() => void addPelapor()}
-          >
-            {adding ? "Menyimpan…" : "+ Tambah personel"}
-          </button>
-          <span className="text-[11px] text-slate-500">
-            Akun otomatis bisa langsung login di HP dengan kode + PIN ini.
-          </span>
-        </div>
-      </section>
 
       {/* Ringkasan update versi */}
       {pelapor !== null && pelapor.length > 0 && (

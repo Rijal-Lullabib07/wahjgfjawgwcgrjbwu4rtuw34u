@@ -32,6 +32,7 @@ pernah dijalankan.
 | 21 | `0021_laporan_multi_nrp.sql` | `nrp_pelapor` text → **text[]** (multi-NRP per laporan) + index GIN | ✅ Aktif |
 | 22 | `0022_fix_trigger_tahap_bebas.sql` | Kembalikan trigger `validate_laporan_turunan` ke versi 0017 + pastikan trigger terpasang — perbaiki error *"Laporan baru harus bertahap awal"* | ✅ Aktif |
 | 23 | `0023_admin_only_management.sql` | Helper `is_admin_penuh()` (role `admin` + access_level `all`) + RLS kelola personel/pemantau/jenis hanya untuk admin penuh — Wakapolres & pimpinan jadi read-only | ✅ Aktif |
+| 24 | `0024_push_monitor_id.sql` | Dukungan pemantau pada `push_subscriptions`: kolom `monitor_id` + index, constraint `push_owner_check`, `claim_push_subscription` versi regu/pemantau, RLS pemilik device regu ATAU pemantau — perbaiki error 400 saat pemantau mengaktifkan notifikasi | ✅ Aktif |
 
 ## Yang dihapus (usang, tidak dipakai lagi)
 

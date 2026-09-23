@@ -16,7 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../supabase/client';
 import { hasVapidKey, urlBase64ToUint8Array, vapidPublicKey } from './vapid';
-import { getPlatform } from '../session';
+import { getPlatform, loadSession } from '../session';
 
 function requireClient(): SupabaseClient {
   if (!supabase) {
@@ -112,10 +112,15 @@ async function getRegistration(timeoutMs = 8000): Promise<ServiceWorkerRegistrat
 }
 
 /** Baris tabel `push_subscriptions` dari objek PushSubscription browser. */
-function toRow(sub: PushSubscription, reguId: string | undefined) {
+function toRow(
+  sub: PushSubscription,
+  reguId: string | undefined,
+  monitorId: string | undefined,
+) {
   const json = sub.toJSON();
   return {
     regu_id: reguId ?? null,
+    monitor_id: monitorId ?? null,
     endpoint: sub.endpoint,
     p256dh: json.keys?.p256dh ?? '',
     auth: json.keys?.auth ?? '',
@@ -134,7 +139,14 @@ async function saveSubscription(
   reguId: string | undefined,
 ): Promise<void> {
   const client = requireClient();
-  const row = toRow(sub, reguId);
+  // Pemantau (admin/pimpinan) tidak punya regu — subscription terikat ke
+  // monitor_id (admin_users.id) yang disimpan saat login. Migration 0024
+  // menambah kolom monitor_id + RLS-nya; tanpa itu upsert pemantau ditolak.
+  const session = loadSession();
+  const isMonitor =
+    !reguId && (session?.role === 'admin' || session?.role === 'pimpinan');
+  const monitorId = isMonitor ? session?.monitorId : undefined;
+  const row = toRow(sub, reguId, monitorId);
   if (!row.p256dh || !row.auth) {
     throw new Error('Subscription dari browser tidak berisi kunci p256dh/auth.');
   }
