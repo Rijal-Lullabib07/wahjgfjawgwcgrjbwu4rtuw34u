@@ -26,47 +26,47 @@ export const jawaraRoles: JawaraRole[] = [
     access: "all",
     description:
       "Memantau seluruh laporan dan mengelola sistem (pemantau + kelola).",
-    username: "polres.kapolres",
+    username: "kapolres.purwakarta",
   },
   {
     title: "Wakapolres",
     access: "all",
     description: "Memantau seluruh laporan (read-only, tanpa kelola).",
-    username: "polres.wakapolres",
+    username: "wakapolres.purwakarta",
   },
   {
-    title: "Admin Utama",
+    title: "Kabag Operasional",
     access: "all",
     description:
-      "Akun terpisah untuk mengelola akun, konfigurasi, dan seluruh sistem.",
-    username: "polres.admin",
+      "Memantau seluruh laporan dan mengelola sistem (setara Kapolres).",
+    username: "kabag.ops",
   },
   {
     title: "Kasat Polres",
     access: "fungsi",
     description:
       "Memantau satuannya di Polres dan folder unit yang sama di tiap Polsek.",
-    username: "reskrim.kasat",
+    username: "sat.reskrim",
   },
   {
     title: "Kapolsek",
     access: "wilayah",
     description:
       "Langsung masuk ke folder Polseknya dan memantau seluruh unit di wilayah itu.",
-    username: "jatiluhur.kapolsek",
+    username: "kapolsek.jatiluhur",
   },
   {
     title: "Pelapor level 2",
     access: "pelapor-level-2",
-    description: "Satu akun per satuan Polres yang membuat laporan giat.",
-    username: "reskrim.polres",
+    description: "Satu akun per unit satuan Polres yang membuat laporan giat.",
+    username: "sat.reskrim.unit1",
   },
   {
     title: "Pelapor level 1",
     access: "pelapor-level-1",
     description:
-      "Satu akun per unit di Polsek (mis. reskrim.jatiluhur) plus SPKT per Polsek.",
-    username: "reskrim.jatiluhur",
+      "Satu akun per unit di Polsek (mis. unit.reskrim.jatiluhur) plus SPKT per Polsek.",
+    username: "unit.reskrim.jatiluhur",
   },
 ];
 
@@ -87,96 +87,108 @@ const wilayahList: Array<[string, string]> = [
   ["bojong", "Bojong"],
 ];
 
-const unitLabels: Record<string, string> = {
-  reskrim: "Reskrim",
+// Satuan Polres yang punya akun pelapor sat.unit1..N ( struktur v2).
+const satuanUnits = [
+  ["intelkam", "Satintelkam"],
+  ["reskrim", "Satreskrim"],
+  ["resnarkoba", "Satresnarkoba"],
+  ["binmas", "Satbinmas"],
+  ["samapta", "Satsamapta"],
+  ["lantas", "Satlantas"],
+  ["polair", "Satpolairud"],
+  ["tahti", "Sattahti"],
+] as const;
+
+const satuanUnitCounts: Record<(typeof satuanUnits)[number][0], number> = {
+  intelkam: 4,
+  reskrim: 5,
+  resnarkoba: 2,
+  binmas: 1,
+  samapta: 3,
+  lantas: 5,
+  polair: 2,
+  tahti: 1,
+};
+
+const satuanLabels: Record<string, string> = {
   intelkam: "Intelkam",
-  bhabinkamtibmas: "Bhabinkamtibmas",
-  samapta: "Samapta",
+  reskrim: "Reskrim",
+  resnarkoba: "Resnarkoba",
   binmas: "Binmas",
-  propam: "Propam",
+  samapta: "Samapta",
   lantas: "Lantas",
-  sium: "Sium & Humas",
+  polair: "Polair",
+  tahti: "Tahti",
   spkt: "SPKT",
 };
 
-// Presensi unit per Polsek — sama dengan seed db_supabase.sql & provision.
+// Presensi unit per Polsek (struktur v2): semua unit seragam 14 Polsek.
 const allWilayah = wilayahList.map(([w]) => w);
 const unitPresence: Record<string, string[]> = {
-  reskrim: [...allWilayah],
-  intelkam: [...allWilayah],
-  bhabinkamtibmas: [...allWilayah],
-  samapta: allWilayah.filter((w) => w !== "sukatani"),
-  binmas: allWilayah.filter(
-    (w) => !["plered", "darangdan", "sukasari"].includes(w),
-  ),
-  propam: allWilayah.filter(
-    (w) => !["kota", "campaka", "maniis"].includes(w),
-  ),
-  lantas: ["kota", "plered", "jatiluhur", "bungursari", "cibatu"],
-  sium: [...allWilayah],
   spkt: [...allWilayah],
+  intelkam: [...allWilayah],
+  reskrim: [...allWilayah],
+  binmas: [...allWilayah],
+  samapta: [...allWilayah],
+  lantas: [...allWilayah],
 };
 
 export const jawaraStructure = {
-  /** 146 = 27 pemantau + 9 pelapor Polres + 110 pelapor Polsek. */
-  totalAccounts: 146,
+  /** 132 = 25 pemantau (3 all-access + 8 kasat + 14 kapolsek) + 107 pelapor
+   *  (23 satuan + 84 Polsek). Semua akun lama dihapus & dibuat ulang. */
+  totalAccounts: 132,
   allAccessMonitors: 3,
-  allAccessNames: ["KAPOLRES", "WAKAPOLRES (read-only)", "ADMIN UTAMA"],
+  allAccessNames: [
+    "KAPOLRES PURWAKARTA",
+    "WAKAPOLRES PURWAKARTA (read-only)",
+    "KABAG OPERASIONAL",
+  ],
   functionMonitors: [
     "KASAT INTELKAM",
     "KASAT RESKRIM",
     "KASAT RESNARKOBA",
     "KASAT BINMAS",
     "KASAT SAMAPTA",
-    "PAM OBVIT SAMAPTA",
     "KASAT LANTAS",
     "KASAT POLAIR",
     "KASAT TAHTI",
-    "KASAT SPKT",
   ],
   polsekMonitors: wilayahList.map(
     ([, nama]) => `KAPOLSEK ${nama.toUpperCase()}`,
   ),
-  polresReporters: [
-    { name: "SATUAN INTELKAM", count: 1, items: ["intelkam.polres"], scope: "polres" },
-    { name: "SATUAN RESKRIM", count: 1, items: ["reskrim.polres"], scope: "polres" },
-    { name: "SATUAN RESNARKOBA", count: 1, items: ["narkoba.polres"], scope: "polres" },
-    { name: "SATUAN BINMAS", count: 1, items: ["binmas.polres"], scope: "polres" },
-    { name: "SATUAN SAMAPTA", count: 1, items: ["samapta.polres"], scope: "polres" },
-    { name: "PAM OBVIT SAMAPTA", count: 1, items: ["pamobvit.polres"], scope: "polres" },
-    { name: "SATUAN LANTAS", count: 1, items: ["lantas.polres"], scope: "polres" },
-    { name: "SATUAN POLAIR", count: 1, items: ["polair.polres"], scope: "polres" },
-    { name: "SATUAN TAHTI", count: 1, items: ["tahti.polres"], scope: "polres" },
-  ] as JawaraGroup[],
-  polsekReporters: wilayahList.map(([wilayah, nama]) => {
-    const units = Object.entries(unitPresence)
-      .filter(([unit, wilayahs]) => unit !== "spkt" && wilayahs.includes(wilayah))
-      .map(([unit]) => `${unitLabels[unit] ?? unit} — ${unit}.${wilayah}`);
-    const items = unitPresence.spkt.includes(wilayah)
-      ? [...units, `SPKT — spkt.${wilayah}`]
-      : units;
-    return {
-      name: `POLSEK ${nama.toUpperCase()}`,
-      count: items.length,
-      items,
-      scope: "polsek" as const,
-    };
-  }),
+  polresReporters: satuanUnits.map(([unit, name]) => ({
+    name,
+    count: satuanUnitCounts[unit],
+    items: Array.from(
+      { length: satuanUnitCounts[unit] },
+      (_, i) => `sat.${unit}.unit${i + 1}`,
+    ),
+    scope: "polres" as const,
+  })),
+  polsekReporters: wilayahList.map(([wilayah, nama]) => ({
+    name: `POLSEK ${nama.toUpperCase()}`,
+    count: 6,
+    items: Object.keys(unitPresence).map(
+      (unit) =>
+        `${satuanLabels[unit] ?? unit} — unit.${unit}.${wilayah}`,
+    ),
+    scope: "polsek" as const,
+  })),
 };
 
 export const jawaraTotals = {
   pemantau:
     jawaraStructure.allAccessMonitors +
     jawaraStructure.functionMonitors.length +
-    jawaraStructure.polsekMonitors.length, // 27
+    jawaraStructure.polsekMonitors.length, // 3 + 8 + 14 = 25
   polresReporters: jawaraStructure.polresReporters.reduce(
     (sum, item) => sum + item.count,
     0,
-  ), // 9
+  ), // 23
   polsekReporters: jawaraStructure.polsekReporters.reduce(
     (sum, item) => sum + item.count,
     0,
-  ), // 96 + 14 SPKT = 110
+  ), // 84
 };
 
 const unitTerms: Record<string, string[]> = {

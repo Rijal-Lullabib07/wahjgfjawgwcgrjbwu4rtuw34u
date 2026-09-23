@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { SessionUser } from "../../types";
 import {
   fetchLaporan,
   fetchLokasiPelapor,
@@ -16,6 +17,33 @@ interface Props {
   refreshKey: number;
   /** Posisi GPS sendiri juga ditampilkan (default: ya). */
   showSelf?: boolean;
+  /** Session pemantau — untuk filter cakupan personel di peta (lapisan
+   *  klien di atas RLS posisi; Kapolsek hanya lihat Polseknya, Kasat
+   *  hanya unit fungsinya, all = semua). */
+  session?: SessionUser | null;
+}
+
+/**
+ * Filter cakupan pemantau untuk daftar personel (posisi live).
+ * Kebijakan SAMA dengan can_read_monitor_scope() di SQL:
+ *   all     → semua
+ *   wilayah → hanya personel ber-wilayah_key sama
+ *   fungsi  → hanya personel ber-unit_key sama
+ */
+function dalamCakupan(
+  session: SessionUser | null | undefined,
+  p: Pick<LokasiPelapor, "unit_key" | "wilayah_key">,
+): boolean {
+  if (!session) return true; // tanpa session (mis. ReguApp) — biarkan RLS bekerja
+  if (session.accessLevel === "wilayah") {
+    return (session.scopeKey ?? "").trim().toLowerCase() ===
+      (p.wilayah_key ?? "").trim().toLowerCase();
+  }
+  if (session.accessLevel === "fungsi") {
+    return (session.scopeKey ?? "").trim().toLowerCase() ===
+      (p.unit_key ?? "").trim().toLowerCase();
+  }
+  return true; // all
 }
 
 /** Marker titik berwarna via divIcon (tanpa aset gambar). */
@@ -138,7 +166,7 @@ function PopupPersonel({ p }: { p: LokasiPelapor }) {
  * Biru = kegiatan, merah = kejadian, pion = posisi live personel
  * (realtime dari tabel `posisi`), hijau = posisi sendiri.
  */
-export default function PetaScreen({ refreshKey, showSelf = true }: Props) {
+export default function PetaScreen({ refreshKey, showSelf = true, session }: Props) {
   const [kategori, setKategori] = useState<"all" | "kegiatan" | "kejadian">("all");
   const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchLaporan>> | null>(
     null,
@@ -176,12 +204,15 @@ export default function PetaScreen({ refreshKey, showSelf = true }: Props) {
 
   const loadPelapor = useCallback(async () => {
     try {
-      setPelapor(await fetchLokasiPelapor());
+      const semua = await fetchLokasiPelapor();
+      // Lapisan klien di atas RLS: sembunyikan personel di luar cakupan
+      // (Kapolsek = Polseknya, Kasat = unit fungsinya, all = semua).
+      setPelapor(semua.filter((p) => dalamCakupan(session, p)));
     } catch {
       // Layer personel opsional — kegagalan tidak menggagalkan peta.
       setPelapor([]);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     void loadPelapor();

@@ -6,6 +6,7 @@
   "scripts": {
     "icons": "node scripts/generate-icons.mjs",
     "provision:jawara": "node scripts/provision-jawara-accounts.mjs",
+    "provision:siplap-v2": "node scripts/provision-siplap-v2.mjs",
     "dev": "npm run icons && vite",
     "build": "npm run icons && tsc --noEmit && vite build",
     "preview": "vite preview",

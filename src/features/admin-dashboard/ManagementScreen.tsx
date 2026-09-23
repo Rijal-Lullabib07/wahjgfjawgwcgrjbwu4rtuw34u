@@ -463,7 +463,7 @@ function EditPemantauModal({
               className="input mt-1"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="mis. polres.kapolres"
+              placeholder="mis. kapolres.purwakarta"
             />
           </label>
           <label className="text-xs font-semibold text-slate-500 sm:col-span-2">

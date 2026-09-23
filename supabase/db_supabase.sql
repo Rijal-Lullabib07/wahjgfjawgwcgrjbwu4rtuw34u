@@ -1,12 +1,13 @@
 -- =============================================================
 -- SIPLAP — Supabase consolidated database script (PROJECT BARU)
 -- =============================================================
--- Struktur akun JAWARA (146 total):
---   Pemantau (27)   : Kapolres, Wakapolres (read-only), Admin Utama,
---                     10 Kasat (fungsi), 14 Kapolsek (wilayah)
---   Pelapor Lv2 (9) : satu akun per satuan Polres (reskrim.polres, dst.)
---   Pelapor Lv1 (110): 96 akun unit di Polsek (reskrim.jatiluhur, dst.)
---                      + 14 SPKT (spkt.jatiluhur)
+-- Struktur akun SIPLAP v2 (132 total):
+--   Pemantau (25)   : Kapolres, Wakapolres (read-only), Kabag Operasional,
+--                     8 Kasat sat.* (fungsi), 14 Kapolsek kapolsek.* (wilayah)
+--   Pelapor Lv2 (23): unit satuan Polres (sat.intelkam.unit1..4, dst.)
+--   Pelapor Lv1 (84): 6 unit × 14 Polsek (unit.spkt/intelkam/reskrim/
+--                     binmas/samapta/lantas . <polsek>, mis.
+--                     unit.spkt.jatiluhur)
 -- Akun lama (631) TIDAK dibuat di sini; skema tetap mendukung arsip
 -- lewat kolom regu.is_legacy bila riwayat lama diimpor kemudian.
 --
@@ -162,7 +163,9 @@ as $$
   select public.current_monitor_id() is not null;
 $$;
 
--- Admin penuh (Kapolres / Admin Utama): boleh kelola.
+-- Admin penuh (Kapolres / Kabag Ops): boleh kelola.
+-- (migration 0026: cek access_level WAJIB pada baris pemanggil — versi
+-- lama mengecek dua baris berbeda sehingga semua pemantau dianggap admin.)
 create or replace function public.is_admin()
 returns boolean
 language sql stable security definer set search_path = public
@@ -170,7 +173,7 @@ as $$
   select exists (
     select 1 from public.admin_users a
     where a.id = public.current_monitor_id()
-      and a.access_level = 'all'
+      and lower(trim(coalesce(a.access_level, ''))) = 'all'
   );
 $$;
 
@@ -259,6 +262,10 @@ alter table public.reminder_logs       enable row level security;
 alter table public.folder_reads        enable row level security;
 
 -- regu: pelapor lihat profil sendiri; pemantau lihat sesuai cakupan.
+-- (migration 0026: policy terbuka warisan 0006 "accounts readable by
+-- authenticated" using(true) di-drop — hanya cakupan yang berlaku.)
+drop policy if exists "regu readable by authenticated" on public.regu;
+drop policy if exists "accounts readable by authenticated" on public.regu;
 drop policy if exists "accounts readable by own scope" on public.regu;
 create policy "accounts readable by own scope"
 on public.regu for select to authenticated
@@ -326,6 +333,60 @@ with check (exists (
   select 1 from public.laporan l
   where l.id = laporan_id and l.regu_id = public.current_regu_id()
 ));
+
+-- posisi (GPS realtime pelapor): baca sesuai cakupan; tulis hanya pemilik.
+create table if not exists public.posisi (
+  regu_id       uuid primary key references public.regu(id) on delete cascade,
+  latitude      double precision not null,
+  longitude     double precision not null,
+  accuracy_m    double precision,
+  kecepatan_mps double precision,
+  diupdate_pada timestamptz not null default now(),
+  created_at    timestamptz not null default now()
+);
+comment on table public.posisi is
+  'Posisi GPS terkini tiap pelapor — satu baris per regu, selalu di-update (realtime tracking).';
+alter table public.posisi enable row level security;
+create index if not exists idx_posisi_diupdate on public.posisi (diupdate_pada desc);
+
+-- Baca: pelapor hanya posisinya; pemantau sesuai cakupan
+-- (Kapolsek = wilayahnya, Kasat = unit fungsinya, all = semua).
+drop policy if exists "posisi readable by authenticated" on public.posisi;
+drop policy if exists "posisi read scoped" on public.posisi;
+create policy "posisi read scoped"
+on public.posisi for select to authenticated
+using (
+  regu_id = public.current_regu_id()
+  or exists (
+    select 1 from public.regu r
+    where r.id = posisi.regu_id
+      and public.can_read_monitor_scope(r.unit_key, r.wilayah_key)
+  )
+);
+
+drop policy if exists "posisi insert own" on public.posisi;
+create policy "posisi insert own"
+on public.posisi for insert to authenticated
+with check (regu_id = public.current_regu_id());
+
+drop policy if exists "posisi update own" on public.posisi;
+create policy "posisi update own"
+on public.posisi for update to authenticated
+using (regu_id = public.current_regu_id())
+with check (regu_id = public.current_regu_id());
+
+-- posisi masuk publication realtime (peta dashboard update tanpa reload).
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'posisi'
+    ) then
+      execute 'alter publication supabase_realtime add table public.posisi';
+    end if;
+  end if;
+end $$;
 
 -- push_subscriptions: pemilik device kelola sendiri; admin baca semua.
 drop policy if exists "push sub manage own" on public.push_subscriptions;
@@ -760,6 +821,12 @@ begin
     end if;
     if not exists (
       select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'posisi'
+    ) then
+      execute 'alter publication supabase_realtime add table public.posisi';
+    end if;
+    if not exists (
+      select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'laporan_foto'
     ) then
       execute 'alter publication supabase_realtime add table public.laporan_foto';
@@ -773,41 +840,39 @@ begin
   end if;
 end $$;
 
--- 10) SEED 146 AKUN JAWARA ---------------------------------------
--- Hanya metadata akun; password dibuat oleh scripts/provision-jawara-accounts.mjs.
+-- 10) SEED 132 AKUN SIPLAP v2 ------------------------------------
+-- Hanya metadata akun; password dibuat oleh scripts/provision-siplap-v2.mjs.
 
--- 10a. Pemantau all-access (3)
+-- 10a. Pemantau all-access (3): Kapolres, Wakapolres, Kabag Operasional
 insert into public.admin_users (nama, email, username, role, access_level, scope_key)
 values
-  ('KAPOLRES',   'polres.kapolres@monitor.siplap.id',   'polres.kapolres',   'admin',    'all', null),
-  ('WAKAPOLRES', 'polres.wakapolres@monitor.siplap.id', 'polres.wakapolres', 'pimpinan', 'all', null),
-  ('ADMIN UTAMA','admin@polres.go.id',                  'polres.admin',      'admin',    'all', null)
+  ('KAPOLRES PURWAKARTA',   'kapolres.purwakarta@monitor.siplap.id',   'kapolres.purwakarta',   'admin',    'all', null),
+  ('WAKAPOLRES PURWAKARTA', 'wakapolres.purwakarta@monitor.siplap.id', 'wakapolres.purwakarta', 'pimpinan', 'all', null),
+  ('KABAG OPERASIONAL', 'kabag.ops@monitor.siplap.id',       'kabag.ops',       'admin',    'all', null)
 on conflict (email) do update set
   nama = excluded.nama, username = excluded.username, role = excluded.role,
   access_level = excluded.access_level, scope_key = excluded.scope_key;
 
--- 10b. Pemantau sesuai fungsi: 10 Kasat
+-- 10b. Pemantau sesuai fungsi: 8 Kasat (sat.<unit>)
 insert into public.admin_users (nama, email, username, role, access_level, scope_key)
 values
-  ('KASAT INTELKAM',     'intelkam.kasat@monitor.siplap.id', 'intelkam.kasat', 'pimpinan', 'fungsi', 'intelkam'),
-  ('KASAT RESKRIM',      'reskrim.kasat@monitor.siplap.id',  'reskrim.kasat',  'pimpinan', 'fungsi', 'reskrim'),
-  ('KASAT RESNARKOBA',   'narkoba.kasat@monitor.siplap.id',  'narkoba.kasat',  'pimpinan', 'fungsi', 'narkoba'),
-  ('KASAT BINMAS',       'binmas.kasat@monitor.siplap.id',   'binmas.kasat',   'pimpinan', 'fungsi', 'binmas'),
-  ('KASAT SAMAPTA',      'samapta.kasat@monitor.siplap.id',  'samapta.kasat',  'pimpinan', 'fungsi', 'samapta'),
-  ('PAM OBVIT SAMAPTA',  'pamobvit.kasat@monitor.siplap.id', 'pamobvit.kasat', 'pimpinan', 'fungsi', 'pamobvit'),
-  ('KASAT LANTAS',       'lantas.kasat@monitor.siplap.id',   'lantas.kasat',   'pimpinan', 'fungsi', 'lantas'),
-  ('KASAT POLAIR',       'polair.kasat@monitor.siplap.id',   'polair.kasat',   'pimpinan', 'fungsi', 'polair'),
-  ('KASAT TAHTI',        'tahti.kasat@monitor.siplap.id',    'tahti.kasat',    'pimpinan', 'fungsi', 'tahti'),
-  ('KASAT SPKT',         'spkt.kasat@monitor.siplap.id',     'spkt.kasat',     'pimpinan', 'fungsi', 'spkt')
+  ('KASAT INTELKAM',    'sat.intelkam@monitor.siplap.id',   'sat.intelkam',   'pimpinan', 'fungsi', 'intelkam'),
+  ('KASAT RESKRIM',     'sat.reskrim@monitor.siplap.id',    'sat.reskrim',    'pimpinan', 'fungsi', 'reskrim'),
+  ('KASAT RESNARKOBA',  'sat.resnarkoba@monitor.siplap.id', 'sat.resnarkoba', 'pimpinan', 'fungsi', 'resnarkoba'),
+  ('KASAT BINMAS',      'sat.binmas@monitor.siplap.id',     'sat.binmas',     'pimpinan', 'fungsi', 'binmas'),
+  ('KASAT SAMAPTA',     'sat.samapta@monitor.siplap.id',    'sat.samapta',    'pimpinan', 'fungsi', 'samapta'),
+  ('KASAT LANTAS',      'sat.lantas@monitor.siplap.id',     'sat.lantas',     'pimpinan', 'fungsi', 'lantas'),
+  ('KASAT POLAIR',      'sat.polair@monitor.siplap.id',     'sat.polair',     'pimpinan', 'fungsi', 'polair'),
+  ('KASAT TAHTI',       'sat.tahti@monitor.siplap.id',      'sat.tahti',      'pimpinan', 'fungsi', 'tahti')
 on conflict (email) do update set
   nama = excluded.nama, username = excluded.username, role = excluded.role,
   access_level = excluded.access_level, scope_key = excluded.scope_key;
 
--- 10c. Pemantau sesuai wilayah: 14 Kapolsek
+-- 10c. Pemantau sesuai wilayah: 14 Kapolsek (kapolsek.<polsek>)
 insert into public.admin_users (nama, email, username, role, access_level, scope_key)
 select 'KAPOLSEK ' || upper(w.nama),
-       w.wilayah_key || '.kapolsek@monitor.siplap.id',
-       w.wilayah_key || '.kapolsek',
+       'kapolsek.' || w.wilayah_key || '@monitor.siplap.id',
+       'kapolsek.' || w.wilayah_key,
        'pimpinan', 'wilayah', w.wilayah_key
 from (values
   ('kota','Purwakarta Kota'), ('plered','Plered'),
@@ -822,32 +887,35 @@ on conflict (email) do update set
   nama = excluded.nama, username = excluded.username, role = excluded.role,
   access_level = excluded.access_level, scope_key = excluded.scope_key;
 
--- 10d. Pelapor level 2: 9 akun, satu per satuan Polres
+-- 10d. Pelapor level 2: 23 akun unit satuan Polres (sat.<unit>.unitN)
 insert into public.regu (nama_regu, kode_login, status_aktif, access_level, unit_key, wilayah_key)
-values
-  ('Satintelkam',       'intelkam.polres', true, 'pelapor-level-2', 'intelkam', null),
-  ('Satreskrim',        'reskrim.polres',  true, 'pelapor-level-2', 'reskrim',  null),
-  ('Satresnarkoba',     'narkoba.polres',  true, 'pelapor-level-2', 'narkoba',  null),
-  ('Satbinmas',         'binmas.polres',   true, 'pelapor-level-2', 'binmas',   null),
-  ('Satsamapta',        'samapta.polres',  true, 'pelapor-level-2', 'samapta',  null),
-  ('Pam Obvit Samapta', 'pamobvit.polres', true, 'pelapor-level-2', 'pamobvit', null),
-  ('Satlantas',         'lantas.polres',   true, 'pelapor-level-2', 'lantas',   null),
-  ('Satpolairud',       'polair.polres',   true, 'pelapor-level-2', 'polair',   null),
-  ('Sattahti',          'tahti.polres',    true, 'pelapor-level-2', 'tahti',    null)
+select
+  s.label || ' Unit ' || s.no,
+  'sat.' || s.unit_key || '.unit' || s.no,
+  true, 'pelapor-level-2', s.unit_key, null
+from (values
+  ('intelkam','Satintelkam',4),
+  ('reskrim','Satreskrim',5),
+  ('resnarkoba','Satresnarkoba',2),
+  ('binmas','Satbinmas',1),
+  ('samapta','Satsamapta',3),
+  ('lantas','Satlantas',5),
+  ('polair','Satpolairud',2),
+  ('tahti','Sattahti',1)
+) as s(unit_key, label, jumlah)
+cross join lateral generate_series(1, s.jumlah) as s2(no)
 on conflict (kode_login) do update set
   nama_regu = excluded.nama_regu, status_aktif = excluded.status_aktif,
   access_level = excluded.access_level, unit_key = excluded.unit_key,
   wilayah_key = excluded.wilayah_key, is_legacy = false;
 
--- 10e. Pelapor level 1: 96 akun unit di Polsek (reskrim.jatiluhur, dst.)
--- Presensi unit mengikuti JAWARA APP.xlsx (BKO diabaikan):
---   samapta tidak ada di Sukatani, binmas tidak ada di Plered/Darangdan/Sukasari,
---   propam tidak ada di Purwakarta Kota/Campaka/Maniis, lantas hanya di
---   Kota/Plered/Jatiluhur/Bungursari/Cibatu, sium = staf gabungan di semua Polsek.
+-- 10e. Pelapor level 1: 6 unit × 14 Polsek = 84 akun (seragam, struktur v2)
+--      Kode: unit.<unit>.<polsek> (mis. unit.spkt.jatiluhur); nama tampil:
+--      "Polsek <Nama> Unit <Unit>".
 insert into public.regu (nama_regu, kode_login, status_aktif, access_level, unit_key, wilayah_key)
 select
-  un.nama || ' Polsek ' || w.nama,
-  un.unit_key || '.' || w.wilayah_key,
+  'Polsek ' || w.nama || ' Unit ' || un.nama,
+  'unit.' || un.unit_key || '.' || w.wilayah_key,
   true, 'pelapor-level-1', un.unit_key, w.wilayah_key
 from (values
   ('kota','Purwakarta Kota'), ('plered','Plered'),
@@ -858,70 +926,17 @@ from (values
   ('sukatani','Sukatani'),    ('sukasari','Sukasari'),
   ('kiarapedes','Kiarapedes'),('bojong','Bojong')
 ) as w(wilayah_key, nama)
-join (values
-  ('reskrim','Reskrim'),          ('intelkam','Intelkam'),
-  ('bhabinkamtibmas','Bhabinkamtibmas'), ('samapta','Samapta'),
-  ('binmas','Binmas'),            ('propam','Propam'),
-  ('lantas','Lantas'),            ('sium','Sium & Humas')
+cross join (values
+  ('spkt','SPKT'),     ('intelkam','Intelkam'), ('reskrim','Reskrim'),
+  ('binmas','Binmas'), ('samapta','Samapta'),   ('lantas','Lantas')
 ) as un(unit_key, nama)
-  on (un.unit_key, w.wilayah_key) in (
-    -- samapta: semua kecuali Sukatani
-    select u, wk from (values
-      ('samapta','kota'),('samapta','plered'),('samapta','jatiluhur'),('samapta','bungursari'),
-      ('samapta','campaka'),('samapta','cibatu'),('samapta','pasawahan'),('samapta','darangdan'),
-      ('samapta','wanayasa'),('samapta','maniis'),('samapta','sukasari'),('samapta','kiarapedes'),
-      ('samapta','bojong')
-    ) as v(u, wk)
-    union all
-    -- binmas: semua kecuali Plered, Darangdan, Sukasari
-    select u, wk from (values
-      ('binmas','kota'),('binmas','jatiluhur'),('binmas','bungursari'),('binmas','campaka'),
-      ('binmas','cibatu'),('binmas','pasawahan'),('binmas','wanayasa'),('binmas','maniis'),
-      ('binmas','sukatani'),('binmas','kiarapedes'),('binmas','bojong')
-    ) as v(u, wk)
-    union all
-    -- propam: semua kecuali Purwakarta Kota, Campaka
-    select u, wk from (values
-      ('propam','plered'),('propam','jatiluhur'),('propam','bungursari'),('propam','cibatu'),
-      ('propam','pasawahan'),('propam','darangdan'),('propam','wanayasa'),('propam','sukatani'),
-      ('propam','sukasari'),('propam','kiarapedes'),('propam','bojong')
-    ) as v(u, wk)
-    union all
-    -- lantas: hanya di 5 Polsek
-    select u, wk from (values
-      ('lantas','kota'),('lantas','plered'),('lantas','jatiluhur'),
-      ('lantas','bungursari'),('lantas','cibatu')
-    ) as v(u, wk)
-    union all
-    -- reskrim, intelkam, bhabinkamtibmas, sium: semua Polsek (4 × 14 = 56)
-    select un2.u, w2.wk
-    from unnest(array['reskrim','intelkam','bhabinkamtibmas','sium']) as un2(u)
-    cross join unnest(array['kota','plered','jatiluhur','bungursari','campaka','cibatu','pasawahan',
-                           'darangdan','wanayasa','maniis','sukatani','sukasari','kiarapedes','bojong']) as w2(wk)
-  )
 on conflict (kode_login) do update set
   nama_regu = excluded.nama_regu, status_aktif = excluded.status_aktif,
   access_level = excluded.access_level, unit_key = excluded.unit_key,
   wilayah_key = excluded.wilayah_key, is_legacy = false;
 
--- 10f. Pelapor SPKT: 14 akun (spkt.<polsek>)
-insert into public.regu (nama_regu, kode_login, status_aktif, access_level, unit_key, wilayah_key)
-select 'SPKT Polsek ' || w.nama,
-       'spkt.' || w.wilayah_key,
-       true, 'pelapor-level-1', 'spkt', w.wilayah_key
-from (values
-  ('kota','Purwakarta Kota'), ('plered','Plered'),
-  ('jatiluhur','Jatiluhur'),  ('bungursari','Bungursari'),
-  ('campaka','Campaka'),      ('cibatu','Cibatu'),
-  ('pasawahan','Pasawahan'),  ('darangdan','Darangdan'),
-  ('wanayasa','Wanayasa'),    ('maniis','Maniis'),
-  ('sukatani','Sukatani'),    ('sukasari','Sukasari'),
-  ('kiarapedes','Kiarapedes'),('bojong','Bojong')
-) as w(wilayah_key, nama)
-on conflict (kode_login) do update set
-  nama_regu = excluded.nama_regu, status_aktif = excluded.status_aktif,
-  access_level = excluded.access_level, unit_key = excluded.unit_key,
-  wilayah_key = excluded.wilayah_key, is_legacy = false;
+-- 10f. (DELETED) Seed lama 96 akun Presensi unit per Polsek — digantikan
+--       blok 10e format unit.<unit>.<polsek>.
 
 -- 11) SANITY CHECK -----------------------------------------------
 
@@ -930,22 +945,20 @@ declare
   n_monitor int;
   n_l2 int;
   n_l1 int;
-  n_spkt int;
 begin
   select count(*) into n_monitor from public.admin_users;
   select count(*) into n_l2 from public.regu where access_level = 'pelapor-level-2';
-  select count(*) into n_l1 from public.regu where access_level = 'pelapor-level-1' and unit_key <> 'spkt';
-  select count(*) into n_spkt from public.regu where access_level = 'pelapor-level-1' and unit_key = 'spkt';
-  if n_monitor <> 27 or n_l2 <> 9 or n_l1 <> 96 or n_spkt <> 14 then
-    raise exception 'Seed SIPLAP tidak lengkap: % pemantau, % pelapor Polres, % pelapor unit, % SPKT',
-      n_monitor, n_l2, n_l1, n_spkt;
+  select count(*) into n_l1 from public.regu where access_level = 'pelapor-level-1';
+  if n_monitor <> 25 or n_l2 <> 23 or n_l1 <> 84 then
+    raise exception 'Seed SIPLAP tidak lengkap: % pemantau, % pelapor satuan, % pelapor Polsek',
+      n_monitor, n_l2, n_l1;
   end if;
-  raise notice 'Seed SIPLAP selesai: 27 pemantau + 9 pelapor Polres + 96 pelapor unit + 14 SPKT = 146 akun.';
+  raise notice 'Seed SIPLAP v2 selesai: 25 pemantau + 23 pelapor satuan + 84 pelapor Polsek = 132 akun.';
 end $$;
 
 -- =============================================================
 -- SELESAI. Lanjutkan dengan:
---   1. npm run provision:jawara  → buat akun Auth + password
+--   1. npm run provision:siplap-v2  → buat akun Auth + password
 --   2. README → setup VAPID, NOTIFY_SECRET, deploy notify-laporan,
 --      dan Database Webhook pada tabel laporan.
 -- =============================================================

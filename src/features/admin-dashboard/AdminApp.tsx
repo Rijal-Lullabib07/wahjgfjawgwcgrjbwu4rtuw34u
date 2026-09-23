@@ -202,13 +202,13 @@ export default function AdminApp({ session, onLogout }: Props) {
   const page = (() => {
     switch (tab) {
       case "laporan":
-        return <LaporanGiatScreen refreshKey={refreshKey} />;
+        return <LaporanGiatScreen refreshKey={refreshKey} session={session} />;
       case "statistik":
         return <StatistikScreen refreshKey={refreshKey} />;
       case "peta":
-        return <PetaScreen refreshKey={refreshKey} />;
+        return <PetaScreen refreshKey={refreshKey} session={session} />;
       case "rekap":
-        return <RekapScreen />;
+        return <RekapScreen session={session} />;
       case "manajemen":
         return session.role === "admin" ? <ManagementScreen /> : null;
       default:
@@ -353,6 +353,6 @@ export default function AdminApp({ session, onLogout }: Props) {
 }
 
 /** Rekap & Unduh — alias ringkas dari generator laporan (PDF/Excel). */
-function RekapScreen() {
-  return <LaporanGiatScreen refreshKey={0} rekapMode />;
+function RekapScreen({ session }: { session: SessionUser }) {
+  return <LaporanGiatScreen refreshKey={0} rekapMode session={session} />;
 }

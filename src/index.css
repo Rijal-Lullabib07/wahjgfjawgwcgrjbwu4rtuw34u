@@ -162,6 +162,41 @@ select {
   position: relative;
   isolation: isolate;
   animation: login-glow 7s ease-in-out infinite;
+  border-color: #5d91c2;
+  background: linear-gradient(145deg, #3f78aa 0%, #2e6295 100%);
+  box-shadow: 0 20px 50px rgba(2, 12, 25, 0.32);
+  backdrop-filter: none;
+}
+.login-page {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(116, 174, 226, 0.34), transparent 30rem),
+    radial-gradient(circle at 86% 22%, rgba(245, 185, 66, 0.16), transparent 25rem),
+    linear-gradient(135deg, #29486a 0%, #1e3858 52%, #1c304d 100%);
+}
+.login-page .input {
+  border-color: #9bbce0;
+  background: #dbeafe;
+  color: #102f50;
+  box-shadow: inset 0 1px 2px rgba(8, 33, 60, 0.12);
+}
+.login-page .input:focus {
+  border-color: #f5b942;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.22);
+}
+.login-page .input::placeholder {
+  color: #5d7390;
+}
+.login-page .login-form-card > .mb-5 {
+  background: #24527f;
+}
+.login-page .login-form-card label {
+  color: #dbeafe;
+}
+.login-page > .mx-auto > .mt-6 {
+  border-color: #5d91c2;
+  background: #285a88;
+  backdrop-filter: none;
 }
 .login-form-card::before {
   content: "";
@@ -922,7 +957,7 @@ select {
     font-size: 0.58rem;
   }
   .regu-app header .text-sm {
-    max-width: 5rem;
+    max-width: none;
     font-size: 0.72rem;
   }
 }

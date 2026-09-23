@@ -4,8 +4,11 @@ dev-dist/
 .env
 .env.local
 .env*
+.envduluhiraukan
+env baru/
 .vapid-tmp.txt
 jawara-credentials-*.csv
+siplap-v2-credentials-*.csv
 pw.md
 .DS_Store
 supabase/.branches

@@ -20,18 +20,17 @@ pemantau memantau lewat **tab 📁 Folder** (Polsek → unit → laporan) dan me
 - **Generator laporan**: export PDF (jsPDF + thumbnail) & Excel (SheetJS)
 - **RLS Supabase**: pelapor hanya akses laporan miliknya; pemantau sesuai cakupan
 
-## Struktur akun (146 total)
+## Struktur akun (132 total)
 
 | Kelompok | Jumlah | Cakupan |
 | --- | --- | --- |
-| Kapolres | 1 | Pemantau + kelola (semua folder) |
-| Wakapolres | 1 | Read-only (semua folder) |
-| Admin Utama | 1 | Kelola (akun terpisah) |
-| Kasat (fungsi) | 10 | Satuannya di Polres + folder unit yang sama di tiap Polsek |
-| Kapolsek (wilayah) | 14 | Langsung masuk folder Polseknya |
-| Pelapor level 2 | 9 | Satu akun per satuan Polres (`reskrim.polres`, dst.) |
-| Pelapor level 1 | 96 | Akun unit di Polsek (`reskrim.jatiluhur`, dst.) |
-| SPKT | 14 | Satu akun per Polsek (`spkt.jatiluhur`, dst.) |
+| Kapolres | 1 | Pemantau + kelola (semua folder) — `kapolres.purwakarta` |
+| Wakapolres | 1 | Read-only (semua folder) — `wakapolres.purwakarta` |
+| Kabag Operasional | 1 | Pemantau + kelola (semua folder) — `kabag.ops` |
+| Kasat (fungsi) | 8 | Satuannya di Polres + folder unit yang sama di tiap Polsek (`sat.intelkam`, dst.) |
+| Kapolsek (wilayah) | 14 | Langsung masuk folder Polseknya (`kapolsek.jatiluhur`, dst.) |
+| Pelapor level 2 | 23 | Satu akun per unit satuan Polres (`sat.reskrim.unit1`, dst.) |
+| Pelapor level 1 | 84 | Akun unit di Polsek, 6 unit × 14 Polsek (`unit.spkt.jatiluhur`, `unit.reskrim.jatiluhur`, dst.) — nama tampil: **"Polsek Jatiluhur Unit SPKT"** |
 
 Akun lama (format `.pelapor01`–`.pelapor73` dst.) **tidak dibuat** di project
 baru. Skema tetap mendukung arsip lewat kolom `regu.is_legacy`: bila kelak data
@@ -51,18 +50,18 @@ lama diimpor, laporannya tampil di folder satuan masing-masing dan di folder
 3. **SQL Editor** → jalankan **seluruh isi `supabase/db_supabase.sql`**.
    Satu file ini berisi: tabel + index, helper & RLS scope-aware, storage
    bucket `laporan-foto`, realtime, RPC folder (`folder_overview`,
-   `folder_laporan`, `mark_folder_read`), dan **seed 146 akun** (metadata saja,
+   `folder_laporan`, `mark_folder_read`), dan **seed 132 akun** (metadata saja,
    tanpa password). Idempoten — aman dijalankan ulang.
    > Folder `supabase/migrations/` adalah riwayat project lama; untuk project
    > baru cukup `db_supabase.sql`.
 4. **Provision akun Auth** (membuat password):
    ```powershell
    # .env.provision.local: VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
-   npm run provision:jawara
+   npm run provision:siplap-v2
    ```
-   Script membuat **146 akun** dengan password pola **KATA-ANGKA-KATA**
+   Script membuat **132 akun** dengan password pola **KATA-ANGKA-KATA**
    (contoh: `Mangga-7429-Roti`) — tidak terlalu gampang ditebak, tidak terlalu
-   susah diketik di HP. Hasilnya ditulis ke `jawara-credentials-latest.csv`
+   susah diketik di HP. Hasilnya ditulis ke `siplap-v2-credentials-latest.csv`
    dan `pw.md` (keduanya sudah di `.gitignore`). Bagikan lewat kanal aman lalu
    **hapus kedua file**.
 
@@ -161,9 +160,9 @@ src/lib/folders.ts             → RPC folder (overview, isi, mark read)
 src/lib/notify.ts              → bunyi + getar popup
 src/lib/push                   → Web Push VAPID (subscribe, vapid, localReminder)
 src/lib/supabase               → client + adapter data
-supabase/db_supabase.sql       → skema lengkap + seed 146 akun (project baru)
+supabase/db_supabase.sql       → skema lengkap + seed 132 akun (project baru)
 supabase/functions             → notify-laporan, reminder-push, archive-photos, generate-report
-scripts/provision-jawara-accounts.mjs → buat akun Auth + password
+scripts/provision-siplap-v2.mjs → buat akun Auth + password (132 akun)
 ```
 
 ## Keamanan

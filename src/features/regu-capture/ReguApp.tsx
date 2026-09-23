@@ -146,22 +146,22 @@ export default function ReguApp({ session, onLogout }: Props) {
     <div className="regu-app flex min-h-dvh flex-col">
       <header className="safe-top sticky top-0 z-10 border-b border-white/10 bg-[#0b1428]/90 px-4 py-3 shadow-[0_12px_40px_rgba(2,12,25,0.28)] backdrop-blur-2xl">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="regu-logo-panel shrink-0">
               <PolresLogo className="h-12 w-40 sm:h-14 sm:w-48" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-gold-400">
                 Pelapor lapangan
               </div>
-              <div className="mt-0.5 max-w-32 truncate text-sm font-bold leading-tight text-white">
+              <div className="mt-0.5 whitespace-normal break-words text-sm font-bold leading-tight text-white">
                 {session.namaRegu}
               </div>
             </div>
           </div>
           <button
             onClick={onLogout}
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-400/40 hover:bg-red-400/10 hover:text-red-300"
+            className="shrink-0 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-red-400/40 hover:bg-red-400/10 hover:text-red-300"
           >
             Keluar
           </button>

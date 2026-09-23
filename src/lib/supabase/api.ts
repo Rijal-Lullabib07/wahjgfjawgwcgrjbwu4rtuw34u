@@ -97,12 +97,9 @@ export async function loginAdmin(
 ): Promise<SessionUser> {
   const client = requireClient();
   const normalized = identifier.trim().toLowerCase();
-  const email =
-    normalized === "polres.admin"
-      ? "admin@polres.go.id"
-      : normalized.includes("@")
-        ? normalized
-        : `${normalized}@monitor.siplap.id`;
+  const email = normalized.includes("@")
+    ? normalized
+    : `${normalized}@monitor.siplap.id`;
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw describeAuthError(error);
 
@@ -537,8 +534,9 @@ export interface LokasiPelapor {
 /**
  * Posisi terkini SEMUA pelapor (untuk peta personel di dashboard).
  * Satu baris per regu — tabel `posisi` selalu di-update pelapor.
- * RLS: semua authenticated boleh baca; penyaringan cakupan pemantau
- * dilakukan lewat can_read_laporan di klien.
+ * RLS (migration 0025): pelapor hanya posisinya; pemantau hanya posisi
+ * dalam cakupannya (can_read_monitor_scope). PetaScreen menyaring lagi
+ * di klien sebagai lapisan kedua.
  */
 export async function fetchLokasiPelapor(): Promise<LokasiPelapor[]> {
   const client = requireClient();

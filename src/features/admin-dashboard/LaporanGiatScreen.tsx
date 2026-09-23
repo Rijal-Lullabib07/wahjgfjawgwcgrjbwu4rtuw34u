@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Laporan } from "../../types";
+import type { Laporan, SessionUser } from "../../types";
 import {
   fetchLaporan,
   fetchReguList,
@@ -17,6 +17,28 @@ interface Props {
   refreshKey: number;
   /** rekapMode: tampilkan ringkas + tombol unduh besar (menu Rekap & Unduh). */
   rekapMode?: boolean;
+  /** Session pemantau — filter pilihan unit sesuai cakupan (lapisan klien
+   *  di atas RLS regu; Kapolsek hanya unit Polseknya, Kasat hanya unit
+   *  fungsinya, all = semua). */
+  session?: SessionUser | null;
+}
+
+/** Cakupan pemantau untuk daftar regu — sama dengan can_read_monitor_scope(). */
+function reguDalamCakupan(
+  session: SessionUser | null | undefined,
+  r: { unit_key?: string | null; wilayah_key?: string | null },
+): boolean {
+  if (!session) return true;
+  const level = session.accessLevel ?? "all";
+  if (level === "wilayah") {
+    return (session.scopeKey ?? "").trim().toLowerCase() ===
+      (r.wilayah_key ?? "").trim().toLowerCase();
+  }
+  if (level === "fungsi") {
+    return (session.scopeKey ?? "").trim().toLowerCase() ===
+      (r.unit_key ?? "").trim().toLowerCase();
+  }
+  return true; // all
 }
 
 type Preset = "harian" | "mingguan" | "bulanan" | "custom";
@@ -161,7 +183,7 @@ function CopyTeksButton({ teks }: { teks: string }) {
     </button>
   );
 }
-export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
+export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Props) {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState("all");
@@ -174,10 +196,16 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: reguList = [] } = useQuery({
+  const { data: reguSemua = [] } = useQuery({
     queryKey: ["regu-list"],
     queryFn: fetchReguList,
   });
+  // Lapisan klien di atas RLS (migration 0026): dropdown & export hanya
+  // menawarkan unit dalam cakupan pemantau.
+  const reguList = useMemo(
+    () => reguSemua.filter((r) => reguDalamCakupan(session, r)),
+    [reguSemua, session],
+  );
   const range = useMemo(() => presetRange(preset, custom), [preset, custom]);
 
   const { data: laporan = [], isFetching } = useQuery({

@@ -9,13 +9,13 @@ export default function SplashScreen() {
     <div className="flex min-h-dvh flex-col items-center justify-center bg-navy-950 px-6">
       <div className="flex flex-col items-center">
         {/* Logo + ring pulse + shine */}
-        <div className="relative flex h-28 w-28 items-center justify-center">
-          <span className="splash-ring absolute inset-0 rounded-[2rem] border-2 border-gold-400/60" />
-          <span className="splash-ring-delay absolute inset-0 rounded-[2rem] border-2 border-gold-400/40" />
-          <div className="splash-logo relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.6rem] bg-gradient-to-br from-navy-600 to-navy-800 shadow-2xl shadow-navy-900/80 ring-1 ring-navy-500/50">
+        <div className="relative flex h-24 w-64 items-center justify-center">
+          <span className="splash-ring absolute inset-0 rounded-[1.75rem] border-2 border-gold-400/60" />
+          <span className="splash-ring-delay absolute inset-0 rounded-[1.75rem] border-2 border-gold-400/40" />
+          <div className="splash-logo relative flex h-20 w-60 items-center justify-center rounded-[1.5rem] bg-gradient-to-br from-navy-600/90 to-navy-800/90 px-4 shadow-2xl shadow-navy-900/80 ring-1 ring-navy-500/50">
             {/* shine menyapu diagonal */}
             <span className="splash-shine absolute -inset-y-4 left-0 w-10 bg-gradient-to-r from-transparent via-white/25 to-transparent" />
-            <PolresLogo className="h-16 w-44 drop-shadow-lg" />
+            <PolresLogo className="h-14 w-56" />
           </div>
         </div>
 
