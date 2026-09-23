@@ -51,12 +51,19 @@ const MENU: Array<{
 /**
  * Peta Kegiatan hanya untuk Kapolres — Wakapolres, Kabag, Kasat, dan
  * Kapolsek tidak melihat fitur ini sama sekali (menu + halaman).
+ * Hati-hati: "WAKAPOLRES" mengandung substring "KAPOLRES", jadi pemeriksaan
+ * nama WAJIB pakai awalan + pengecualian eksplisit, bukan `includes`.
  */
 function isKapolresUser(session: SessionUser): boolean {
   const uname = session.username?.toLowerCase() ?? "";
+  const nama = (session.nama ?? "").toUpperCase();
+  if (uname.startsWith("wakapolres") || nama.startsWith("WAKAPOLRES")) {
+    return false;
+  }
   return (
     uname.startsWith("kapolres.") ||
-    (session.nama ?? "").toUpperCase().includes("KAPOLRES")
+    nama.startsWith("KAPOLRES ") ||
+    nama === "KAPOLRES"
   );
 }
 const MOBILE_MENU: Tab[] = ["beranda", "laporan", "statistik"];
