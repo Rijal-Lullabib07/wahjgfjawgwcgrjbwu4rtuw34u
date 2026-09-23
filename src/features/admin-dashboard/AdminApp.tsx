@@ -33,14 +33,32 @@ type Tab =
   | "manajemen";
 type DashboardTheme = "dark" | "light";
 
-const MENU: Array<{ key: Tab; icon: string; label: string; adminOnly?: boolean }> = [
+const MENU: Array<{
+  key: Tab;
+  icon: string;
+  label: string;
+  adminOnly?: boolean;
+  kapolresOnly?: boolean;
+}> = [
   { key: "beranda", icon: "🏠", label: "Beranda" },
   { key: "laporan", icon: "📄", label: "Laporan Giat" },
   { key: "statistik", icon: "📊", label: "Statistik" },
-  { key: "peta", icon: "📍", label: "Peta Kegiatan" },
+  { key: "peta", icon: "📍", label: "Peta Kegiatan", kapolresOnly: true },
   { key: "rekap", icon: "⬇️", label: "Rekap & Unduh" },
   { key: "manajemen", icon: "🗂️", label: "Manajemen Data", adminOnly: true },
 ];
+
+/**
+ * Peta Kegiatan hanya untuk Kapolres — Wakapolres, Kabag, Kasat, dan
+ * Kapolsek tidak melihat fitur ini sama sekali (menu + halaman).
+ */
+function isKapolresUser(session: SessionUser): boolean {
+  const uname = session.username?.toLowerCase() ?? "";
+  return (
+    uname.startsWith("kapolres.") ||
+    (session.nama ?? "").toUpperCase().includes("KAPOLRES")
+  );
+}
 const MOBILE_MENU: Tab[] = ["beranda", "laporan", "statistik"];
 
 /** Tombol "Aktifkan notifikasi" untuk pemantau (sekali saja, lalu aktif). */
@@ -181,9 +199,15 @@ export default function AdminApp({ session, onLogout }: Props) {
     };
   }, [handleInsert]);
 
+  const kapolres = isKapolresUser(session);
   const menu = useMemo(
-    () => MENU.filter((m) => !m.adminOnly || session.role === "admin"),
-    [session.role],
+    () =>
+      MENU.filter(
+        (m) =>
+          (!m.adminOnly || session.role === "admin") &&
+          (!m.kapolresOnly || kapolres),
+      ),
+    [session.role, kapolres],
   );
 
   const openFromPopup = () => {
@@ -206,7 +230,11 @@ export default function AdminApp({ session, onLogout }: Props) {
       case "statistik":
         return <StatistikScreen refreshKey={refreshKey} />;
       case "peta":
-        return <PetaScreen refreshKey={refreshKey} session={session} />;
+        return kapolres ? (
+          <PetaScreen refreshKey={refreshKey} session={session} />
+        ) : (
+          <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} />
+        );
       case "rekap":
         return <RekapScreen session={session} />;
       case "manajemen":
