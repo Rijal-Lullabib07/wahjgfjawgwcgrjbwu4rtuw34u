@@ -15,9 +15,17 @@
 //   { "action": "hapus",  regu_id }  → hapus permanen personel
 //     (akun auth + baris regu + laporan/foto terkait, cascade)
 //
-// Keamanan: pemanggil wajib membawa JWT admin penuh (is_admin()),
-// diverifikasi di sisi server lewat query admin_users — token user
-// tidak bisa dipalsukan karena diambil dari header Authorization.
+// Kelola PEMANTAU/pimpinan (tabel admin_users):
+//   { "action": "reset_pin_pemantau", admin_user_id, password_baru }
+//   { "action": "update_pemantau", admin_user_id, nama?, username_baru?,
+//     password_baru?, status_aktif? }
+//   { "action": "hapus_pemantau", admin_user_id }
+//
+// Keamanan: pemanggil wajib membawa JWT admin penuh — role 'admin'
+// DAN access_level 'all' di admin_users (Wakapolres/pimpinan yang
+// access_level-nya 'all' tetap DITOLAK karena read-only), diverifikasi
+// di sisi server lewat query admin_users — token user tidak bisa
+// dipalsukan karena diambil dari header Authorization.
 //
 // Deploy:
 //   supabase functions deploy manage-personel
@@ -25,6 +33,9 @@
 //  mengizinkan pemanggil dengan akses admin penuh.)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+/** Tipe klien Supabase service-role. */
+type AdminClient = ReturnType<typeof createClient>;
 
 interface BuatPayload {
   action: "buat";
@@ -58,7 +69,34 @@ interface HapusPayload {
   regu_id: string;
 }
 
-type Payload = BuatPayload | ResetPayload | UpdatePayload | HapusPayload;
+interface ResetPemantauPayload {
+  action: "reset_pin_pemantau";
+  admin_user_id: string;
+  password_baru: string;
+}
+
+interface UpdatePemantauPayload {
+  action: "update_pemantau";
+  admin_user_id: string;
+  nama?: string;
+  username_baru?: string;
+  password_baru?: string;
+  status_aktif?: boolean;
+}
+
+interface HapusPemantauPayload {
+  action: "hapus_pemantau";
+  admin_user_id: string;
+}
+
+type Payload =
+  | BuatPayload
+  | ResetPayload
+  | UpdatePayload
+  | HapusPayload
+  | ResetPemantauPayload
+  | UpdatePemantauPayload
+  | HapusPemantauPayload;
 
 /** Kunci service-role, mendukung model API key lama & baru. */
 function resolveAdminKey(): string {
@@ -86,6 +124,49 @@ function json(body: unknown, status = 200): Response {
       ...corsHeaders,
     },
   });
+}
+
+/**
+ * Cari id user auth dari email — telusuri SEMUA halaman. GoTrue default
+ * hanya mengembalikan 50 user per halaman, sehingga akun mudah terlewat
+ * bila proyek punya banyak user (personel + pemantau).
+ * Kolom admin_users.email menyimpan email auth pemantau.
+ */
+async function findAuthUserIdByEmail(
+  client: AdminClient,
+  email: string,
+): Promise<string | null> {
+  const needle = email.toLowerCase();
+  const perPage = 200;
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await client.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+    if (error) return null;
+    const users = data?.users ?? [];
+    const match = users.find(
+      (u) => (u.email ?? "").toLowerCase() === needle,
+    );
+    if (match) return match.id;
+    // Halaman tidak penuh → tidak ada halaman berikutnya.
+    if (users.length < perPage) return null;
+  }
+  return null;
+}
+
+/** Password sementara otomatis — untuk akun auth pemantau yang belum ada. */
+const KATA = [
+  "Mangga", "Roti", "Nasi", "Kopi", "Teh", "Gula", "Susu", "Buku",
+  "Pena", "Meja", "Kursi", "Lampu", "Pintu", "Kunci", "Gunung", "Laut",
+];
+
+function generatedPassword(): string {
+  const a = KATA[Math.floor(Math.random() * KATA.length)];
+  let b = KATA[Math.floor(Math.random() * KATA.length)];
+  while (b === a) b = KATA[Math.floor(Math.random() * KATA.length)];
+  const angka = 1000 + Math.floor(Math.random() * 9000);
+  return `${a}-${angka}-${b}`;
 }
 
 /**
@@ -129,13 +210,20 @@ Deno.serve(async (req) => {
 
   const { data: me, error: meErr } = await admin
     .from("admin_users")
-    .select("id, nama, access_level, status_aktif")
+    .select("id, nama, role, access_level, status_aktif")
     .or(`email.eq.${callerEmail},username.eq.${callerEmail.split("@")[0]}`)
     .maybeSingle();
   if (meErr) return json({ error: meErr.message }, 500);
-  if (!me || me.access_level !== "all" || me.status_aktif === false) {
+  // Kelola personel/pemantau HANYA untuk role 'admin' (Kapolres & Admin
+  // Utama). Wakapolres read-only meski access_level-nya 'all'.
+  if (
+    !me ||
+    me.role !== "admin" ||
+    me.access_level !== "all" ||
+    me.status_aktif === false
+  ) {
     return json(
-      { error: "Hanya admin penuh yang boleh mengelola personel." },
+      { error: "Hanya admin (Kapolres/Admin Utama) yang boleh mengelola personel." },
       403,
     );
   }
@@ -486,6 +574,309 @@ Deno.serve(async (req) => {
       }
 
       return json({ ok: true, regu_id: regu.id });
+    }
+
+    // ===== RESET PASSWORD PEMANTAU (pimpinan) =====
+    if (payload.action === "reset_pin_pemantau") {
+      const targetId = (payload.admin_user_id ?? "").trim();
+      const passwordBaru = (payload.password_baru ?? "").trim();
+      if (!targetId) return json({ error: "admin_user_id wajib diisi." }, 400);
+      if (passwordBaru.length < 6) {
+        return json({ error: "Password minimal 6 karakter." }, 400);
+      }
+
+      const { data: target, error: tErr } = await admin
+        .from("admin_users")
+        .select("id, nama, email, username")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (tErr) return json({ error: tErr.message }, 500);
+      if (!target) return json({ error: "Pemantau tidak ditemukan." }, 404);
+
+      // Cari akun auth lewat email pemantau (email wajib ada di admin_users).
+      let authUserId: string | null = null;
+      if (target.email) {
+        authUserId = await findAuthUserIdByEmail(admin, target.email);
+      }
+      if (!authUserId && target.username) {
+        // Fallback: email sintetis username@monitor.siplap.id.
+        authUserId = await findAuthUserIdByEmail(
+          admin,
+          `${target.username}@monitor.siplap.id`,
+        );
+      }
+      // Email akun auth: kolom email admin_users, fallback pola
+      // username@monitor.siplap.id.
+      const emailAuth =
+        target.email ?? `${target.username ?? targetId}@monitor.siplap.id`;
+
+      if (!authUserId) {
+        // Akun auth belum ada (mis. dibuat hanya lewat SQL) → buat sekarang
+        // dengan password baru yang diminta admin.
+        const created = await admin.auth.admin.createUser({
+          email: emailAuth,
+          password: passwordBaru,
+          email_confirm: true,
+          user_metadata: {
+            username: target.username ?? emailAuth.split("@")[0],
+          },
+        });
+        if (created.error) {
+          // Email ternyata sudah terdaftar → cari lagi & pakai akun itu.
+          if (!/already|exists|terdaftar/i.test(created.error.message)) {
+            return json(
+              { error: `Gagal membuat akun auth pemantau: ${created.error.message}` },
+              500,
+            );
+          }
+          authUserId = await findAuthUserIdByEmail(admin, emailAuth);
+          if (!authUserId) {
+            return json(
+              { error: "Email auth sudah dipakai tapi user tidak ditemukan." },
+              500,
+            );
+          }
+          const { error: syncErr } = await admin.auth.admin.updateUserById(
+            authUserId,
+            { password: passwordBaru },
+          );
+          if (syncErr) return json({ error: syncErr.message }, 500);
+          return json({ ok: true, admin_user_id: target.id, dipakai_ulang: true });
+        }
+        return json({ ok: true, admin_user_id: target.id, dibuat: true });
+      }
+
+      const { error: updErr } = await admin.auth.admin.updateUserById(
+        authUserId,
+        { password: passwordBaru },
+      );
+      if (updErr) return json({ error: updErr.message }, 500);
+
+      return json({ ok: true, admin_user_id: target.id });
+    }
+
+    // ===== EDIT DATA PEMANTAU (nama, username, password, status) =====
+    if (payload.action === "update_pemantau") {
+      const targetId = (payload.admin_user_id ?? "").trim();
+      if (!targetId) return json({ error: "admin_user_id wajib diisi." }, 400);
+
+      const { data: target, error: tErr } = await admin
+        .from("admin_users")
+        .select("id, nama, email, username")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (tErr) return json({ error: tErr.message }, 500);
+      if (!target) return json({ error: "Pemantau tidak ditemukan." }, 404);
+      if (targetId === me.id && payload.status_aktif === false) {
+        return json({ error: "Tidak bisa menonaktifkan akun sendiri." }, 400);
+      }
+
+      // --- Validasi input ---
+      const nama = (payload.nama ?? "").trim();
+      const usernameBaru = (payload.username_baru ?? "").trim().toLowerCase();
+      const passwordBaru = (payload.password_baru ?? "").trim();
+      if (passwordBaru && passwordBaru.length < 6) {
+        return json({ error: "Password minimal 6 karakter." }, 400);
+      }
+      if (usernameBaru && usernameBaru !== (target.username ?? "").toLowerCase()) {
+        // Username unik di admin_users.
+        const { data: dup } = await admin
+          .from("admin_users")
+          .select("id")
+          .ilike("username", usernameBaru)
+          .neq("id", target.id)
+          .maybeSingle();
+        if (dup) {
+          return json(
+            { error: `Username "${usernameBaru}" sudah dipakai pemantau lain.` },
+            409,
+          );
+        }
+      }
+
+      // --- Cari akun auth ---
+      let authUserId: string | null = null;
+      if (target.email) {
+        authUserId = await findAuthUserIdByEmail(admin, target.email);
+      }
+      if (!authUserId && target.username) {
+        // Fallback: email sintetis username@monitor.siplap.id.
+        authUserId = await findAuthUserIdByEmail(
+          admin,
+          `${target.username}@monitor.siplap.id`,
+        );
+      }
+      // Email auth yang diinginkan: kolom email, fallback pola
+      // username@monitor.siplap.id.
+      const emailAuth =
+        target.email ?? `${target.username ?? targetId}@monitor.siplap.id`;
+
+      // Cegah username baru yang email auth-nya sudah dipakai user lain.
+      if (
+        usernameBaru &&
+        usernameBaru !== (target.username ?? "").toLowerCase()
+      ) {
+        const pemilikEmail = await findAuthUserIdByEmail(
+          admin,
+          `${usernameBaru}@monitor.siplap.id`,
+        );
+        if (pemilikEmail && pemilikEmail !== authUserId) {
+          return json(
+            {
+              error:
+                `Username "${usernameBaru}" tidak bisa dipakai (email auth sudah terdaftar).`,
+            },
+            409,
+          );
+        }
+      }
+
+      // Akun auth belum ada → buat otomatis sekarang.
+      let passwordEfektif = passwordBaru;
+      let passwordDibuat = false;
+      if (!authUserId) {
+        if (!passwordEfektif) {
+          passwordEfektif = generatedPassword();
+          passwordDibuat = true;
+        }
+        const created = await admin.auth.admin.createUser({
+          email: emailAuth,
+          password: passwordEfektif,
+          email_confirm: true,
+          user_metadata: {
+            username: target.username ?? emailAuth.split("@")[0],
+          },
+        });
+        if (created.error) {
+          // Email ternyata sudah terdaftar → cari lagi & pakai akun itu.
+          if (!/already|exists|terdaftar/i.test(created.error.message)) {
+            return json(
+              { error: `Gagal membuat akun auth pemantau: ${created.error.message}` },
+              500,
+            );
+          }
+          authUserId = await findAuthUserIdByEmail(admin, emailAuth);
+          if (!authUserId) {
+            return json(
+              { error: "Email auth sudah dipakai tapi user tidak ditemukan." },
+              500,
+            );
+          }
+          passwordDibuat = false;
+        } else {
+          authUserId = created.data.user!.id;
+        }
+      }
+
+      // --- Update baris admin_users ---
+      // Email ikut disinkronkan agar is_admin() (yang mencocokkan
+      // admin_users.email = auth.email()) tetap valid setelah ganti username.
+      const { error: updErr } = await admin
+        .from("admin_users")
+        .update({
+          ...(nama ? { nama } : {}),
+          ...(usernameBaru && usernameBaru !== (target.username ?? "").toLowerCase()
+            ? {
+                username: usernameBaru,
+                email: `${usernameBaru}@monitor.siplap.id`,
+              }
+          : {}),
+          ...(typeof payload.status_aktif === "boolean"
+            ? { status_aktif: payload.status_aktif }
+            : {}),
+        })
+        .eq("id", target.id);
+      if (updErr) return json({ error: updErr.message }, 500);
+
+      // --- Sinkron akun auth (email = username@monitor.siplap.id) ---
+      const authAttrs: {
+        password?: string;
+        email?: string;
+        user_metadata?: Record<string, unknown>;
+      } = {};
+      if (passwordEfektif) authAttrs.password = passwordEfektif;
+      if (usernameBaru && usernameBaru !== (target.username ?? "").toLowerCase()) {
+        authAttrs.email = `${usernameBaru}@monitor.siplap.id`;
+        authAttrs.user_metadata = { username: usernameBaru };
+      }
+      if (Object.keys(authAttrs).length > 0) {
+        const { error: authErr } = await admin.auth.admin.updateUserById(
+          authUserId,
+          authAttrs,
+        );
+        if (authErr) {
+          return json(
+            {
+              error:
+                `Data pemantau tersimpan, tapi gagal sinkron akun auth: ${authErr.message}. ` +
+                `Login pemantau mungkin masih memakai username/password lama.`,
+            },
+            500,
+          );
+        }
+      }
+
+      return json({
+        ok: true,
+        admin_user_id: target.id,
+        username: usernameBaru || target.username,
+        ...(passwordDibuat ? { pin: passwordEfektif } : {}),
+      });
+    }
+
+    // ===== HAPUS PEMANTAU (pimpinan) =====
+    if (payload.action === "hapus_pemantau") {
+      const targetId = (payload.admin_user_id ?? "").trim();
+      if (!targetId) return json({ error: "admin_user_id wajib diisi." }, 400);
+
+      const { data: target, error: tErr } = await admin
+        .from("admin_users")
+        .select("id, nama, email, username")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (tErr) return json({ error: tErr.message }, 500);
+      if (!target) return json({ error: "Pemantau tidak ditemukan." }, 404);
+      if (targetId === me.id) {
+        return json({ error: "Tidak bisa menghapus akun sendiri." }, 400);
+      }
+
+      // Cari akun auth lewat email pemantau.
+      let authUserId: string | null = null;
+      if (target.email) {
+        authUserId = await findAuthUserIdByEmail(admin, target.email);
+      }
+      if (!authUserId && target.username) {
+        authUserId = await findAuthUserIdByEmail(
+          admin,
+          `${target.username}@monitor.siplap.id`,
+        );
+      }
+
+      // Hapus baris admin_users dulu, lalu akun auth-nya.
+      const { error: delErr } = await admin
+        .from("admin_users")
+        .delete()
+        .eq("id", target.id);
+      if (delErr) return json({ error: delErr.message }, 500);
+
+      if (authUserId) {
+        const { error: delUserErr } = await admin.auth.admin.deleteUser(
+          authUserId,
+        );
+        if (delUserErr) {
+          return json(
+            {
+              ok: true,
+              warning:
+                `Pemantau terhapus, tapi akun auth gagal dihapus: ${delUserErr.message}. ` +
+                `Username ${target.username ?? target.email} sebaiknya tidak dipakai ulang.`,
+            },
+            200,
+          );
+        }
+      }
+
+      return json({ ok: true, admin_user_id: target.id });
     }
 
     return json({ error: `Aksi tidak dikenal.` }, 400);

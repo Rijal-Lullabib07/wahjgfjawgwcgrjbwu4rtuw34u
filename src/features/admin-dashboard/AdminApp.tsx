@@ -284,7 +284,7 @@ export default function AdminApp({ session, onLogout }: Props) {
       <div className="flex min-w-0 flex-1 flex-col lg:ml-72">
         <header className="safe-top sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="rounded-xl border border-slate-200 px-3 py-2 text-slate-600 lg:hidden"
@@ -301,7 +301,7 @@ export default function AdminApp({ session, onLogout }: Props) {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
               <NotificationButton session={session} />
               <button
                 type="button"
@@ -312,7 +312,7 @@ export default function AdminApp({ session, onLogout }: Props) {
               >
                 {theme === "dark" ? "☀️ Terang" : "🌙 Gelap"}
               </button>
-              <span className="badge hidden bg-blue-50 text-blue-700 sm:inline-flex">
+              <span className="badge whitespace-nowrap bg-blue-50 px-2 py-1 text-[10px] text-blue-700 sm:px-2.5 sm:py-0.5 sm:text-xs">
                 🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
               </span>
             </div>

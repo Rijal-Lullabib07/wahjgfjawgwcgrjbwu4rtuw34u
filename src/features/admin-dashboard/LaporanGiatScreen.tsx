@@ -305,8 +305,98 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode }: Props) {
         </div>
       )}
 
-      {/* Tabel */}
-      <section className="card overflow-x-auto p-0">
+      {/* Ringkasan kartu untuk layar kecil agar isi laporan tidak menyempit. */}
+      <section className="space-y-3 lg:hidden">
+        {shown.map((l, i) => (
+          <article key={l.id} className="card space-y-3 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-500">
+                  #{safePage * pageSize + i + 1} ·{" "}
+                  {new Date(l.timestamp_kirim).toLocaleDateString("id-ID", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </div>
+                <div className="mt-1 text-sm font-bold leading-snug text-slate-800">
+                  {l.regu ? reguDisplayName(l.regu).split(" — ")[0] : l.regu_id}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {new Date(l.timestamp_kirim).toLocaleTimeString("id-ID", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
+                  WIB
+                  {l.nrp_pelapor ? ` · NRP ${l.nrp_pelapor}` : ""}
+                </div>
+              </div>
+              <span
+                className={
+                  "badge shrink-0 " +
+                  (KATEGORI_BADGE[l.kategori] ?? "bg-slate-100 text-slate-600")
+                }
+              >
+                {l.kategori === "kejadian" ? "⚡ Kejadian" : "📋 Kegiatan"}
+              </span>
+            </div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Perihal / Kegiatan
+              </div>
+              <div className="mt-1 text-sm leading-5 text-slate-700">
+                {l.perihal ?? l.catatan ?? "—"}
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+              <span className="min-w-0 truncate">
+                <span className="font-semibold text-slate-600">Lokasi: </span>
+                <PlaceBadge lat={l.latitude} lng={l.longitude} />
+              </span>
+              <button
+                onClick={() => setPreview(l)}
+                className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+              >
+                👁 Lihat
+              </button>
+            </div>
+          </article>
+        ))}
+        {shown.length === 0 && (
+          <div className="card px-4 py-10 text-center text-sm text-slate-400">
+            Tidak ada laporan pada filter ini.
+          </div>
+        )}
+      </section>
+      <div className="flex items-center justify-between gap-3 text-xs text-slate-500 lg:hidden">
+        <span>
+          Halaman {safePage + 1} dari {pages}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            className="rounded-lg border border-slate-200 px-3 py-2 font-semibold disabled:opacity-40"
+            disabled={safePage === 0}
+            onClick={() => setPage(safePage - 1)}
+            aria-label="Halaman sebelumnya"
+          >
+            ‹
+          </button>
+          <span className="px-2 font-semibold text-slate-600">
+            {safePage + 1}
+          </span>
+          <button
+            className="rounded-lg border border-slate-200 px-3 py-2 font-semibold disabled:opacity-40"
+            disabled={safePage >= pages - 1}
+            onClick={() => setPage(safePage + 1)}
+            aria-label="Halaman berikutnya"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      {/* Tabel desktop */}
+      <section className="card hidden overflow-x-auto p-0 lg:block">
         <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>

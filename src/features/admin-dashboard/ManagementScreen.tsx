@@ -30,7 +30,7 @@ async function callManagePersonel(
 }
 
 /**
- * Menu 🗂️ Manajemen Data — KELOLA PERSONEL saja.
+ * Menu 🗂️ Manajemen Data — kelola personel lapangan & pemantau/pimpinan.
  *
  * - Nama dan Jabatan dipisah (kolom regu.jabatan).
  * - Tambah akun lewat edge function `manage-personel` (membuat user
@@ -38,6 +38,9 @@ async function callManagePersonel(
  * - Edit (modal): nama, jabatan, username/kode login, PIN baru, dan
  *   status aktif/nonaktif — semuanya dalam satu form.
  * - Hapus permanen KHUSUS personel (laporan & foto ikut terhapus).
+ * - Pemantau/pimpinan (admin_users): reset password, edit (nama,
+ *   username, password, status), dan hapus permanen — lewat edge
+ *   function yang sama dengan action *_pemantau.
  */
 
 interface ReguRow {
@@ -55,6 +58,7 @@ interface ReguRow {
 interface AdminRow {
   id: string;
   nama: string;
+  email: string | null;
   role: string;
   username: string | null;
   status_aktif: boolean;
@@ -110,32 +114,35 @@ function ToggleStatus({
   );
 }
 
-/** Kartu "PIN sementara" — tampil setelah tambah akun / reset PIN. */
+/** Kartu "PIN sementara" — tampil setelah tambah akun / reset PIN/password. */
 function PinReveal({
   kode,
   pin,
   judul = "✅ Akun dibuat — catat PIN sekarang",
+  labelKode = "Kode login",
+  labelKredensial = "PIN",
+  pesan = "PIN hanya ditampilkan sekali ini. Bagikan ke personel bersama kode login-nya.",
   onClose,
 }: {
   kode: string;
   pin: string;
   judul?: string;
+  labelKode?: string;
+  labelKredensial?: string;
+  pesan?: string;
   onClose: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
       <div className="text-sm font-bold text-emerald-800">{judul}</div>
-      <p className="mt-1 text-xs text-emerald-700">
-        PIN hanya ditampilkan sekali ini. Bagikan ke personel bersama kode
-        login-nya.
-      </p>
+      <p className="mt-1 text-xs text-emerald-700">{pesan}</p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-white px-3 py-2">
-          <div className="text-[11px] font-semibold text-slate-500">Kode login</div>
+          <div className="text-[11px] font-semibold text-slate-500">{labelKode}</div>
           <code className="text-sm font-bold text-slate-800">{kode}</code>
         </div>
         <div className="rounded-xl bg-white px-3 py-2">
-          <div className="text-[11px] font-semibold text-slate-500">PIN</div>
+          <div className="text-[11px] font-semibold text-slate-500">{labelKredensial}</div>
           <code className="text-sm font-bold text-emerald-700">{pin}</code>
         </div>
       </div>
@@ -370,6 +377,156 @@ function EditPersonelModal({
   );
 }
 
+/**
+ * Modal edit pemantau/pimpinan: nama, username, password baru (opsional),
+ * dan status aktif/nonaktif dalam satu form.
+ */
+function EditPemantauModal({
+  row,
+  busy,
+  onClose,
+  onSave,
+}: {
+  row: AdminRow;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (nilai: {
+    nama: string;
+    username: string;
+    password: string;
+    aktif: boolean;
+  }) => Promise<void>;
+}) {
+  const [nama, setNama] = useState(row.nama);
+  const [username, setUsername] = useState(row.username ?? "");
+  const [password, setPassword] = useState("");
+  const [aktif, setAktif] = useState(row.status_aktif);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!nama.trim()) {
+      setError("Nama wajib diisi.");
+      return;
+    }
+    if (!username.trim()) {
+      setError("Username wajib diisi.");
+      return;
+    }
+    if (password.trim() && password.trim().length < 6) {
+      setError("Password baru minimal 6 karakter (kosongkan bila tidak diubah).");
+      return;
+    }
+    setError(null);
+    try {
+      await onSave({
+        nama: nama.trim(),
+        username: username.trim().toLowerCase(),
+        password: password.trim(),
+        aktif,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal menyimpan perubahan.");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="card w-full max-w-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="eyebrow">Edit pemantau</div>
+            <h3 className="mt-0.5 font-bold text-slate-800">{row.nama}</h3>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="text-lg leading-none text-slate-400 hover:text-slate-600 disabled:opacity-40"
+            title="Tutup tanpa menyimpan"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-semibold text-slate-500">
+            Nama
+            <input
+              className="input mt-1"
+              value={nama}
+              onChange={(e) => setNama(e.target.value)}
+              placeholder="mis. Kapolres Purwakarta"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-500">
+            Username / kode login
+            <input
+              className="input mt-1"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="mis. polres.kapolres"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-500 sm:col-span-2">
+            Password baru (opsional)
+            <input
+              className="input mt-1"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Kosongkan bila tidak diubah — min. 6 karakter"
+            />
+          </label>
+        </div>
+
+        <label className="mt-4 flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 px-3 py-2">
+          <input
+            type="checkbox"
+            checked={aktif}
+            onChange={(e) => setAktif(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-emerald-600"
+          />
+          <span className="text-xs">
+            <span className="font-bold text-slate-700">Akun aktif</span>
+            <span className="block text-slate-500">
+              {aktif
+                ? "Pemantau bisa login ke dashboard."
+                : "Nonaktif: pemantau tidak bisa login, datanya tetap tersimpan."}
+            </span>
+          </span>
+        </label>
+
+        {username.trim().toLowerCase() !== (row.username ?? "").toLowerCase() && (
+          <p className="mt-2 text-[11px] text-amber-600">
+            ⚠️ Username berubah — pemantau harus login dengan username baru ini.
+          </p>
+        )}
+
+        {error && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Batal
+          </button>
+          <button
+            className="btn-primary"
+            disabled={busy}
+            onClick={() => void submit()}
+          >
+            {busy ? "Menyimpan…" : "Simpan perubahan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ManagementScreen() {
   const [pelapor, setPelapor] = useState<ReguRow[] | null>(null);
   const [pemantau, setPemantau] = useState<AdminRow[] | null>(null);
@@ -382,9 +539,16 @@ export default function ManagementScreen() {
     kode: string;
     pin: string;
     judul?: string;
+    labelKode?: string;
+    labelKredensial?: string;
+    pesan?: string;
   } | null>(null);
   /** Personel yang sedang diedit di modal. */
   const [editRow, setEditRow] = useState<ReguRow | null>(null);
+  /** Pemantau yang sedang diedit di modal. */
+  const [editAdminRow, setEditAdminRow] = useState<AdminRow | null>(null);
+  /** Email akun yang sedang login — untuk cegah hapus diri sendiri. */
+  const [emailSaya, setEmailSaya] = useState<string | null>(null);
   /** Versi build terbaru yang diketahui = yang paling banyak dilaporkan personel. */
   const versiTerbaru = useMemo<string | null>(() => {
     const hitung = new Map<string, number>();
@@ -417,23 +581,28 @@ export default function ManagementScreen() {
   const load = useCallback(async () => {
     try {
       const client = supabase!;
-      const [{ data: reguData, error: reguErr }, { data: adminData, error: adminErr }] =
-        await Promise.all([
-          client
-            .from("regu")
-            .select(
-              "id, nama_regu, jabatan, kode_login, status_aktif, unit_key, wilayah_key, app_version, versi_dikirim_pada",
-            )
-            .order("nama_regu"),
-          client
-            .from("admin_users")
-            .select("id, nama, role, username, status_aktif")
-            .order("nama"),
-        ]);
+      const [
+        { data: reguData, error: reguErr },
+        { data: adminData, error: adminErr },
+        { data: userData },
+      ] = await Promise.all([
+        client
+          .from("regu")
+          .select(
+            "id, nama_regu, jabatan, kode_login, status_aktif, unit_key, wilayah_key, app_version, versi_dikirim_pada",
+          )
+          .order("nama_regu"),
+        client
+          .from("admin_users")
+          .select("id, nama, email, role, username, status_aktif")
+          .order("nama"),
+        client.auth.getUser(),
+      ]);
       if (reguErr) throw reguErr;
       if (adminErr) throw adminErr;
       setPelapor((reguData ?? []) as ReguRow[]);
       setPemantau((adminData ?? []) as AdminRow[]);
+      setEmailSaya((userData?.user?.email ?? "").toLowerCase() || null);
       setError(null);
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e);
@@ -603,7 +772,7 @@ export default function ManagementScreen() {
     : (pelapor ?? []);
   const pemantauTersaring = q
     ? (pemantau ?? []).filter((r) =>
-        [r.nama, r.role, r.username ?? ""]
+        [r.nama, r.role, r.username ?? "", r.email ?? ""]
           .join(" ")
           .toLowerCase()
           .includes(q),
@@ -622,6 +791,123 @@ export default function ManagementScreen() {
       await load();
     } catch (e) {
       setError(pesanError(e, "Gagal mengubah status pemantau."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** Simpan hasil modal edit pemantau (nama, username, password, status). */
+  const simpanEditPemantau = async (row: AdminRow, nilai: {
+    nama: string;
+    username: string;
+    password: string;
+    aktif: boolean;
+  }) => {
+    setError(null);
+    setBusyId(row.id);
+    try {
+      const hasil = await callManagePersonel({
+        action: "update_pemantau",
+        admin_user_id: row.id,
+        nama: nilai.nama,
+        username_baru: nilai.username,
+        status_aktif: nilai.aktif,
+        ...(nilai.password ? { password_baru: nilai.password } : {}),
+      });
+      // Password dari server ada bila akun auth baru dibuat otomatis.
+      const pwServer = (hasil as { pin?: string }).pin;
+      if (nilai.password || pwServer) {
+        setPinBaru({
+          kode: (hasil as { username?: string }).username ?? nilai.username,
+          pin: nilai.password || (pwServer as string),
+          judul: nilai.password
+            ? "✅ Perubahan tersimpan — password baru pemantau ini"
+            : "✅ Akun auth dibuat — catat password sekarang",
+          labelKode: "Username",
+          labelKredensial: "Password",
+          pesan:
+            "Password hanya ditampilkan sekali ini. Bagikan ke pemantau bersama username-nya.",
+        });
+      }
+      setEditAdminRow(null);
+      await load();
+    } catch (e) {
+      throw new Error(
+        pesanError(
+          e,
+          "Gagal mengubah data pemantau. Pastikan edge function manage-personel sudah dideploy ulang.",
+        ),
+      );
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** Reset password pemantau via edge function. */
+  const resetPasswordPemantau = async (row: AdminRow) => {
+    const pw = window.prompt(
+      `Password baru untuk ${row.username || row.nama}: (minimal 6 karakter)`,
+    );
+    if (pw === null) return;
+    if (pw.trim().length < 6) {
+      setError("Password minimal 6 karakter.");
+      return;
+    }
+    setBusyId(row.id);
+    setError(null);
+    try {
+      await callManagePersonel({
+        action: "reset_pin_pemantau",
+        admin_user_id: row.id,
+        password_baru: pw.trim(),
+      });
+      setPinBaru({
+        kode: row.username || row.nama,
+        pin: pw.trim(),
+        judul: "✅ Password diperbarui — catat password sekarang",
+        labelKode: "Username",
+        labelKredensial: "Password",
+        pesan: "Password hanya ditampilkan sekali ini. Bagikan ke pemantau bersama username-nya.",
+      });
+    } catch (e) {
+      setError(pesanError(e, "Gagal reset password. Pastikan edge function manage-personel sudah dideploy."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** Hapus permanen pemantau — akun auth + baris admin_users ikut terhapus. */
+  const hapusPemantau = async (row: AdminRow) => {
+    const kode = row.username || row.nama;
+    if (row.email && emailSaya && row.email.toLowerCase() === emailSaya) {
+      setError("Tidak bisa menghapus akun yang sedang login.");
+      return;
+    }
+    const yakin = window.confirm(
+      `Hapus permanen ${row.nama} (${kode})?\n\n` +
+        "Pemantau tidak akan bisa login lagi. Riwayat laporan TIDAK ikut terhapus.",
+    );
+    if (!yakin) return;
+    const konfirmasi = window.prompt(
+      `Ketik username (${kode}) untuk konfirmasi hapus:`,
+    );
+    if (konfirmasi === null) return;
+    if (konfirmasi.trim().toLowerCase() !== kode.toLowerCase()) {
+      setError("Konfirmasi hapus gagal: username tidak cocok.");
+      return;
+    }
+    setBusyId(row.id);
+    setError(null);
+    try {
+      await callManagePersonel({ action: "hapus_pemantau", admin_user_id: row.id });
+      await load();
+    } catch (e) {
+      setError(
+        pesanError(
+          e,
+          "Gagal menghapus pemantau. Pastikan edge function manage-personel sudah dideploy ulang.",
+        ),
+      );
     } finally {
       setBusyId(null);
     }
@@ -662,8 +948,8 @@ export default function ManagementScreen() {
           Manajemen Personel
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Kelola akun personel lapangan & pemantau. Hapus permanen hanya untuk
-          personel; untuk pemantau gunakan status nonaktif.
+          Kelola akun personel lapangan & pemantau: reset PIN/password, edit
+          data, nonaktifkan, atau hapus permanen.
         </p>
 
         {/* ===== Pencarian personel ===== */}
@@ -712,6 +998,9 @@ export default function ManagementScreen() {
           kode={pinBaru.kode}
           pin={pinBaru.pin}
           judul={pinBaru.judul}
+          labelKode={pinBaru.labelKode}
+          labelKredensial={pinBaru.labelKredensial}
+          pesan={pinBaru.pesan}
           onClose={() => setPinBaru(null)}
         />
       )}
@@ -722,6 +1011,15 @@ export default function ManagementScreen() {
           busy={busyId === editRow.id}
           onClose={() => setEditRow(null)}
           onSave={(nilai) => simpanEdit(editRow, nilai)}
+        />
+      )}
+
+      {editAdminRow && (
+        <EditPemantauModal
+          row={editAdminRow}
+          busy={busyId === editAdminRow.id}
+          onClose={() => setEditAdminRow(null)}
+          onSave={(nilai) => simpanEditPemantau(editAdminRow, nilai)}
         />
       )}
 
@@ -835,23 +1133,23 @@ export default function ManagementScreen() {
           {pelaporTersaring.map((row) => (
             <div
               key={row.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
+              className="flex flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-bold text-slate-800">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="break-words text-sm font-bold leading-snug text-slate-800">
                     {row.nama_regu}
                   </span>
                   <StatusVersiBadge row={row} versiTerbaru={versiTerbaru} />
                 </div>
-                <div className="truncate text-xs text-slate-500">
+                <div className="break-words text-xs leading-5 text-slate-500">
                   {row.jabatan ? `${row.jabatan} · ` : ""}
                   {row.kode_login}
                   {row.wilayah_key ? ` · Polsek ${row.wilayah_key}` : ""}
                   {row.unit_key ? ` · ${row.unit_key}` : ""}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-2 sm:shrink-0 sm:border-0 sm:pt-0">
                 <ToggleStatus
                   aktif={row.status_aktif}
                   busy={busyId === row.id}
@@ -907,22 +1205,48 @@ export default function ManagementScreen() {
           {pemantauTersaring.map((row) => (
             <div
               key={row.id}
-              className="flex items-center justify-between gap-3 px-4 py-3"
+              className="flex flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <div className="truncate text-sm font-bold text-slate-800">
+                <div className="break-words text-sm font-bold leading-snug text-slate-800">
                   {row.nama}
                 </div>
-                <div className="truncate text-xs text-slate-500">
+                <div className="break-words text-xs leading-5 text-slate-500">
                   {row.role}
                   {row.username ? ` · ${row.username}` : ""}
+                  {row.email ? ` · ${row.email}` : ""}
                 </div>
               </div>
-              <ToggleStatus
-                aktif={row.status_aktif}
-                busy={busyId === row.id}
-                onToggle={() => void toggleAdmin(row)}
-              />
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-2 sm:shrink-0 sm:border-0 sm:pt-0">
+                <ToggleStatus
+                  aktif={row.status_aktif}
+                  busy={busyId === row.id}
+                  onToggle={() => void toggleAdmin(row)}
+                />
+                <button
+                  onClick={() => void resetPasswordPemantau(row)}
+                  disabled={busyId === row.id}
+                  className="text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-50"
+                  title="Ganti password login pemantau ini"
+                >
+                  Reset Password
+                </button>
+                <button
+                  onClick={() => setEditAdminRow(row)}
+                  disabled={busyId === row.id}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => void hapusPemantau(row)}
+                  disabled={busyId === row.id}
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                  title="Hapus permanen akun pemantau ini"
+                >
+                  Hapus
+                </button>
+              </div>
             </div>
           ))}
           {pemantau === null && pemantauTersaring.length === 0 && (
