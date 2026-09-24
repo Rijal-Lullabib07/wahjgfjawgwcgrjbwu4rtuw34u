@@ -197,7 +197,72 @@ export async function fetchLaporan(filter: {
   limit?: number;
   kategori?: KategoriLaporan;
 }): Promise<Laporan[]> {
-  if (isDashboardDemo) {
+  const demoRows = isDashboardDemo
+    ? createDemoLaporan(
+        filter.from ?? new Date(Date.now() - 7 * 86_400_000),
+        filter.to ?? new Date(),
+      ).filter((row) => {
+        if (filter.reguId && row.regu_id !== filter.reguId) return false;
+        if (filter.kategori && row.kategori !== filter.kategori) return false;
+        if (filter.from && new Date(row.timestamp_kirim) < filter.from)
+          return false;
+        if (filter.to && new Date(row.timestamp_kirim) > filter.to)
+          return false;
+        return true;
+      })
+    : [];
+
+  // Mode demo tetap boleh dipakai tanpa konfigurasi Supabase. Jika Supabase
+  // tersedia, data sintetis digabung dengan laporan nyata agar laporan
+  // pelapor tetap masuk ke pemantau.
+  if (!supabase) {
+    if (isDashboardDemo) return demoRows.slice(0, filter.limit ?? 500);
+    requireClient();
+  }
+
+  const client = requireClient();
+  let query = client
+    .from("laporan")
+    .select(
+      "*, regu:regu_id(*), jenis:jenis_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
+    )
+    .order("timestamp_kirim", { ascending: false })
+    .limit(filter.limit ?? 500);
+  if (filter.reguId) query = query.eq("regu_id", filter.reguId);
+  if (filter.kategori) query = query.eq("kategori", filter.kategori);
+  if (filter.from)
+    query = query.gte("timestamp_kirim", filter.from.toISOString());
+  if (filter.to)
+    query = query.lte("timestamp_kirim", filter.to.toISOString());
+  const { data, error } = await query;
+  if (error) throw describeSupabaseError(error, "Gagal memuat laporan");
+  // `laporan_video` punya unique(laporan_id) → PostgREST menganggap relasi
+  // satu-ke-satu dan mengembalikan OBJEK (atau null), bukan array. Normalisasi
+  // agar pemakaian `(l.videos ?? []).map(...)` tidak meledak.
+  const normalized = (data ?? []).map((row) => {
+    const r = row as Laporan;
+    // Kolom nrp_pelapor di DB sudah text[] (migration 0021) — rapikan jadi
+    // teks "NRP1, NRP2" agar UI & export versi ini tetap tampil normal.
+    const nrpDb = r.nrp_pelapor as unknown;
+    const nrpText = Array.isArray(nrpDb)
+      ? nrpDb.filter(Boolean).join(", ") || null
+      : ((nrpDb as string | null) ?? null);
+    return {
+      ...r,
+      nrp_pelapor: nrpText,
+      fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
+      videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
+    } as Laporan;
+  });
+
+  return [...demoRows, ...normalized]
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp_kirim).getTime() -
+        new Date(a.timestamp_kirim).getTime(),
+    )
+    .slice(0, filter.limit ?? 500);
+  /*
     const from = filter.from ?? new Date(Date.now() - 7 * 86_400_000);
     const to = filter.to ?? new Date();
     const rows = createDemoLaporan(from, to).filter((row) => {
@@ -244,6 +309,7 @@ export async function fetchLaporan(filter: {
     } as Laporan;
   });
   return normalized;
+  */
 }
 
 /** Upload satu foto ke Supabase Storage, kembalikan storage_path. */
@@ -484,10 +550,7 @@ export interface RingkasanKelompok {
  * Data dihitung dari fetch laporan (RLS tetap berlaku).
  */
 export async function fetchDashboardSummary(from: Date, to: Date) {
-  // Mode ini hanya membaca generator lokal; tidak menyentuh database.
-  const rows = isDashboardDemo
-    ? createDemoLaporan(from, to)
-    : await fetchLaporan({ from, to, limit: 2000 });
+  const rows = await fetchLaporan({ from, to, limit: 2000 });
   const perWilayah = new Map<string, number>();
   const perUnit = new Map<string, number>();
   let kegiatan = 0;
