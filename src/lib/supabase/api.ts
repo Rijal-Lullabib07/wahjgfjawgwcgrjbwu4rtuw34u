@@ -6,12 +6,12 @@ import type {
   Regu,
   SessionUser,
 } from "../../types";
+import { createDemoLaporan, isDashboardDemo } from "../demoData";
 import { supabase } from "./client";
 
 /**
  * Adapter data — SEMUA lewat Supabase (Postgres + Auth + Storage + Realtime).
- * Tidak ada mode demo; jika .env belum diisi, aplikasi menampilkan
- * pesan konfigurasi jelas (bukan data palsu).
+ * Ringkasan dashboard punya mode demo opt-in untuk kebutuhan presentasi.
  */
 
 function requireClient() {
@@ -197,6 +197,19 @@ export async function fetchLaporan(filter: {
   limit?: number;
   kategori?: KategoriLaporan;
 }): Promise<Laporan[]> {
+  if (isDashboardDemo) {
+    const from = filter.from ?? new Date(Date.now() - 7 * 86_400_000);
+    const to = filter.to ?? new Date();
+    const rows = createDemoLaporan(from, to).filter((row) => {
+      if (filter.reguId && row.regu_id !== filter.reguId) return false;
+      if (filter.kategori && row.kategori !== filter.kategori) return false;
+      if (filter.from && new Date(row.timestamp_kirim) < filter.from) return false;
+      if (filter.to && new Date(row.timestamp_kirim) > filter.to) return false;
+      return true;
+    });
+    return rows.slice(0, filter.limit ?? 500);
+  }
+
   const client = requireClient();
   let query = client
     .from("laporan")
@@ -471,7 +484,10 @@ export interface RingkasanKelompok {
  * Data dihitung dari fetch laporan (RLS tetap berlaku).
  */
 export async function fetchDashboardSummary(from: Date, to: Date) {
-  const rows = await fetchLaporan({ from, to, limit: 2000 });
+  // Mode ini hanya membaca generator lokal; tidak menyentuh database.
+  const rows = isDashboardDemo
+    ? createDemoLaporan(from, to)
+    : await fetchLaporan({ from, to, limit: 2000 });
   const perWilayah = new Map<string, number>();
   const perUnit = new Map<string, number>();
   let kegiatan = 0;
@@ -638,7 +654,7 @@ export async function laporkanVersiApp(reguId: string, versi: string): Promise<v
   if (error) console.debug("laporkanVersiApp:", error.message);
 }
 
-function wilayahLabel(key: string): string {
+export function wilayahLabel(key: string): string {
   const map: Record<string, string> = {
     kota: "Purwakarta Kota",
     plered: "Plered",
@@ -665,7 +681,7 @@ function wilayahLabel(key: string): string {
   );
 }
 
-function unitLabel(key: string): string {
+export function unitLabel(key: string): string {
   // Samakan dengan unitNames di src/lib/regu.ts — penamaan resmi satuan
   // Polres (Satintelkam, Satreskrim, dst.) sesuai nama akun pelapor.
   const map: Record<string, string> = {

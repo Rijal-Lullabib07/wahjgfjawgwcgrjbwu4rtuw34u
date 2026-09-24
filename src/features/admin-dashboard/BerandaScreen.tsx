@@ -194,7 +194,7 @@ export default function BerandaScreen({ refreshKey, onOpenTab }: Props) {
             </button>
           </div>
           <div className="flex items-end gap-2 overflow-x-auto pb-1">
-            {(data?.perWilayah ?? []).slice(0, 7).map((w, index) => (
+            {(data?.perWilayah ?? []).map((w, index) => (
               <VBar
                 key={w.key}
                 label={w.label}
@@ -223,7 +223,7 @@ export default function BerandaScreen({ refreshKey, onOpenTab }: Props) {
             </button>
           </div>
           <div className="flex items-end gap-2 overflow-x-auto pb-1">
-            {(data?.perUnit ?? []).slice(0, 7).map((w, index) => (
+            {(data?.perUnit ?? []).map((w, index) => (
               <VBar
                 key={w.key}
                 label={w.label}

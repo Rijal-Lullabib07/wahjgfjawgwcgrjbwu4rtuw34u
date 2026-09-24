@@ -241,7 +241,7 @@ export default function AdminApp({ session, onLogout }: Props) {
       case "laporan":
         return <LaporanGiatScreen refreshKey={refreshKey} session={session} />;
       case "statistik":
-        return <StatistikScreen refreshKey={refreshKey} />;
+        return <StatistikScreen refreshKey={refreshKey} session={session} />;
       case "peta":
         return kapolres ? (
           <PetaScreen refreshKey={refreshKey} session={session} />
