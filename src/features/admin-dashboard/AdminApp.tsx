@@ -360,6 +360,13 @@ export default function AdminApp({ session, onLogout }: Props) {
               </span>
             </div>
           </div>
+          {/* Baris 2 (khusus mobile): chip akses — supaya judul di baris 1
+              tampil utuh tanpa terpotong. Di md+ chip kembali ke baris 1. */}
+          <div className="mt-2 md:hidden">
+            <span className="badge bg-blue-50 px-2.5 py-1 text-[10px] text-blue-700">
+              🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
+            </span>
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 pb-24 sm:px-6 lg:pb-5">
