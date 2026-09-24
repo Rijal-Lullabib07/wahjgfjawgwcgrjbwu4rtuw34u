@@ -138,6 +138,13 @@ npm run build    # produksi (ikut typecheck) → dist/
 Deploy `dist/` ke Vercel/Netlify/Cloudflare Pages. PWA manifest & service
 worker otomatis dari `vite-plugin-pwa`.
 
+Mode demo dashboard tidak aktif secara default. Jika diperlukan hanya untuk
+rekaman video, isi `VITE_DEMO_DASHBOARD=true` pada environment saat build.
+Untuk penggunaan normal, jangan isi variabel tersebut atau gunakan
+`VITE_DEMO_DASHBOARD=false`. Setelah mengubah `.env.local`, restart dev server;
+untuk deployment, ubah environment variable di layanan hosting lalu lakukan
+redeploy karena variabel Vite ditanam saat proses build.
+
 ## Folder pemantau (cara kerja singkat)
 
 - **Kapolres / Wakapolres / Admin**: dua tingkat — **Polsek → unit → laporan**

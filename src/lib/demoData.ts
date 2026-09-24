@@ -1,8 +1,8 @@
 import type { Laporan, KategoriLaporan, Regu } from "../types";
 
-// Demo diaktifkan sementara sebagai default untuk kebutuhan video. Set
-// VITE_DEMO_DASHBOARD=false saat dashboard harus kembali membaca Supabase.
-export const isDashboardDemo = import.meta.env.VITE_DEMO_DASHBOARD !== "false";
+// Demo hanya aktif bila sengaja diaktifkan untuk kebutuhan video.
+// Nilai yang tidak ada atau selain "true" membuat dashboard membaca Supabase.
+export const isDashboardDemo = import.meta.env.VITE_DEMO_DASHBOARD === "true";
 
 const WILAYAH = [
   ["kota", "Regu Polres Kota"],
