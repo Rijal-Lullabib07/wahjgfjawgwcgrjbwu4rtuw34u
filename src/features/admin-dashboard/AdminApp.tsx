@@ -84,8 +84,9 @@ function NotificationButton({ session }: { session: SessionUser }) {
   if (!isMonitor || perm === "granted" || perm === "unsupported") return null;
 
   const blocker = getPushBlocker();
+  const hint = msg ?? (blocker ? describePushBlocker(blocker) : null);
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="relative flex items-center">
       <button
         onClick={async () => {
           setBusy(true);
@@ -100,13 +101,17 @@ function NotificationButton({ session }: { session: SessionUser }) {
           }
         }}
         disabled={busy}
-        className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+        aria-label="Aktifkan notifikasi"
+        title="Aktifkan notifikasi"
+        className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-2 text-base leading-none text-blue-700 transition hover:bg-blue-100 disabled:opacity-50 sm:px-3"
       >
-        {busy ? "Mengaktifkan…" : "🔔 Aktifkan notifikasi"}
+        {busy ? "⏳" : "🔔"}
       </button>
-      {(msg || blocker) && (
-        <span className="max-w-[16rem] text-right text-[11px] leading-tight text-red-500">
-          {msg ?? describePushBlocker(blocker as Exclude<typeof blocker, null>)}
+      {/* Pesan/blocker ditampilkan sebagai popover supaya tidak mendorong
+          tombol lain saat layar sempit. */}
+      {hint && (
+        <span className="header-hint absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border px-3 py-2 text-[11px] font-medium leading-snug">
+          {hint}
         </span>
       )}
     </div>
@@ -327,8 +332,8 @@ export default function AdminApp({ session, onLogout }: Props) {
               >
                 ☰
               </button>
-              <div>
-                <div className="text-sm font-extrabold tracking-tight text-slate-900">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-extrabold tracking-tight text-slate-900">
                   Dashboard Pemantau
                 </div>
                 <div className="hidden text-[11px] text-slate-500 sm:block">
@@ -341,13 +346,16 @@ export default function AdminApp({ session, onLogout }: Props) {
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="theme-toggle rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold transition"
+                className="theme-toggle rounded-xl border border-slate-200 px-2.5 py-2 text-xs font-semibold transition sm:px-3"
                 aria-label={theme === "dark" ? "Aktifkan mode terang" : "Aktifkan mode gelap"}
                 title={theme === "dark" ? "Mode terang" : "Mode gelap"}
               >
-                {theme === "dark" ? "☀️ Terang" : "🌙 Gelap"}
+                <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
+                <span className="hidden sm:inline">
+                  {theme === "dark" ? "Terang" : "Gelap"}
+                </span>
               </button>
-              <span className="badge whitespace-nowrap bg-blue-50 px-2 py-1 text-[10px] text-blue-700 sm:px-2.5 sm:py-0.5 sm:text-xs">
+              <span className="badge hidden whitespace-nowrap bg-blue-50 px-2.5 py-1 text-[10px] text-blue-700 md:inline-flex md:text-xs">
                 🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
               </span>
             </div>

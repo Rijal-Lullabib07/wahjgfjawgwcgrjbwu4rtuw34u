@@ -523,6 +523,20 @@ select {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+/* Popover kecil di header dashboard (mis. pesan blocker notifikasi) */
+.header-hint {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(8, 33, 60, 0.97);
+  color: #fecaca;
+  box-shadow: 0 12px 28px rgba(2, 12, 25, 0.35);
+}
+.dash-light .header-hint {
+  border-color: #fecaca;
+  background: #fff;
+  color: #b42318;
+  box-shadow: 0 12px 28px rgba(15, 42, 72, 0.18);
+}
+
 /* Bar chart sederhana berbasis div (tanpa library chart) */
 .hbar-track {
   @apply h-2.5 w-full overflow-hidden rounded-full bg-slate-200;
