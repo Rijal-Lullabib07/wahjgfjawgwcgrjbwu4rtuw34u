@@ -907,7 +907,7 @@ export default function ManagementScreen() {
             🔍
           </span>
           <input
-            className="input pl-9 pr-9"
+            className="input input-iconed"
             type="search"
             value={cari}
             onChange={(e) => setCari(e.target.value)}

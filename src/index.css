@@ -545,6 +545,19 @@ select {
 .dash .badge.hidden {
   display: none;
 }
+/* Input berikon (mis. pencarian personel): padding kiri/kanan harus menang
+   atas .dash .input yang menetapkan px-4 — tanpa ini ikon ketiban teks. */
+.dash .input.input-iconed {
+  padding-left: 2.5rem;
+  padding-right: 2.5rem;
+}
+/* Tombol ✕ bawaan browser untuk type=search disembunyikan pada input
+   berikon karena sudah ada tombol hapus kustom — jangan sampai dobel. */
+.input-iconed::-webkit-search-cancel-button,
+.input-iconed::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
 .dash .btn-primary {
   @apply inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold
     text-white transition hover:bg-blue-700 active:scale-[0.97] disabled:opacity-40;
