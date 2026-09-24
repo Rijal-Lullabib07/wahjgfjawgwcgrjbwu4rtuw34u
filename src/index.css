@@ -84,6 +84,14 @@ select {
   .anim-rise {
     animation: none;
   }
+  .dash-bottom-nav button,
+  .dash-bottom-nav button .text-lg {
+    transition: none;
+    transform: none;
+  }
+  .dash-bottom-nav button.text-blue-600::before {
+    animation: none;
+  }
 }
 /* ===== Splash screen ===== */
 @keyframes splash-pop {
@@ -490,6 +498,16 @@ select {
 }
 .dash-bottom-nav button {
   position: relative;
+  transition: color 0.2s ease, transform 0.12s ease;
+}
+.dash-bottom-nav button:active {
+  transform: scale(0.94);
+}
+.dash-bottom-nav button .text-lg {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.dash-bottom-nav button.text-blue-600 .text-lg {
+  transform: translateY(-2px) scale(1.12);
 }
 .dash-bottom-nav button.text-blue-600::before {
   content: "";
@@ -500,6 +518,17 @@ select {
   height: 3px;
   border-radius: 0 0 999px 999px;
   background: #2563eb;
+  animation: nav-indicator-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes nav-indicator-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 .dash .input {
   @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-800
@@ -510,6 +539,11 @@ select {
 }
 .dash .badge {
   @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+}
+/* Utilitas `hidden` harus tetap menang atas .dash .badge (CSS non-layer
+   menimpa utility Tailwind) — tanpa ini badge tak bisa disembunyikan. */
+.dash .badge.hidden {
+  display: none;
 }
 .dash .btn-primary {
   @apply inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold

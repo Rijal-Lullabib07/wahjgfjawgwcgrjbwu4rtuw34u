@@ -212,6 +212,7 @@ export default function AdminApp({ session, onLogout }: Props) {
   }, [handleInsert]);
 
   const kapolres = isKapolresUser(session);
+  const roleLabel = session.role === "admin" ? "Admin" : "Pimpinan";
   const menu = useMemo(
     () =>
       MENU.filter(
@@ -323,17 +324,17 @@ export default function AdminApp({ session, onLogout }: Props) {
       {/* ===== Konten ===== */}
       <div className="flex min-w-0 flex-1 flex-col lg:ml-72">
         <header className="safe-top sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <div className="flex items-center justify-between gap-1.5 py-2.5 pl-3 pr-2.5 sm:gap-3 sm:px-6 sm:py-3">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-slate-600 lg:hidden"
+                className="rounded-xl border border-slate-200 px-2 py-2 text-slate-600 lg:hidden"
                 aria-label="Buka menu"
               >
                 ☰
               </button>
               <div className="min-w-0">
-                <div className="truncate text-sm font-extrabold tracking-tight text-slate-900">
+                <div className="truncate whitespace-nowrap text-xs font-extrabold tracking-tight text-slate-900 sm:text-sm">
                   Dashboard Pemantau
                 </div>
                 <div className="hidden text-[11px] text-slate-500 sm:block">
@@ -341,12 +342,28 @@ export default function AdminApp({ session, onLogout }: Props) {
                 </div>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-3">
               <NotificationButton session={session} />
+              {/* Chip akses: ikon + nama role (mobile) / ikon + "Akses <role>"
+                  (sm ke atas) — ditulis manual tanpa class .badge karena rule
+                  .dash .badge memaksa inline-flex dan menimpa utility `hidden`. */}
+              <span
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-50 py-1.5 pl-2 pr-2.5 text-[11px] font-semibold text-blue-700 sm:text-xs"
+                title={"Akses " + roleLabel}
+                aria-label={"Akses " + roleLabel}
+              >
+                <span aria-hidden="true">🛡️</span>
+                <span className="hidden sm:inline" aria-hidden="true">
+                  Akses {roleLabel}
+                </span>
+                <span className="sm:hidden" aria-hidden="true">
+                  {roleLabel}
+                </span>
+              </span>
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="theme-toggle rounded-xl border border-slate-200 px-2.5 py-2 text-xs font-semibold transition sm:px-3"
+                className="theme-toggle rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold transition sm:px-3"
                 aria-label={theme === "dark" ? "Aktifkan mode terang" : "Aktifkan mode gelap"}
                 title={theme === "dark" ? "Mode terang" : "Mode gelap"}
               >
@@ -355,22 +372,16 @@ export default function AdminApp({ session, onLogout }: Props) {
                   {theme === "dark" ? "Terang" : "Gelap"}
                 </span>
               </button>
-              <span className="badge hidden whitespace-nowrap bg-blue-50 px-2.5 py-1 text-[10px] text-blue-700 md:inline-flex md:text-xs">
-                🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
-              </span>
             </div>
-          </div>
-          {/* Baris 2 (khusus mobile): chip akses — supaya judul di baris 1
-              tampil utuh tanpa terpotong. Di md+ chip kembali ke baris 1. */}
-          <div className="mt-2 md:hidden">
-            <span className="badge bg-blue-50 px-2.5 py-1 text-[10px] text-blue-700">
-              🛡️ Akses: {session.role === "admin" ? "Admin" : "Pimpinan"}
-            </span>
           </div>
         </header>
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 pb-24 sm:px-6 lg:pb-5">
-          {page}
+          {/* key={tab} → tiap pindah halaman komponen remount, sehingga
+              animasi rise-in terputar ulang (perpindahan terasa hidup). */}
+          <div key={tab} className="anim-rise">
+            {page}
+          </div>
         </main>
 
         {/* Navigasi inti di bawah; fitur tambahan tetap tersedia melalui menu hamburger. */}
