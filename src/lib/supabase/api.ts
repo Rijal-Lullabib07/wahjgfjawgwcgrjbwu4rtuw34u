@@ -255,13 +255,23 @@ export async function fetchLaporan(filter: {
     } as Laporan;
   });
 
-  return [...demoRows, ...normalized]
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp_kirim).getTime() -
-        new Date(a.timestamp_kirim).getTime(),
-    )
-    .slice(0, filter.limit ?? 500);
+  const limit = filter.limit ?? 500;
+  const sortByNewest = (a: Laporan, b: Laporan) =>
+    new Date(b.timestamp_kirim).getTime() -
+    new Date(a.timestamp_kirim).getTime();
+
+  // Jangan biarkan ratusan baris demo menghabiskan kuota hasil dan
+  // menyingkirkan laporan pelapor nyata. Semua baris real yang sudah diambil
+  // dari Supabase diprioritaskan; demo hanya mengisi sisa kuota tampilan.
+  if (isDashboardDemo) {
+    const realRows = [...normalized].sort(sortByNewest);
+    const demoRowsForDisplay = [...demoRows]
+      .sort(sortByNewest)
+      .slice(0, Math.max(0, limit - realRows.length));
+    return [...realRows, ...demoRowsForDisplay].sort(sortByNewest);
+  }
+
+  return normalized.sort(sortByNewest).slice(0, limit);
   /*
     const from = filter.from ?? new Date(Date.now() - 7 * 86_400_000);
     const to = filter.to ?? new Date();
