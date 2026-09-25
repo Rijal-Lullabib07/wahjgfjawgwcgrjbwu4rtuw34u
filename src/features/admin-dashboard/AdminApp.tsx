@@ -246,14 +246,14 @@ export default function AdminApp({ session, onLogout }: Props) {
         return kapolres ? (
           <PetaScreen refreshKey={refreshKey} session={session} />
         ) : (
-          <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} />
+          <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} session={session} />
         );
       case "rekap":
         return <RekapScreen session={session} />;
       case "manajemen":
         return session.role === "admin" ? <ManagementScreen /> : null;
       default:
-        return <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} />;
+        return <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} session={session} />;
     }
   })();
 

@@ -6,7 +6,11 @@ import type {
   Regu,
   SessionUser,
 } from "../../types";
-import { createDemoLaporan, isDashboardDemo } from "../demoData";
+import {
+  createDemoLaporan,
+  isDashboardDemo,
+  isDemoLaporanInScope,
+} from "../demoData";
 import { supabase } from "./client";
 
 /**
@@ -196,12 +200,14 @@ export async function fetchLaporan(filter: {
   to?: Date;
   limit?: number;
   kategori?: KategoriLaporan;
+  session?: SessionUser | null;
 }): Promise<Laporan[]> {
   const demoRows = isDashboardDemo
     ? createDemoLaporan(
         filter.from ?? new Date(Date.now() - 7 * 86_400_000),
         filter.to ?? new Date(),
       ).filter((row) => {
+        if (!isDemoLaporanInScope(row, filter.session)) return false;
         if (filter.reguId && row.regu_id !== filter.reguId) return false;
         if (filter.kategori && row.kategori !== filter.kategori) return false;
         if (filter.from && new Date(row.timestamp_kirim) < filter.from)
@@ -559,8 +565,12 @@ export interface RingkasanKelompok {
  * (satuan), per kategori (kegiatan/kejadian), foto+video.
  * Data dihitung dari fetch laporan (RLS tetap berlaku).
  */
-export async function fetchDashboardSummary(from: Date, to: Date) {
-  const rows = await fetchLaporan({ from, to, limit: 2000 });
+export async function fetchDashboardSummary(
+  from: Date,
+  to: Date,
+  session?: SessionUser | null,
+) {
+  const rows = await fetchLaporan({ from, to, limit: 2000, session });
   const perWilayah = new Map<string, number>();
   const perUnit = new Map<string, number>();
   let kegiatan = 0;

@@ -1,4 +1,4 @@
-import type { Laporan, KategoriLaporan, Regu } from "../types";
+import type { Laporan, KategoriLaporan, Regu, SessionUser } from "../types";
 
 // Demo hanya aktif bila sengaja diaktifkan untuk kebutuhan video.
 // Nilai yang tidak ada atau selain "true" membuat dashboard membaca Supabase.
@@ -76,6 +76,37 @@ function weightedIndex(value: number, weights: readonly number[]): number {
     if (cursor < 0) return index;
   }
   return weights.length - 1;
+}
+
+/**
+ * Kembalikan Polsek asal laporan demo tanpa mengubah baris dummy.
+ *
+ * Laporan demo bertipe unit sengaja tidak menyimpan wilayah_key karena bentuk
+ * datanya meniru akun satuan. Indeks pada id laporan tetap deterministik,
+ * sehingga scope wilayah dapat dihitung ulang dengan formula generator yang
+ * sama saat data hendak ditampilkan.
+ */
+function demoWilayahKey(row: Laporan): string | null {
+  const match = /^demo-laporan-(\d+)$/.exec(row.id);
+  if (!match) return row.regu?.wilayah_key ?? null;
+  const index = Number(match[1]);
+  return WILAYAH[weightedIndex(index * 17, WILAYAH_BOBOT)]?.[0] ?? null;
+}
+
+/** Filter visibilitas demo mengikuti scope pemantau, tanpa menyentuh data. */
+export function isDemoLaporanInScope(
+  row: Laporan,
+  session?: SessionUser | null,
+): boolean {
+  if (!session) return true;
+  const level = session.accessLevel ?? "all";
+  const scope = (session.scopeKey ?? "").trim().toLowerCase();
+  if (level === "all" || !scope) return true;
+  if (level === "wilayah") return demoWilayahKey(row)?.toLowerCase() === scope;
+  if (level === "fungsi") {
+    return (row.regu?.unit_key ?? "").trim().toLowerCase() === scope;
+  }
+  return true;
 }
 
 /** Membuat baris laporan lokal yang bentuknya sama dengan hasil query Supabase. */

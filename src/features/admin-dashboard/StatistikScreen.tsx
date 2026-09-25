@@ -597,7 +597,7 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
     setLoading(true);
     void (async () => {
       try {
-        const summary = await fetchDashboardSummary(range.from, range.to);
+        const summary = await fetchDashboardSummary(range.from, range.to, session);
         if (!active) return;
         setData(summary);
         setError(null);
@@ -609,7 +609,7 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
       }
       // Periode sebelumnya hanya untuk indikator ▲/▼ — gagal = sembunyikan.
       try {
-        const p = await fetchDashboardSummary(pRange.from, pRange.to);
+        const p = await fetchDashboardSummary(pRange.from, pRange.to, session);
         if (!active) return;
         setPrev(p);
       } catch {

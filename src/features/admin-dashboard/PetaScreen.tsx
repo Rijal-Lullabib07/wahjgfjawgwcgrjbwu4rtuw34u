@@ -188,7 +188,7 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
     from.setHours(0, 0, 0, 0);
     void (async () => {
       try {
-        const data = await fetchLaporan({ from, limit: 1000 });
+        const data = await fetchLaporan({ from, limit: 1000, session });
         if (!active) return;
         setRows(data);
         setError(null);
@@ -200,7 +200,7 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
     return () => {
       active = false;
     };
-  }, [refreshKey]);
+  }, [refreshKey, session]);
 
   const loadPelapor = useCallback(async () => {
     try {

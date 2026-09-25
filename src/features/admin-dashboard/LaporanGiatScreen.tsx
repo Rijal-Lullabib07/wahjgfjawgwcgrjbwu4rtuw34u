@@ -217,6 +217,7 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
         reguId: reguId === "all" ? undefined : reguId,
         kategori: kategori === "all" ? undefined : kategori,
         limit: 2000,
+        session,
       }),
   });
 

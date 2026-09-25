@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchDashboardSummary } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
 import { fotoUrl } from "../../lib/supabase/api";
+import type { SessionUser } from "../../types";
 
 interface Props {
   refreshKey: number;
   onOpenTab: (tab: "laporan" | "statistik" | "peta" | "rekap" | "manajemen") => void;
+  session?: SessionUser | null;
 }
 
 type Preset = "harian" | "7" | "30";
@@ -61,7 +63,7 @@ function VBar({
  * Beranda / Dashboard Pemantau — kartu ringkasan + Monitoring Wilayah
  * & Fungsi (bar chart) + daftar Laporan Terbaru, sesuai mockup.
  */
-export default function BerandaScreen({ refreshKey, onOpenTab }: Props) {
+export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props) {
   const [preset, setPreset] = useState<Preset>("harian");
   const [data, setData] = useState<Awaited<
     ReturnType<typeof fetchDashboardSummary>
@@ -73,7 +75,7 @@ export default function BerandaScreen({ refreshKey, onOpenTab }: Props) {
     let active = true;
     void (async () => {
       try {
-        const summary = await fetchDashboardSummary(range.from, range.to);
+        const summary = await fetchDashboardSummary(range.from, range.to, session);
         if (!active) return;
         setData(summary);
         setError(null);
@@ -85,7 +87,7 @@ export default function BerandaScreen({ refreshKey, onOpenTab }: Props) {
     return () => {
       active = false;
     };
-  }, [range, refreshKey]);
+  }, [range, refreshKey, session]);
 
   const maxWilayah = Math.max(1, ...(data?.perWilayah.map((w) => w.jumlah) ?? [1]));
   const maxUnit = Math.max(1, ...(data?.perUnit.map((w) => w.jumlah) ?? [1]));
