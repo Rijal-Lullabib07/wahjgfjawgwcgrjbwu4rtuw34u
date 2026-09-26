@@ -14,6 +14,11 @@ export interface WatermarkInfo {
   label: string; // nama regu / siklus
   place?: string | null; // nama tempat hasil reverse geocoding (opsional)
   accuracy?: number | null;
+  /** Teks pengganti koordinat GPS (mis. foto galeri tanpa data lokasi).
+   *  Bila diisi, baris koordinat diganti teks ini — jangan mengarang GPS. */
+  note?: string | null;
+  /** true = tanpa panel watermark sama sekali (foto galeri polos). */
+  plain?: boolean;
 }
 
 /** Dimensi maksimum foto tersimpan (px, sisi terpanjang). */
@@ -22,11 +27,21 @@ const MAX_DIM = 1280;
 const JPEG_QUALITY = 0.72;
 
 export async function applyWatermark(
-  source: HTMLVideoElement | HTMLCanvasElement | ImageBitmap,
+  source: HTMLVideoElement | HTMLCanvasElement | ImageBitmap | HTMLImageElement,
   info: WatermarkInfo,
 ): Promise<{ blob: Blob; width: number; height: number }> {
-  const w = 'videoWidth' in source ? source.videoWidth : source.width;
-  const h = 'videoHeight' in source ? source.videoHeight : source.height;
+  const w =
+    'videoWidth' in source
+      ? source.videoWidth
+      : 'naturalWidth' in source
+        ? source.naturalWidth
+        : source.width;
+  const h =
+    'videoHeight' in source
+      ? source.videoHeight
+      : 'naturalHeight' in source
+        ? source.naturalHeight
+        : source.height;
 
   // Skala turun bila melebihi MAX_DIM (rasio aspek dipertahankan).
   const scaleDown = Math.min(1, MAX_DIM / Math.max(w, h));
@@ -39,13 +54,24 @@ export async function applyWatermark(
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(source as CanvasImageSource, 0, 0, cw, ch);
 
+  // Foto galeri (tanpa watermark) langsung dikompres saja.
+  if (info.plain) {
+    const blob = await new Promise<Blob | null>((res) =>
+      canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY),
+    );
+    if (!blob) throw new Error('Gagal memproses foto');
+    return { blob, width: cw, height: ch };
+  }
+
   const scale = Math.max(1, Math.round(cw / 640));
   const pad = 14 * scale;
   const fs = 13 * scale;
   const lh = fs * 1.35;
 
   // Panel semi-transparan di bawah kiri
-  const coord = `📍 ${info.lat != null ? info.lat.toFixed(6) : '—'}, ${info.lng != null ? info.lng.toFixed(6) : '—'}${info.accuracy != null ? ` (±${Math.round(info.accuracy)}m)` : ''}`;
+  const coord = info.note
+    ? `📍 ${info.note}`
+    : `📍 ${info.lat != null ? info.lat.toFixed(6) : '—'}, ${info.lng != null ? info.lng.toFixed(6) : '—'}${info.accuracy != null ? ` (±${Math.round(info.accuracy)}m)` : ''}`;
   const lines = [
     info.place ? `📌 ${info.place}` : null,
     coord,
@@ -74,4 +100,28 @@ export async function applyWatermark(
   );
   if (!blob) throw new Error('Gagal memproses foto');
   return { blob, width: cw, height: ch };
+}
+
+/**
+ * Kompres foto galeri (unggahan manual khusus kejadian) ke maks 1280px &
+ * JPEG q0.72 — sama seperti hasil kamera agar kuota storage aman.
+ * Watermark TIDAK menempel koordinat GPS: foto milik masyarakat tidak
+ * punya data lokasi, dan posisi HP anggota saat mengunggah bisa berbeda
+ * dari lokasi kejadian. Cukup label keterangan "Dokumentasi galeri".
+ */
+export async function compressGaleriFoto(
+  file: File,
+  info: Omit<WatermarkInfo, 'lat' | 'lng' | 'place' | 'accuracy'>,
+): Promise<{ blob: Blob; width: number; height: number }> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  try {
+    return await applyWatermark(bitmap, {
+      ...info,
+      lat: null,
+      lng: null,
+      note: 'Dokumentasi galeri — tanpa GPS',
+    });
+  } finally {
+    bitmap.close();
+  }
 }

@@ -113,6 +113,9 @@ export interface QueuedLaporan {
   kategori: KategoriLaporan;
   jenisId?: string | null;
   jenisNama?: string | null;
+  /** Nama jenis yang diketik pelapor sendiri (tidak dipilih dari master).
+   *  Dicari/didaftarkan saat sync via RPC pakai_jenis_custom. */
+  jenisCustom?: string | null;
   tahap: TahapLaporan;
   parentId?: string | null;
   perihal?: string;

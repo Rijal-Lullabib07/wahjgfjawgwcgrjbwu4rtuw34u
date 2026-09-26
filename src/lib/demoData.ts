@@ -65,7 +65,9 @@ function demoRegu(index: number, wilayahKey?: string): Regu {
     kode_login: "DEMO",
     status_aktif: true,
     unit_key: isUnitMode ? unitKey : null,
-    wilayah_key: isUnitMode ? null : (wilayahKey ?? WILAYAH[index % WILAYAH.length][0]),
+    wilayah_key: isUnitMode
+      ? null
+      : (wilayahKey ?? WILAYAH[index % WILAYAH.length][0]),
   };
 }
 
@@ -79,21 +81,15 @@ function weightedIndex(value: number, weights: readonly number[]): number {
 }
 
 /**
- * Kembalikan Polsek asal laporan demo tanpa mengubah baris dummy.
+ * Filter visibilitas demo mengikuti scope pemantau, tanpa menyentuh data.
  *
- * Laporan demo bertipe unit sengaja tidak menyimpan wilayah_key karena bentuk
- * datanya meniru akun satuan. Indeks pada id laporan tetap deterministik,
- * sehingga scope wilayah dapat dihitung ulang dengan formula generator yang
- * sama saat data hendak ditampilkan.
+ * Aturan sama dengan RLS can_read_monitor_scope di database:
+ *   - wilayah (Kapolsek) HANYA melihat pelapor Polsek wilayahnya — baris
+ *     mode satuan (wilayah_key NULL) TIDAK BOLEH muncul. Sebelumnya baris
+ *     satuan diberi Polsek karangan di sini, sehingga Kapolsek melihat
+ *     "pelapor satuan Polres" yang seharusnya tak terlihat.
+ *   - fungsi (Kasat) hanya melihat unit fungsinya.
  */
-function demoWilayahKey(row: Laporan): string | null {
-  const match = /^demo-laporan-(\d+)$/.exec(row.id);
-  if (!match) return row.regu?.wilayah_key ?? null;
-  const index = Number(match[1]);
-  return WILAYAH[weightedIndex(index * 17, WILAYAH_BOBOT)]?.[0] ?? null;
-}
-
-/** Filter visibilitas demo mengikuti scope pemantau, tanpa menyentuh data. */
 export function isDemoLaporanInScope(
   row: Laporan,
   session?: SessionUser | null,
@@ -102,7 +98,10 @@ export function isDemoLaporanInScope(
   const level = session.accessLevel ?? "all";
   const scope = (session.scopeKey ?? "").trim().toLowerCase();
   if (level === "all" || !scope) return true;
-  if (level === "wilayah") return demoWilayahKey(row)?.toLowerCase() === scope;
+  if (level === "wilayah") {
+    const wilayah = (row.regu?.wilayah_key ?? "").trim().toLowerCase();
+    return wilayah !== "" && wilayah === scope;
+  }
   if (level === "fungsi") {
     return (row.regu?.unit_key ?? "").trim().toLowerCase() === scope;
   }
@@ -116,7 +115,7 @@ export function createDemoLaporan(from: Date, to: Date): Laporan[] {
   const rows: Laporan[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const ratio = (i * 37) % count / count;
+    const ratio = ((i * 37) % count) / count;
     // Selalu berada di dalam rentang aktif, termasuk saat preset "Hari Ini".
     const timestamp = new Date(from.getTime() + ratio * span);
     timestamp.setSeconds((i * 11) % 60, 0);

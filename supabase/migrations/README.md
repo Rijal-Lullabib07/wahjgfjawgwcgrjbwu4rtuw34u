@@ -35,6 +35,7 @@ pernah dijalankan.
 | 24 | `0024_push_monitor_id.sql` | Dukungan pemantau pada `push_subscriptions`: kolom `monitor_id` + index, constraint `push_owner_check`, `claim_push_subscription` versi regu/pemantau, RLS pemilik device regu ATAU pemantau — perbaiki error 400 saat pemantau mengaktifkan notifikasi | ✅ Aktif |
 | 25 | `0025_posisi_scope_rls.sql` | RLS `posisi` mengikuti cakupan pemantau (`can_read_monitor_scope`) — sebelumnya `using (true)` sehingga Kapolsek/Kasat melihat posisi seluruh personel di peta | ✅ Aktif |
 | 26 | `0026_fix_regu_directory_rls.sql` | Drop policy `regu` warisan 0006 yang `using (true)` (daftar 107 regu bocor ke semua pemantau: dropdown "Semua Unit", PDF/Excel) + perbaiki `is_admin()` yang menganggap semua pemantau admin | ✅ Aktif |
+| 27 | `0027_jenis_custom_upload_manual.sql` | RPC `pakai_jenis_custom(kategori, nama)` — pelapor bisa mengetik jenis sendiri dari form Lapor (dicari/didaftarkan aman tanpa duplikat); pendukung unggah manual foto/video untuk laporan kejadian dari masyarakat | ✅ Aktif |
 
 ## Yang dihapus (usang, tidak dipakai lagi)
 

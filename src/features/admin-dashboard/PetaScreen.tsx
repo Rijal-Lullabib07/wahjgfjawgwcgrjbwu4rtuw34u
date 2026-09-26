@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, CircleMarker } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  CircleMarker,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { SessionUser } from "../../types";
@@ -10,7 +16,11 @@ import {
   type LokasiPelapor,
 } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
-import { namaTempat, cachedNamaTempat, type NamaTempat } from "../../lib/mapPlace";
+import {
+  namaTempat,
+  cachedNamaTempat,
+  type NamaTempat,
+} from "../../lib/mapPlace";
 import { useGeolocation } from "../regu-capture/useGeolocation";
 
 interface Props {
@@ -36,12 +46,16 @@ function dalamCakupan(
 ): boolean {
   if (!session) return true; // tanpa session (mis. ReguApp) — biarkan RLS bekerja
   if (session.accessLevel === "wilayah") {
-    return (session.scopeKey ?? "").trim().toLowerCase() ===
-      (p.wilayah_key ?? "").trim().toLowerCase();
+    return (
+      (session.scopeKey ?? "").trim().toLowerCase() ===
+      (p.wilayah_key ?? "").trim().toLowerCase()
+    );
   }
   if (session.accessLevel === "fungsi") {
-    return (session.scopeKey ?? "").trim().toLowerCase() ===
-      (p.unit_key ?? "").trim().toLowerCase();
+    return (
+      (session.scopeKey ?? "").trim().toLowerCase() ===
+      (p.unit_key ?? "").trim().toLowerCase()
+    );
   }
   return true; // all
 }
@@ -73,14 +87,27 @@ function buatIconDiri(): L.DivIcon {
  *  - ≤ 15 menit → baru saja (indigo)
  *  - > 15 menit → offline / terakhir (abu-abu)
  */
-function statusUsia(iso: string): { label: string; warna: string; live: boolean } {
+function statusUsia(iso: string): {
+  label: string;
+  warna: string;
+  live: boolean;
+} {
   const usia = Date.now() - new Date(iso).getTime();
   const menit = Math.floor(usia / 60_000);
-  if (menit <= 2) return { label: "Live — sekarang", warna: "#16a34a", live: true };
+  if (menit <= 2)
+    return { label: "Live — sekarang", warna: "#16a34a", live: true };
   if (menit <= 15)
-    return { label: `Aktif ${menit} menit lalu`, warna: "#4f46e5", live: false };
+    return {
+      label: `Aktif ${menit} menit lalu`,
+      warna: "#4f46e5",
+      live: false,
+    };
   if (menit < 1440)
-    return { label: `Terakhir ${menit} menit lalu`, warna: "#64748b", live: false };
+    return {
+      label: `Terakhir ${menit} menit lalu`,
+      warna: "#64748b",
+      live: false,
+    };
   const jam = Math.floor(menit / 60);
   return { label: `Terakhir ${jam} jam lalu`, warna: "#94a3b8", live: false };
 }
@@ -151,7 +178,9 @@ function PopupPersonel({ p }: { p: LokasiPelapor }) {
         📍 {tempat ? tempat.nama : "Mencari nama tempat…"}
       </div>
       {tempat?.keterangan && (
-        <div style={{ fontSize: 11, color: "#64748b" }}>{tempat.keterangan}</div>
+        <div style={{ fontSize: 11, color: "#64748b" }}>
+          {tempat.keterangan}
+        </div>
       )}
       <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
         Update posisi: {new Date(p.diupdate_pada).toLocaleTimeString("id-ID")}
@@ -166,11 +195,17 @@ function PopupPersonel({ p }: { p: LokasiPelapor }) {
  * Biru = kegiatan, merah = kejadian, pion = posisi live personel
  * (realtime dari tabel `posisi`), hijau = posisi sendiri.
  */
-export default function PetaScreen({ refreshKey, showSelf = true, session }: Props) {
-  const [kategori, setKategori] = useState<"all" | "kegiatan" | "kejadian">("all");
-  const [rows, setRows] = useState<Awaited<ReturnType<typeof fetchLaporan>> | null>(
-    null,
+export default function PetaScreen({
+  refreshKey,
+  showSelf = true,
+  session,
+}: Props) {
+  const [kategori, setKategori] = useState<"all" | "kegiatan" | "kejadian">(
+    "all",
   );
+  const [rows, setRows] = useState<Awaited<
+    ReturnType<typeof fetchLaporan>
+  > | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pelapor, setPelapor] = useState<LokasiPelapor[] | null>(null);
   const [tampilPelapor, setTampilPelapor] = useState(true);
@@ -239,7 +274,8 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
   );
 
   const liveCount = useMemo(
-    () => (pelapor ?? []).filter((p) => statusUsia(p.diupdate_pada).live).length,
+    () =>
+      (pelapor ?? []).filter((p) => statusUsia(p.diupdate_pada).live).length,
     [pelapor],
   );
 
@@ -249,8 +285,10 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
       return [p.latitude, p.longitude];
     }
     if (points.length === 0) return [-6.706, 107.443]; // Purwakarta
-    const lat = points.reduce((a, l) => a + (l.latitude ?? 0), 0) / points.length;
-    const lng = points.reduce((a, l) => a + (l.longitude ?? 0), 0) / points.length;
+    const lat =
+      points.reduce((a, l) => a + (l.latitude ?? 0), 0) / points.length;
+    const lng =
+      points.reduce((a, l) => a + (l.longitude ?? 0), 0) / points.length;
     return [lat, lng];
   }, [points, pelapor, tampilPelapor]);
 
@@ -345,11 +383,14 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
                       style={{
                         fontSize: 11,
                         fontWeight: 700,
-                        color: l.kategori === "kejadian" ? "#dc2626" : "#2563eb",
+                        color:
+                          l.kategori === "kejadian" ? "#dc2626" : "#2563eb",
                         marginBottom: 2,
                       }}
                     >
-                      {l.kategori === "kejadian" ? "⚡ KEJADIAN" : "📋 KEGIATAN"}
+                      {l.kategori === "kejadian"
+                        ? "⚡ KEJADIAN"
+                        : "📋 KEGIATAN"}
                       {l.jenis ? ` · ${l.jenis.nama}` : ""}
                     </div>
                     <div style={{ fontWeight: 700, marginBottom: 4 }}>
@@ -385,7 +426,10 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
                 <Marker
                   key={"p-" + p.regu_id}
                   position={[p.latitude, p.longitude]}
-                  icon={buatIconPelapor(p.nama_regu, statusUsia(p.diupdate_pada).warna)}
+                  icon={buatIconPelapor(
+                    p.nama_regu,
+                    statusUsia(p.diupdate_pada).warna,
+                  )}
                 >
                   <Popup>
                     <PopupPersonel p={p} />
@@ -406,10 +450,7 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
                     fillOpacity: 0.15,
                   }}
                 />
-                <Marker
-                  position={[geo.lat, geo.lng]}
-                  icon={buatIconDiri()}
-                >
+                <Marker position={[geo.lat, geo.lng]} icon={buatIconDiri()}>
                   <Popup>
                     <div style={{ minWidth: 160 }}>
                       <div
@@ -445,10 +486,12 @@ export default function PetaScreen({ refreshKey, showSelf = true, session }: Pro
             <span className="h-3 w-3 rounded-full bg-red-600" /> ⚡ Kejadian
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-emerald-600" /> 👮 Live (≤2 mnt)
+            <span className="h-3 w-3 rounded-full bg-emerald-600" /> 👮 Live (≤2
+            mnt)
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-indigo-600" /> Baru saja (≤15 mnt)
+            <span className="h-3 w-3 rounded-full bg-indigo-600" /> Baru saja
+            (≤15 mnt)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full bg-slate-400" /> Terakhir

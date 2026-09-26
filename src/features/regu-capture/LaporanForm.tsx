@@ -9,11 +9,14 @@ import { TAHAP_LABEL } from "../../types";
 import { fetchJenisLaporan } from "../../lib/supabase/api";
 import { useCamera } from "./useCamera";
 import { useGeolocation } from "./useGeolocation";
-import { applyWatermark } from "./watermark";
+import { applyWatermark, compressGaleriFoto } from "./watermark";
 
 export interface LaporanFormResult {
   kategori: KategoriLaporan;
   jenis: JenisLaporan | null;
+  /** Nama jenis ketikan pelapor sendiri (tidak dari master) — dicari/
+   *  didaftarkan saat sync lewat RPC pakai_jenis_custom. */
+  jenisCustom: string | null;
   tahap: TahapLaporan;
   parentId: string | null;
   perihal: string;
@@ -109,6 +112,10 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   const [jenisId, setJenisId] = useState<string>("");
   const [jenisQuery, setJenisQuery] = useState("");
   const [jenisOpen, setJenisOpen] = useState(false);
+  /** Mode jenis custom: pelapor mengetik jenis sendiri (tidak ada di master).
+   *  Aktif lewat opsi "➕ Jenis lain / ketik sendiri…" di dropdown. */
+  const [jenisCustomMode, setJenisCustomMode] = useState(false);
+  const [jenisCustomNama, setJenisCustomNama] = useState("");
   const [perihal, setPerihal] = useState("");
   const [isi, setIsi] = useState("");
   /** Daftar NRP pelapor — diingat di localStorage agar tidak ketik ulang.
@@ -167,13 +174,25 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
     setJenisId("");
     setJenisQuery("");
     setJenisOpen(false);
+    setJenisCustomMode(false);
+    setJenisCustomNama("");
     setTahap("awal");
+    // Toggle galeri hanya ada di kejadian — kembali ke kamera agar mode
+    // unggah manual tidak nyangkut saat kategori berubah.
+    setMediaSource("kamera");
+    setCaptureError(null);
   }, [kategori]);
 
   const jenisTerpilih = useMemo(
     () => jenisList.find((j) => j.id === jenisId) ?? null,
     [jenisList, jenisId],
   );
+
+  /** Nama custom siap kirim (dirapikan) — hanya saat mode custom aktif. */
+  const jenisCustomBersih = useMemo(() => {
+    if (!jenisCustomMode) return null;
+    return jenisCustomNama.replace(/\s+/g, " ").trim() || null;
+  }, [jenisCustomMode, jenisCustomNama]);
 
   /** Daftar jenis tersaring kata kunci pencarian (tidak peka huruf besar). */
   const jenisTersaring = useMemo(() => {
@@ -222,6 +241,11 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   const [recSeconds, setRecSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  /** Sumber media: kamera langsung (default) atau unggah manual dari
+   *  galeri/perangkat — hanya untuk kategori kejadian (laporan dari
+   *  masyarakat dulu, baru diinput anggota → tidak bisa direkam ulang). */
+  const [mediaSource, setMediaSource] = useState<"kamera" | "galeri">("kamera");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const flashRef = useRef<HTMLDivElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordStartRef = useRef(0);
@@ -280,6 +304,88 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       setShots((s) => [...s, { url: URL.createObjectURL(blob), ts, blob }]);
     } finally {
       setCapturing(false);
+    }
+  };
+
+  /** Ganti sumber media. Galeri = matikan kamera + buka pemilih file
+   *  (dipanggil dalam gesture klik → pemilih file boleh terbuka). */
+  const pilihSumber = async (next: "kamera" | "galeri") => {
+    setCaptureError(null);
+    setMediaSource(next);
+    if (next === "galeri") {
+      camera.stop();
+      fileInputRef.current?.click();
+    } else {
+      setMediaMode("foto");
+      await camera.start(camera.facing, false);
+    }
+  };
+
+  /** Durasi video galeri dari metadata (detik) — 0 bila tak terbaca. */
+  const probeVideoDuration = (file: File): Promise<number> =>
+    new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement("video");
+      const selesai = (d: number) => {
+        URL.revokeObjectURL(url);
+        v.src = "";
+        resolve(d);
+      };
+      v.preload = "metadata";
+      v.onloadedmetadata = () =>
+        selesai(Number.isFinite(v.duration) ? v.duration : 0);
+      v.onerror = () => selesai(0);
+      v.src = url;
+    });
+
+  /** Unggah manual (khusus kejadian): foto dikompres + diberi label
+   *  "Dokumentasi galeri" (TANPA koordinat GPS karangan), video divalidasi
+   *  durasi maks 60 detik & ukuran maks 50 MB. */
+  const handleGaleriFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setCaptureError(null);
+    const list = Array.from(files);
+    const sisaFoto = Math.max(0, 4 - shots.length);
+    const fotoFiles = list.filter((f) => f.type.startsWith("image/")).slice(0, sisaFoto);
+    const videoFile = list.find((f) => f.type.startsWith("video/"));
+
+    for (const f of fotoFiles) {
+      try {
+        const ts = new Date();
+        const { blob } = await compressGaleriFoto(f, {
+          timestamp: ts,
+          label: "SALAM PRESISI · Pelaporan Giat",
+        });
+        setShots((s) =>
+          s.length >= 4 ? s : [...s, { url: URL.createObjectURL(blob), ts, blob }],
+        );
+      } catch {
+        setCaptureError(`Gagal memproses foto ${f.name}.`);
+      }
+    }
+    if (fotoFiles.length > 0 && fotoFiles.length < list.filter((f) => f.type.startsWith("image/")).length) {
+      setCaptureError("Maksimal 4 foto per laporan.");
+    }
+
+    if (videoFile) {
+      if (videoFile.size > 50 * 1024 * 1024) {
+        setCaptureError("Ukuran video galeri melebihi 50 MB — potong/kompres dulu di galeri HP.");
+        return;
+      }
+      const dur = await probeVideoDuration(videoFile);
+      if (dur > 60) {
+        setCaptureError(`Durasi video galeri ${Math.round(dur)} detik — maksimal 60 detik. Potong dulu di galeri HP.`);
+        return;
+      }
+      setVideoShot((v) => {
+        if (v) URL.revokeObjectURL(v.url);
+        return {
+          url: URL.createObjectURL(videoFile),
+          ts: new Date(),
+          blob: videoFile,
+          durationSeconds: Math.max(1, Math.round(dur || 0)),
+        };
+      });
     }
   };
 
@@ -386,8 +492,12 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       setError("Isi laporan wajib diisi.");
       return;
     }
-    if (mode === "baru" && !jenisTerpilih) {
+    if (mode === "baru" && !jenisCustomMode && !jenisTerpilih) {
       setError("Pilih jenis laporan terlebih dahulu.");
+      return;
+    }
+    if (mode === "baru" && jenisCustomMode && !jenisCustomBersih) {
+      setError("Tulis nama jenis laporan terlebih dahulu.");
       return;
     }
     if (mode === "baru" && tahap !== "awal" && !parent) {
@@ -400,6 +510,10 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       await onSubmit({
         kategori,
         jenis: mode === "turunan" ? null : jenisTerpilih,
+        jenisCustom:
+          mode === "baru" && jenisCustomMode
+            ? (jenisCustomBersih ?? null)
+            : null,
         tahap:
           mode === "turunan" && parent ? parent.tahapBerikut : tahap,
         parentId: parent?.id ?? null,
@@ -522,16 +636,30 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
           <input
             type="text"
             className="input"
-            placeholder="🔍 Cari jenis… (mis. pencurian)"
-            value={jenisTerpilih && !jenisOpen ? jenisTerpilih.nama : jenisQuery}
+            placeholder={
+              jenisCustomMode
+                ? "Tulis jenis sendiri, mis. Kegiatan Masyarakat"
+                : "🔍 Cari jenis… (mis. pencurian)"
+            }
+            value={
+              jenisCustomMode
+                ? jenisCustomNama
+                : jenisTerpilih && !jenisOpen
+                  ? jenisTerpilih.nama
+                  : jenisQuery
+            }
             onFocus={() => setJenisOpen(true)}
             onChange={(e) => {
+              if (jenisCustomMode) {
+                setJenisCustomNama(e.target.value);
+                return;
+              }
               setJenisQuery(e.target.value);
               setJenisOpen(true);
               setJenisId("");
             }}
           />
-          {jenisOpen && (
+          {jenisOpen && !jenisCustomMode && (
             <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[#0b172b] shadow-2xl">
               {jenisTersaring.length === 0 && (
                 <div className="px-4 py-3 text-sm text-slate-400">
@@ -555,9 +683,44 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
                   {j.nama}
                 </button>
               ))}
+              {/* Opsi custom: pelapor bisa mengetik jenis sendiri bila tidak
+                  ada di master — mis. kegiatan masyarakat yang khas. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setJenisCustomMode(true);
+                  setJenisCustomNama(jenisQuery.trim());
+                  setJenisQuery("");
+                  setJenisId("");
+                  setJenisOpen(false);
+                }}
+                className="block w-full border-t border-white/10 px-4 py-2.5 text-left text-sm font-semibold text-sky-300 transition hover:bg-white/[0.06]"
+              >
+                {jenisQuery.trim()
+                  ? `➕ Gunakan jenis "${jenisQuery.trim()}"`
+                  : "➕ Jenis lain — ketik sendiri…"}
+              </button>
             </div>
           )}
-          {jenisTerpilih && !jenisOpen && (
+          {jenisCustomMode && (
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-sky-300">
+                Jenis ketikan sendiri — tercatat sebagai jenis baru bila belum
+                ada di master.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setJenisCustomMode(false);
+                  setJenisCustomNama("");
+                }}
+                className="shrink-0 text-[11px] font-semibold text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+              >
+                Pilih dari daftar
+              </button>
+            </div>
+          )}
+          {!jenisCustomMode && jenisTerpilih && !jenisOpen && (
             <p className="mt-1 text-[11px] text-slate-500">
               Jenis terpilih: <b className="text-gold-300">{jenisTerpilih.nama}</b>
             </p>
@@ -666,7 +829,34 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0b172b] p-1.5">
+        {/* Sumber media — unggah manual hanya untuk kejadian: laporan bisa
+            berasal dari masyarakat (foto/video WhatsApp dsb.), jadi anggota
+            tidak selalu bisa merekam ulang secara realtime. */}
+        {kategori === "kejadian" && (
+          <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0b172b] p-1.5">
+            <button
+              type="button"
+              onClick={() => void pilihSumber("kamera")}
+              className={mediaSource === "kamera" ? "btn-primary py-2" : "btn-secondary py-2"}
+            >
+              📷 Kamera langsung
+            </button>
+            <button
+              type="button"
+              onClick={() => void pilihSumber("galeri")}
+              className={mediaSource === "galeri" ? "btn-primary py-2" : "btn-secondary py-2"}
+            >
+              📁 Unggah galeri
+            </button>
+          </div>
+        )}
+
+        <div
+          className={
+            "mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0b172b] p-1.5 " +
+            (mediaSource === "galeri" ? "hidden" : "")
+          }
+        >
           <button
             type="button"
             onClick={() => void changeMode("foto")}
@@ -683,7 +873,42 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
           </button>
         </div>
 
-        <div className="camera-frame relative mt-3 overflow-hidden rounded-[1.5rem] border border-sky-400/20 bg-black shadow-[0_20px_45px_rgba(2,12,25,0.38)]">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void handleGaleriFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+
+        {mediaSource === "galeri" && (
+          <div className="mt-3 space-y-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-sky-400/50 bg-sky-400/[0.06] px-4 py-6 text-sm font-bold text-sky-300 transition hover:bg-sky-400/[0.12] active:scale-[0.98]"
+            >
+              <span className="text-2xl">📁</span>
+              Pilih foto / video dari galeri atau file manager
+            </button>
+            <p className="text-center text-[11px] leading-relaxed text-slate-500">
+              Untuk dokumentasi dari masyarakat (WA, dsb.) yang tidak bisa
+              direkam ulang. Foto dikompres otomatis · video maks 60 detik /
+              50 MB.
+            </p>
+          </div>
+        )}
+
+        <div
+          className={
+            "camera-frame relative mt-3 overflow-hidden rounded-[1.5rem] border border-sky-400/20 bg-black shadow-[0_20px_45px_rgba(2,12,25,0.38)] " +
+            (mediaSource === "galeri" ? "hidden" : "")
+          }
+        >
           <video
             ref={camera.videoRef}
             playsInline
@@ -768,6 +993,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
           )}
         </div>
 
+        {mediaSource === "kamera" && (
         <div className="mt-4 flex flex-col items-center gap-2">
           <button
             onClick={toggleCapture}
@@ -803,12 +1029,13 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
                   ? "Video sudah ditambahkan"
                   : "Rekam maksimal 60 detik"}
           </span>
-          {captureError && (
-            <p className="text-center text-xs font-semibold text-red-300">
-              {captureError}
-            </p>
-          )}
         </div>
+        )}
+        {captureError && (
+          <p className="mt-2 text-center text-xs font-semibold text-red-300">
+            {captureError}
+          </p>
+        )}
 
         {shots.length > 0 && (
           <div className="mt-3 grid grid-cols-2 gap-3">

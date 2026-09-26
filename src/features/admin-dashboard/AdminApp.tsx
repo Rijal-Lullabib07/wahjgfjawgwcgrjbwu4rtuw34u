@@ -24,13 +24,7 @@ interface Props {
   onLogout: () => void;
 }
 
-type Tab =
-  | "beranda"
-  | "laporan"
-  | "statistik"
-  | "peta"
-  | "rekap"
-  | "manajemen";
+type Tab = "beranda" | "laporan" | "statistik" | "peta" | "rekap" | "manajemen";
 type DashboardTheme = "dark" | "light";
 
 const MENU: Array<{
@@ -246,14 +240,24 @@ export default function AdminApp({ session, onLogout }: Props) {
         return kapolres ? (
           <PetaScreen refreshKey={refreshKey} session={session} />
         ) : (
-          <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} session={session} />
+          <BerandaScreen
+            refreshKey={refreshKey}
+            onOpenTab={setTab}
+            session={session}
+          />
         );
       case "rekap":
         return <RekapScreen session={session} />;
       case "manajemen":
         return session.role === "admin" ? <ManagementScreen /> : null;
       default:
-        return <BerandaScreen refreshKey={refreshKey} onOpenTab={setTab} session={session} />;
+        return (
+          <BerandaScreen
+            refreshKey={refreshKey}
+            onOpenTab={setTab}
+            session={session}
+          />
+        );
     }
   })();
 
@@ -300,7 +304,9 @@ export default function AdminApp({ session, onLogout }: Props) {
           ))}
         </nav>
         <div className="border-t border-slate-100 px-4 py-4">
-          <div className="text-xs font-semibold text-slate-700">{session.nama}</div>
+          <div className="text-xs font-semibold text-slate-700">
+            {session.nama}
+          </div>
           <div className="text-[11px] text-slate-500">
             {session.role === "admin" ? "Admin" : "Pimpinan"}
           </div>
@@ -364,7 +370,11 @@ export default function AdminApp({ session, onLogout }: Props) {
                 type="button"
                 onClick={toggleTheme}
                 className="theme-toggle rounded-xl border border-slate-200 px-2 py-2 text-xs font-semibold transition sm:px-3"
-                aria-label={theme === "dark" ? "Aktifkan mode terang" : "Aktifkan mode gelap"}
+                aria-label={
+                  theme === "dark"
+                    ? "Aktifkan mode terang"
+                    : "Aktifkan mode gelap"
+                }
                 title={theme === "dark" ? "Mode terang" : "Mode gelap"}
               >
                 <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
@@ -389,17 +399,17 @@ export default function AdminApp({ session, onLogout }: Props) {
           {menu
             .filter((m) => MOBILE_MENU.includes(m.key))
             .map((m) => (
-            <button
-              key={m.key}
-              onClick={() => setTab(m.key)}
-              className={
-                "flex min-h-14 min-w-[76px] shrink-0 flex-col items-center justify-center gap-0.5 px-1.5 py-1.5 text-[10px] font-semibold transition " +
-                (tab === m.key ? "text-blue-600" : "text-slate-500")
-              }
-            >
-              <span className="text-lg leading-none">{m.icon}</span>
-              <span className="whitespace-nowrap px-0.5">{m.label}</span>
-            </button>
+              <button
+                key={m.key}
+                onClick={() => setTab(m.key)}
+                className={
+                  "flex min-h-14 min-w-[76px] shrink-0 flex-col items-center justify-center gap-0.5 px-1.5 py-1.5 text-[10px] font-semibold transition " +
+                  (tab === m.key ? "text-blue-600" : "text-slate-500")
+                }
+              >
+                <span className="text-lg leading-none">{m.icon}</span>
+                <span className="whitespace-nowrap px-0.5">{m.label}</span>
+              </button>
             ))}
         </nav>
       </div>

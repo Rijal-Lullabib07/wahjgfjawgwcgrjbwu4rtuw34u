@@ -6,7 +6,9 @@ import type { SessionUser } from "../../types";
 
 interface Props {
   refreshKey: number;
-  onOpenTab: (tab: "laporan" | "statistik" | "peta" | "rekap" | "manajemen") => void;
+  onOpenTab: (
+    tab: "laporan" | "statistik" | "peta" | "rekap" | "manajemen",
+  ) => void;
   session?: SessionUser | null;
 }
 
@@ -17,8 +19,9 @@ function rangeFor(preset: Preset): { from: Date; to: Date } {
   to.setHours(23, 59, 59, 999);
   const from = new Date();
   if (preset === "harian") from.setHours(0, 0, 0, 0);
-  else if (preset === "7") from.setDate(from.getDate() - 6), from.setHours(0, 0, 0, 0);
-  else from.setDate(from.getDate() - 29), from.setHours(0, 0, 0, 0);
+  else if (preset === "7")
+    (from.setDate(from.getDate() - 6), from.setHours(0, 0, 0, 0));
+  else (from.setDate(from.getDate() - 29), from.setHours(0, 0, 0, 0));
   return { from, to };
 }
 
@@ -42,8 +45,13 @@ function VBar({
       <span className={"wilayah-value wilayah-value-" + index}>{value}</span>
       <div className="wilayah-bar-track flex h-32 w-full items-end justify-center">
         <div
-          className={"wilayah-bar-fill w-9 rounded-t-xl transition-all " + color}
-          style={{ height: `${Math.max(pct, 5)}%`, animationDelay: `${index * 70}ms` }}
+          className={
+            "wilayah-bar-fill w-9 rounded-t-xl transition-all " + color
+          }
+          style={{
+            height: `${Math.max(pct, 5)}%`,
+            animationDelay: `${index * 70}ms`,
+          }}
           title={`${label}: ${value} laporan`}
         >
           <span className="wilayah-bar-shine" />
@@ -63,7 +71,11 @@ function VBar({
  * Beranda / Dashboard Pemantau — kartu ringkasan + Monitoring Wilayah
  * & Fungsi (bar chart) + daftar Laporan Terbaru, sesuai mockup.
  */
-export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props) {
+export default function BerandaScreen({
+  refreshKey,
+  onOpenTab,
+  session,
+}: Props) {
   const [preset, setPreset] = useState<Preset>("harian");
   const [data, setData] = useState<Awaited<
     ReturnType<typeof fetchDashboardSummary>
@@ -75,7 +87,11 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
     let active = true;
     void (async () => {
       try {
-        const summary = await fetchDashboardSummary(range.from, range.to, session);
+        const summary = await fetchDashboardSummary(
+          range.from,
+          range.to,
+          session,
+        );
         if (!active) return;
         setData(summary);
         setError(null);
@@ -89,7 +105,17 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
     };
   }, [range, refreshKey, session]);
 
-  const maxWilayah = Math.max(1, ...(data?.perWilayah.map((w) => w.jumlah) ?? [1]));
+  // Relevansi kartu mengikuti cakupan pemantau (sama dengan Statistik):
+  // Kapolsek (wilayah) tak perlu grafik antar-Polsek, Kasat (fungsi) tak
+  // perlu grafik antar-fungsi.
+  const level = session?.accessLevel ?? "all";
+  const tampilWilayah = level !== "wilayah";
+  const tampilFungsi = level !== "fungsi";
+
+  const maxWilayah = Math.max(
+    1,
+    ...(data?.perWilayah.map((w) => w.jumlah) ?? [1]),
+  );
   const maxUnit = Math.max(1, ...(data?.perUnit.map((w) => w.jumlah) ?? [1]));
   const terbaru = (data?.rows ?? []).slice(0, 8);
   const wilayahColors = [
@@ -169,11 +195,7 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
           icon="📷"
           tint="bg-emerald-50 text-emerald-600"
           label="Foto & Video"
-          value={
-            data != null
-              ? `${data.foto + data.video}`
-              : undefined
-          }
+          value={data != null ? `${data.foto + data.video}` : undefined}
         />
         <SummaryCard
           icon="🛡️"
@@ -183,8 +205,17 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
         />
       </div>
 
-      {/* Monitoring wilayah & fungsi */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Monitoring wilayah & fungsi — relevansi mengikuti cakupan:
+          Kapolsek (wilayah) tidak perlu grafik antar-Polsek (isinya satu
+          Polsek saja), Kasat (fungsi) tidak perlu grafik antar-fungsi. */}
+      <div
+        className={
+          tampilWilayah && tampilFungsi
+            ? "grid gap-4 lg:grid-cols-2"
+            : "space-y-4"
+        }
+      >
+        {tampilWilayah && (
         <section className="card">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-bold text-slate-800">📊 Monitoring Wilayah</h2>
@@ -213,7 +244,9 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
             )}
           </div>
         </section>
+        )}
 
+        {tampilFungsi && (
         <section className="card">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-bold text-slate-800">📈 Monitoring Fungsi</h2>
@@ -242,6 +275,7 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
             )}
           </div>
         </section>
+        )}
       </div>
 
       {/* Laporan terbaru */}
@@ -278,7 +312,9 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
                     })}
                   </td>
                   <td className="px-4 py-2.5 font-medium text-slate-700">
-                    {l.regu ? reguDisplayName(l.regu).split(" — ")[0] : l.regu_id}
+                    {l.regu
+                      ? reguDisplayName(l.regu).split(" — ")[0]
+                      : l.regu_id}
                   </td>
                   <td className="px-4 py-2.5">
                     <span
@@ -289,7 +325,9 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
                           : "bg-sky-50 text-sky-700")
                       }
                     >
-                      {l.kategori === "kejadian" ? "⚡ Kejadian" : "📋 Kegiatan"}
+                      {l.kategori === "kejadian"
+                        ? "⚡ Kejadian"
+                        : "📋 Kegiatan"}
                     </span>
                   </td>
                   <td className="max-w-[240px] px-4 py-2.5">
@@ -315,7 +353,10 @@ export default function BerandaScreen({ refreshKey, onOpenTab, session }: Props)
               ))}
               {terbaru.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                  <td
+                    colSpan={5}
+                    className="px-4 py-8 text-center text-slate-400"
+                  >
                     Belum ada laporan pada periode ini.
                   </td>
                 </tr>
@@ -343,7 +384,10 @@ function SummaryCard({
     <div className="card summary-card">
       <div className="flex items-center gap-2.5">
         <span
-          className={"flex h-10 w-10 items-center justify-center rounded-xl text-lg " + tint}
+          className={
+            "flex h-10 w-10 items-center justify-center rounded-xl text-lg " +
+            tint
+          }
         >
           {icon}
         </span>

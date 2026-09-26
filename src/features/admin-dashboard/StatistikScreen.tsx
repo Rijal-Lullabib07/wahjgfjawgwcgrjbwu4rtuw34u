@@ -16,7 +16,14 @@ interface Props {
 type Preset = "harian" | "7" | "30" | "custom";
 type Summary = Awaited<ReturnType<typeof fetchDashboardSummary>>;
 
-const PALET = ["#3ed8ff", "#9b8cff", "#45e3a8", "#ffb636", "#ff6f9c", "#5f8bff"];
+const PALET = [
+  "#3ed8ff",
+  "#9b8cff",
+  "#45e3a8",
+  "#ffb636",
+  "#ff6f9c",
+  "#5f8bff",
+];
 
 const TABS: Array<[Preset, string]> = [
   ["harian", "Harian"],
@@ -37,7 +44,8 @@ function rangeFor(preset: Preset, custom: { from: string; to: string }) {
     from.setDate(from.getDate() - 29);
     from.setHours(0, 0, 0, 0);
   } else {
-    if (custom.from) from.setTime(new Date(custom.from + "T00:00:00").getTime());
+    if (custom.from)
+      from.setTime(new Date(custom.from + "T00:00:00").getTime());
     if (custom.to) to.setTime(new Date(custom.to + "T23:59:59").getTime());
   }
   return { from, to };
@@ -81,7 +89,8 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   const pts = v.map(
     (y, i) => [(i / (v.length - 1)) * 100, 36 - (y / max) * 28] as const,
   );
-  const d = "M" + pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" L");
+  const d =
+    "M" + pts.map((p) => p.map((n) => n.toFixed(1)).join(",")).join(" L");
   return (
     <svg
       className="stx-spark"
@@ -383,7 +392,11 @@ function GaugeKategori({
   const A = Math.PI * 80;
   return (
     <div className="stx-gauge">
-      <svg viewBox="0 0 200 120" role="img" aria-label="Rasio kegiatan dan kejadian">
+      <svg
+        viewBox="0 0 200 120"
+        role="img"
+        aria-label="Rasio kegiatan dan kejadian"
+      >
         <path
           className="stx-arc"
           d="M20,100 A80,80 0 0 1 180,100"
@@ -583,6 +596,13 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
   const range = useMemo(() => rangeFor(preset, custom), [preset, custom]);
+  // Relevansi kartu mengikuti cakupan: grafik antar-Polsek hanya berarti
+  // bagi pemantau lintas Polsek (all), grafik antar-fungsi hanya berarti
+  // bagi pemantau lintas fungsi. Kapolsek (wilayah) cukup lihat per-fungsi
+  // di Polseknya; Kasat (fungsi) cukup lihat per-wilayah unitnya.
+  const level = session?.accessLevel ?? "all";
+  const tampilWilayah = level !== "wilayah";
+  const tampilFungsi = level !== "fungsi";
   const pRange = useMemo(() => prevRange(range.from, range.to), [range]);
   // Kunci agar animasi grafik diputar ulang tiap ganti periode (bukan tiap refresh).
   const periodKey = `${preset}|${custom.from}|${custom.to}`;
@@ -597,7 +617,11 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
     setLoading(true);
     void (async () => {
       try {
-        const summary = await fetchDashboardSummary(range.from, range.to, session);
+        const summary = await fetchDashboardSummary(
+          range.from,
+          range.to,
+          session,
+        );
         if (!active) return;
         setData(summary);
         setError(null);
@@ -643,7 +667,11 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
       const first = new Date(range.from);
       first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
       first.setHours(0, 0, 0, 0);
-      for (let t = first.getTime(); t <= range.to.getTime(); t += 7 * 86_400_000) {
+      for (
+        let t = first.getTime();
+        t <= range.to.getTime();
+        t += 7 * 86_400_000
+      ) {
         const start = new Date(t);
         weeks.push({
           label: start.toLocaleDateString("id-ID", {
@@ -660,12 +688,16 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
     last.setHours(0, 0, 0, 0);
     const first = new Date(range.from);
     first.setHours(0, 0, 0, 0);
-    const count = Math.round((last.getTime() - first.getTime()) / 86_400_000) + 1;
+    const count =
+      Math.round((last.getTime() - first.getTime()) / 86_400_000) + 1;
     return Array.from({ length: count }, (_, i) => {
       const d = new Date(first);
       d.setDate(d.getDate() + i);
       return {
-        label: d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
+        label: d.toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "short",
+        }),
         start: d.getTime(),
         end: d.getTime() + 86_400_000 - 1,
       };
@@ -781,7 +813,9 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
         <div>
           <h1 className="flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight text-slate-900">
             📊 Statistik
-            {scopeChip && <span className="stx-scope-chip">🎯 {scopeChip}</span>}
+            {scopeChip && (
+              <span className="stx-scope-chip">🎯 {scopeChip}</span>
+            )}
           </h1>
           <p className="text-sm text-slate-500">
             Ringkasan statistik laporan kegiatan &amp; kejadian.
@@ -810,7 +844,9 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
               type="date"
               className="input mt-1"
               value={custom.from}
-              onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
+              onChange={(e) =>
+                setCustom((c) => ({ ...c, from: e.target.value }))
+              }
             />
           </label>
           <label className="text-xs font-semibold text-slate-500">
@@ -846,38 +882,62 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-12">
-            {/* Per wilayah (polsek) */}
-            <section className="card lg:col-span-7">
-              <h2 className="font-bold text-slate-800">Statistik per Wilayah</h2>
-              <p className="stx-muted mb-2 text-[11px]">
-                Jumlah laporan tiap polsek
-              </p>
-              {data.perWilayah.length > 0 ? (
-                <WilayahBars key={periodKey} items={data.perWilayah} />
-              ) : (
-                <p className="stx-empty">Belum ada data.</p>
-              )}
-            </section>
+          <div
+            className={
+              tampilWilayah && tampilFungsi
+                ? "grid gap-4 lg:grid-cols-12"
+                : "space-y-4"
+            }
+          >
+            {/* Per wilayah (polsek) — sembunyi untuk Kasat (fungsi) */}
+            {tampilWilayah && (
+              <section
+                className={
+                  tampilFungsi ? "card lg:col-span-7" : "card"
+                }
+              >
+                <h2 className="font-bold text-slate-800">
+                  Statistik per Wilayah
+                </h2>
+                <p className="stx-muted mb-2 text-[11px]">
+                  Jumlah laporan tiap polsek
+                </p>
+                {data.perWilayah.length > 0 ? (
+                  <WilayahBars key={periodKey} items={data.perWilayah} />
+                ) : (
+                  <p className="stx-empty">Belum ada data.</p>
+                )}
+              </section>
+            )}
 
-            {/* Per fungsi (satuan) */}
-            <section className="card lg:col-span-5">
-              <h2 className="font-bold text-slate-800">Statistik per Fungsi</h2>
-              <p className="stx-muted mb-2 text-[11px]">
-                Sebaran laporan menurut fungsi
-              </p>
-              {data.perUnit.length > 0 ? (
-                <DonutFungsi key={periodKey} items={data.perUnit} />
-              ) : (
-                <p className="stx-empty">Belum ada data.</p>
-              )}
-            </section>
+            {/* Per fungsi (satuan) — sembunyi untuk Kapolsek (wilayah) */}
+            {tampilFungsi && (
+              <section
+                className={
+                  tampilWilayah ? "card lg:col-span-5" : "card"
+                }
+              >
+                <h2 className="font-bold text-slate-800">
+                  Statistik per Fungsi
+                </h2>
+                <p className="stx-muted mb-2 text-[11px]">
+                  Sebaran laporan menurut fungsi
+                </p>
+                {data.perUnit.length > 0 ? (
+                  <DonutFungsi key={periodKey} items={data.perUnit} />
+                ) : (
+                  <p className="stx-empty">Belum ada data.</p>
+                )}
+              </section>
+            )}
 
             {/* Tren */}
             <section className="card lg:col-span-8">
               <div className="mb-2 flex items-center justify-between">
                 <div>
-                  <h2 className="font-bold text-slate-800">Tren Laporan Harian</h2>
+                  <h2 className="font-bold text-slate-800">
+                    Tren Laporan Harian
+                  </h2>
                   <p className="stx-muted text-[11px]">
                     Sentuh titik untuk melihat jumlah per periode
                   </p>
@@ -907,7 +967,9 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
 
             {/* Jenis teratas */}
             <section className="card lg:col-span-6">
-              <h2 className="font-bold text-slate-800">Jenis Laporan Teratas</h2>
+              <h2 className="font-bold text-slate-800">
+                Jenis Laporan Teratas
+              </h2>
               <p className="stx-muted mb-3 text-[11px]">
                 Peringkat berdasarkan jumlah
               </p>
@@ -926,7 +988,9 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
             {/* Feed terbaru */}
             <section className="card lg:col-span-12">
               <h2 className="font-bold text-slate-800">Laporan Terbaru</h2>
-              <p className="stx-muted mb-3 text-[11px]">Masuk secara langsung</p>
+              <p className="stx-muted mb-3 text-[11px]">
+                Masuk secara langsung
+              </p>
               <FeedTerbaru rows={data.rows} now={now} />
             </section>
           </div>

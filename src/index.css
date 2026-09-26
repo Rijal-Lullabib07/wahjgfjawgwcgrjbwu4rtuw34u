@@ -902,12 +902,13 @@ select {
   height: 13rem;
   overflow-x: auto;
   padding-top: 1.4rem;
+  padding-inline: 0.2rem 0.6rem;
 }
 .stx-bar {
   display: flex;
-  min-width: 3rem;
+  min-width: 4.6rem;
+  flex: 0 0 4.6rem;
   height: 100%;
-  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
@@ -946,13 +947,16 @@ select {
   animation: stx-shine 4s 1.4s infinite;
 }
 .stx-bar-label {
-  max-width: 5.5rem;
+  width: 100%;
+  min-height: 2.2rem;
   overflow: hidden;
   color: #8b9bc8;
   font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.15;
   text-align: center;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 /* Donut per fungsi */
 .stx-donut-wrap {
@@ -1131,22 +1135,62 @@ select {
 .dash-light .stx-bar-num {
   background: rgba(31, 77, 133, 0.08);
   color: #253b56;
+  border: 1px solid #c5d9ef;
 }
-.dash-light .stx-bar-label { color: #526b87; }
+.dash-light .stx-bar-label {
+  color: #29496b;
+  font-weight: 700;
+}
+.dash-light .stx-bar-track {
+  border: 1px solid #dbe4ef;
+  border-radius: 0.85rem;
+  background: linear-gradient(
+    to top,
+    rgba(31, 77, 133, 0.1),
+    rgba(31, 77, 133, 0.03)
+  );
+  box-shadow: inset 0 1px 3px rgba(15, 42, 72, 0.08);
+}
+.dash-light .stx-bar-fill {
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--c1) 28%, transparent);
+}
 .dash-light .stx-donut circle[stroke="rgba(255,255,255,.06)"] { stroke: rgba(31, 77, 133, 0.08); }
 .dash-light .stx-donut-total { color: #172b46; }
 .dash-light .stx-donut-sub { color: #71859d; }
 .dash-light .stx-legend b { color: #172b46; }
-.dash-light .stx-dot { stroke: #fff; }
-.dash-light .stx-tick { fill: #71859d; }
+.dash-light .stx-dot {
+  stroke: #fff;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 1px 2px rgba(15, 42, 72, 0.28));
+}
+.dash-light .stx-trend-svg line {
+  stroke: rgba(31, 77, 133, 0.2);
+}
+.dash-light .stx-trend-svg path[stroke="#ffb636"] {
+  stroke: #d97706;
+  filter: drop-shadow(0 2px 4px rgba(180, 83, 9, 0.25));
+}
+.dash-light .stx-tick {
+  fill: #526b87;
+  font-weight: 700;
+}
 .dash-light .stx-tip { background: rgba(23, 43, 70, 0.92); }
 .dash-light .stx-gauge-big { fill: #172b46; }
 .dash-light .stx-gauge-sub { fill: #71859d; }
 .dash-light .stx-rk b { color: #172b46; }
-.dash-light .stx-rk-track { background: rgba(31, 77, 133, 0.1); }
-.dash-light .stx-heat { color: #71859d; }
-.dash-light .stx-feed-item { background: rgba(31, 77, 133, 0.06); }
-.dash-light .stx-feed-item small { color: #71859d; }
+.dash-light .stx-rk-track {
+  background: rgba(31, 77, 133, 0.12);
+  box-shadow: inset 0 1px 2px rgba(15, 42, 72, 0.08);
+}
+.dash-light .stx-heat { color: #526b87; }
+.dash-light .stx-heat-cell {
+  box-shadow: inset 0 0 0 1px rgba(31, 77, 133, 0.12);
+}
+.dash-light .stx-feed-item {
+  border: 1px solid #dbe4ef;
+  background: #f5f9fd;
+}
+.dash-light .stx-feed-item small { color: #526b87; }
 @media (prefers-reduced-motion: reduce) {
   .stx-bar-fill, .stx-bar-fill::after, .stx-dot, .stx-feed-item {
     animation: none !important;

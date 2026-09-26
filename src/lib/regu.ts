@@ -44,10 +44,10 @@ export function reguOrigin(regu: Pick<Regu, "unit_key" | "wilayah_key">): string
     return `Polsek ${wilayahNames[key] ?? titleFromKey(key)}`;
   }
   if (regu.unit_key) {
+    // Satuan Polres (pelapor-level-2): memang tanpa Polsek — jangan ditulis
+    // "belum ditentukan" seolah datanya kurang.
     const key = regu.unit_key.trim().toLowerCase();
-    return `Polsek belum ditentukan · Unit Polres: ${
-      unitNames[key] ?? titleFromKey(key)
-    }`;
+    return `Satuan Polres: ${unitNames[key] ?? titleFromKey(key)}`;
   }
   return "Asal belum diatur";
 }

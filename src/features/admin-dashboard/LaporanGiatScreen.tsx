@@ -31,12 +31,16 @@ function reguDalamCakupan(
   if (!session) return true;
   const level = session.accessLevel ?? "all";
   if (level === "wilayah") {
-    return (session.scopeKey ?? "").trim().toLowerCase() ===
-      (r.wilayah_key ?? "").trim().toLowerCase();
+    return (
+      (session.scopeKey ?? "").trim().toLowerCase() ===
+      (r.wilayah_key ?? "").trim().toLowerCase()
+    );
   }
   if (level === "fungsi") {
-    return (session.scopeKey ?? "").trim().toLowerCase() ===
-      (r.unit_key ?? "").trim().toLowerCase();
+    return (
+      (session.scopeKey ?? "").trim().toLowerCase() ===
+      (r.unit_key ?? "").trim().toLowerCase()
+    );
   }
   return true; // all
 }
@@ -131,7 +135,11 @@ function UnduhMediaButton({
       onClick={() => void unduh()}
       className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:opacity-60"
     >
-      {state === "proses" ? "⏳ Mengunduh…" : state === "gagal" ? "⚠ Gagal" : "⬇ Unduh"}
+      {state === "proses"
+        ? "⏳ Mengunduh…"
+        : state === "gagal"
+          ? "⚠ Gagal"
+          : "⬇ Unduh"}
     </button>
   );
 }
@@ -183,11 +191,17 @@ function CopyTeksButton({ teks }: { teks: string }) {
     </button>
   );
 }
-export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Props) {
+export default function LaporanGiatScreen({
+  refreshKey,
+  rekapMode,
+  session,
+}: Props) {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState("all");
-  const [kategori, setKategori] = useState<"all" | "kegiatan" | "kejadian">("all");
+  const [kategori, setKategori] = useState<"all" | "kegiatan" | "kejadian">(
+    "all",
+  );
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortDir>("terbaru");
   const [pageSize, setPageSize] = useState(10);
@@ -331,14 +345,18 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
                   type="date"
                   className="input w-auto"
                   value={custom.from}
-                  onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
+                  onChange={(e) =>
+                    setCustom((c) => ({ ...c, from: e.target.value }))
+                  }
                 />
                 <span className="text-slate-400">—</span>
                 <input
                   type="date"
                   className="input w-auto"
                   value={custom.to}
-                  onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
+                  onChange={(e) =>
+                    setCustom((c) => ({ ...c, to: e.target.value }))
+                  }
                 />
               </span>
             )}
@@ -567,7 +585,9 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
                 </td>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-slate-800">
-                    {l.regu ? reguDisplayName(l.regu).split(" — ")[0] : l.regu_id}
+                    {l.regu
+                      ? reguDisplayName(l.regu).split(" — ")[0]
+                      : l.regu_id}
                   </div>
                   <div className="text-xs text-slate-500">
                     {l.nrp_pelapor ? `NRP ${l.nrp_pelapor} · ` : ""}
@@ -590,7 +610,8 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
                   <span
                     className={
                       "badge " +
-                      (KATEGORI_BADGE[l.kategori] ?? "bg-slate-100 text-slate-600")
+                      (KATEGORI_BADGE[l.kategori] ??
+                        "bg-slate-100 text-slate-600")
                     }
                   >
                     {l.kategori === "kejadian" ? "⚡ Kejadian" : "📋 Kegiatan"}
@@ -643,7 +664,10 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">
+                <td
+                  colSpan={8}
+                  className="px-4 py-10 text-center text-sm text-slate-400"
+                >
                   Tidak ada laporan pada filter ini.
                 </td>
               </tr>
@@ -706,9 +730,9 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-              <div className="text-xs text-slate-500">
-                {new Date(preview.timestamp_kirim).toLocaleString("id-ID")}
-              </div>
+                <div className="text-xs text-slate-500">
+                  {new Date(preview.timestamp_kirim).toLocaleString("id-ID")}
+                </div>
                 <h3 className="mt-0.5 text-lg font-extrabold text-slate-900">
                   {preview.perihal ?? "Laporan"}
                 </h3>
@@ -719,7 +743,9 @@ export default function LaporanGiatScreen({ refreshKey, rekapMode, session }: Pr
                       (KATEGORI_BADGE[preview.kategori] ?? "bg-slate-100")
                     }
                   >
-                    {preview.kategori === "kejadian" ? "⚡ Kejadian" : "📋 Kegiatan"}
+                    {preview.kategori === "kejadian"
+                      ? "⚡ Kejadian"
+                      : "📋 Kegiatan"}
                   </span>
                   {preview.jenis && (
                     <span className="badge bg-slate-100 text-slate-600">

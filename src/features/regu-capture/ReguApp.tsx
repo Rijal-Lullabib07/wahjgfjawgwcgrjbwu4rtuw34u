@@ -88,6 +88,7 @@ export default function ReguApp({ session, onLogout }: Props) {
         kategori: result.kategori,
         jenisId: result.jenis?.id ?? null,
         jenisNama: result.jenis?.nama ?? parent?.namaJenis ?? null,
+        jenisCustom: result.jenisCustom ?? null,
         tahap: result.tahap,
         parentId: result.parentId,
         perihal: result.perihal,

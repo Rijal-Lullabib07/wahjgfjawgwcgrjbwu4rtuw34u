@@ -29,7 +29,7 @@ import {
   type FolderRow,
 } from "../../lib/folders";
 import {
-  fetchLaporan,
+  fetchDashboardSummary,
   fetchReguList,
   fotoUrl,
   namaFileUnduhan,
@@ -319,8 +319,10 @@ function LaporanCard({ item }: { item: FolderLaporanRow }) {
 /** Header command center + kartu ringkasan (dipindah dari tab Monitoring lama). */
 function MonitoringIntro({
   refreshKey,
+  session,
 }: {
   refreshKey: number;
+  session: SessionUser;
 }) {
   const [stats, setStats] = useState<{
     total: number;
@@ -332,25 +334,28 @@ function MonitoringIntro({
     let active = true;
     void (async () => {
       try {
-        const [reguList, laporanList] = await Promise.all([
+        // Scope-aware: hanya regu & laporan dalam cakupan pemantau yang
+        // dihitung (sebelumnya fetchLaporan tanpa session → bocor lintas
+        // cakupan di angka ringkasan).
+        const hariIni = new Date();
+        const from = new Date(hariIni);
+        from.setHours(0, 0, 0, 0);
+        const [reguList, summary] = await Promise.all([
           fetchReguList(),
-          fetchLaporan({ limit: 200 }),
+          fetchDashboardSummary(from, hariIni, session),
         ]);
         if (!active) return;
-        const sudah = new Set(laporanList.map((l) => l.regu_id)).size;
+        const sudah = new Set(summary.rows.map((l) => l.regu_id)).size;
         setStats({
           total: reguList.length,
-          laporan: laporanList.length,
+          laporan: summary.total,
           sudah,
         });
       } catch {
         /* ringkasan tidak kritikal — biarkan "—" */
       }
     })();
-    return () => {
-      active = false;
-    };
-  }, [refreshKey]);
+  }, [refreshKey, session]);
 
   const belum = stats ? stats.total - stats.sudah : null;
 
@@ -566,7 +571,7 @@ export default function MonitoringScreen({
     const children = byParent.get(polsekKey) ?? [];
     return (
       <div className="space-y-6">
-        <MonitoringIntro refreshKey={refreshKey} />
+        <MonitoringIntro refreshKey={refreshKey} session={session} />
         <div className="space-y-4">
           <div className="card relative overflow-hidden">
             <div className="absolute inset-x-0 top-0 h-1 bg-gold-400" />
@@ -626,7 +631,7 @@ export default function MonitoringScreen({
     }
     return (
       <div className="space-y-6">
-        <MonitoringIntro refreshKey={refreshKey} />
+        <MonitoringIntro refreshKey={refreshKey} session={session} />
         {satuanRows.length > 0 && (
           <section>
             <div className="eyebrow mb-3">Satuan Polres</div>
@@ -697,7 +702,7 @@ export default function MonitoringScreen({
   // Urutan: Satuan (Polres) di ATAS, folder Polsek di bawah.
   return (
     <div className="space-y-6">
-      <MonitoringIntro refreshKey={refreshKey} />
+      <MonitoringIntro refreshKey={refreshKey} session={session} />
 
       <section>
         <div className="eyebrow mb-3">Pelapor tingkat Polres</div>

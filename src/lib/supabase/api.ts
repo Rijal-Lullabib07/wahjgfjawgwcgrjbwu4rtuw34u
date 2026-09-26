@@ -51,7 +51,10 @@ function describeSupabaseError(error: unknown, fallback: string): Error {
   return new Error(fallback);
 }
 
-function describeAuthError(error: { message?: string; status?: number }): Error {
+function describeAuthError(error: {
+  message?: string;
+  status?: number;
+}): Error {
   if (error.status === 400) {
     return new Error(
       "Login ditolak. Periksa kode/username dan password. Password akun lama tidak berubah saat provisioning ulang.",
@@ -109,7 +112,9 @@ export async function loginAdmin(
 
   const { data: admin, error: adminErr } = await client
     .from("admin_users")
-    .select("id, nama, email, role, username, access_level, scope_key, status_aktif")
+    .select(
+      "id, nama, email, role, username, access_level, scope_key, status_aktif",
+    )
     .or(`email.eq.${email},username.eq.${normalized}`)
     .single();
   if (adminErr || !admin) throw new Error("Bukan akun admin yang valid");
@@ -180,6 +185,30 @@ export async function createJenisLaporan(
 }
 
 /**
+ * Jenis ketikan pelapor (custom): cari jenis dengan nama sama (tidak
+ * sensitif kapital) dan pakai; bila belum ada, daftarkan sebagai jenis
+ * baru kategori tersebut. Lewat RPC SECURITY DEFINER karena RLS menolak
+ * insert jenis_laporan dari role regu (migration 0027).
+ * Gagal (mis. RPC belum dipasang) tidak menggagalkan laporan — kembalikan
+ * null agar laporan tetap terkirim tanpa jenis.
+ */
+export async function pakaiJenisCustom(
+  kategori: KategoriLaporan,
+  nama: string,
+): Promise<string | null> {
+  const client = requireClient();
+  const { data, error } = await client.rpc("pakai_jenis_custom", {
+    p_kategori: kategori,
+    p_nama: nama,
+  });
+  if (error) {
+    console.debug("pakaiJenisCustom:", error.message);
+    return null;
+  }
+  return (data as string | null) ?? null;
+}
+
+/**
  * Edit nama & status aktif jenis. TIDAK ADA hapus — jenis lama tetap
  * valid untuk laporan yang sudah ada.
  */
@@ -188,7 +217,10 @@ export async function updateJenisLaporan(
   patch: { nama?: string; aktif?: boolean },
 ): Promise<void> {
   const client = requireClient();
-  const { error } = await client.from("jenis_laporan").update(patch).eq("id", id);
+  const { error } = await client
+    .from("jenis_laporan")
+    .update(patch)
+    .eq("id", id);
   if (error) throw describeSupabaseError(error, "Gagal mengubah jenis laporan");
 }
 
@@ -238,8 +270,7 @@ export async function fetchLaporan(filter: {
   if (filter.kategori) query = query.eq("kategori", filter.kategori);
   if (filter.from)
     query = query.gte("timestamp_kirim", filter.from.toISOString());
-  if (filter.to)
-    query = query.lte("timestamp_kirim", filter.to.toISOString());
+  if (filter.to) query = query.lte("timestamp_kirim", filter.to.toISOString());
   const { data, error } = await query;
   if (error) throw describeSupabaseError(error, "Gagal memuat laporan");
   // `laporan_video` punya unique(laporan_id) → PostgREST menganggap relasi
@@ -350,7 +381,16 @@ async function uploadVideo(
   blob: Blob,
 ): Promise<string> {
   const client = requireClient();
-  const path = `${reguId}/${laporanId}/video/video-1.webm`;
+  // Ekstensi mengikuti tipe blob: rekaman kamera = webm; video galeri
+  // (input manual kejadian dari masyarakat) biasanya mp4/webm-mov.
+  const ext = blob.type.includes("mp4")
+    ? "mp4"
+    : blob.type.includes("quicktime")
+      ? "mov"
+      : blob.type.includes("webm")
+        ? "webm"
+        : "webm";
+  const path = `${reguId}/${laporanId}/video/video-1.${ext}`;
   const { error } = await client.storage
     .from("laporan-foto")
     .upload(path, blob, {
@@ -378,11 +418,17 @@ export async function submitLaporan(
   const nrpLama = (q as { nrp?: string | null }).nrp?.trim() ?? "";
   const nrpList = Array.from(
     new Set(
-      [...(q.nrpList ?? []), nrpLama]
-        .map((n) => n.trim())
-        .filter(Boolean),
+      [...(q.nrpList ?? []), nrpLama].map((n) => n.trim()).filter(Boolean),
     ),
   );
+  // Jenis custom (ketikan pelapor sendiri, bukan pilihan master): cari
+  // atau daftarkan lewat RPC sebelum insert laporan (migration 0027).
+  let jenisIdFinal: string | null = q.jenisId ?? null;
+  const jenisCustomNama = q.jenisCustom?.trim() ?? "";
+  if (!jenisIdFinal && jenisCustomNama) {
+    jenisIdFinal = await pakaiJenisCustom(q.kategori, jenisCustomNama);
+  }
+
   const insertLaporan = async (
     nrpValue: string[] | string | null,
   ): Promise<{ id: string }> => {
@@ -397,7 +443,7 @@ export async function submitLaporan(
         status_sync: "synced",
         catatan: q.catatan ?? null,
         kategori: q.kategori,
-        jenis_id: q.jenisId ?? null,
+        jenis_id: jenisIdFinal,
         tahap: q.tahap,
         parent_id: q.parentId ?? null,
         perihal: q.perihal ?? null,
@@ -419,10 +465,7 @@ export async function submitLaporan(
     // Fallback: bila DB masih skema lama (kolom text), gabungkan daftar jadi
     // satu string — hanya untuk error konversi tipe, bukan error lain.
     const msg = firstErr instanceof Error ? firstErr.message : "";
-    if (
-      nrpList.length === 0 ||
-      !/array|invalid input syntax|22P02/i.test(msg)
-    )
+    if (nrpList.length === 0 || !/array|invalid input syntax|22P02/i.test(msg))
       throw firstErr;
     laporan = await insertLaporan(nrpList.join(", "));
   }
@@ -488,7 +531,8 @@ export async function fetchLaporanThread(rootId: string): Promise<Laporan[]> {
     )
     .or(`id.eq.${rootId},parent_id.eq.${rootId}`)
     .order("timestamp_kirim", { ascending: true });
-  if (error) throw describeSupabaseError(error, "Gagal memuat rangkaian laporan");
+  if (error)
+    throw describeSupabaseError(error, "Gagal memuat rangkaian laporan");
   return (data ?? []).map((row) => {
     const r = row as Laporan;
     const nrpDb = r.nrp_pelapor as unknown;
@@ -527,7 +571,8 @@ export async function fetchOpenThreads(
     .is("parent_id", null)
     .order("timestamp_kirim", { ascending: false })
     .limit(limit);
-  if (error) throw describeSupabaseError(error, "Gagal memuat laporan berjalan");
+  if (error)
+    throw describeSupabaseError(error, "Gagal memuat laporan berjalan");
   const roots = (data ?? []) as Laporan[];
 
   const childCounts = new Map<string, number>();
@@ -538,7 +583,10 @@ export async function fetchOpenThreads(
       .select("id, parent_id")
       .in("parent_id", rootIds);
     if (!childErr && children) {
-      for (const c of children as Array<{ id: string; parent_id: string | null }>) {
+      for (const c of children as Array<{
+        id: string;
+        parent_id: string | null;
+      }>) {
         if (c.parent_id) {
           childCounts.set(c.parent_id, (childCounts.get(c.parent_id) ?? 0) + 1);
         }
@@ -590,12 +638,17 @@ export async function fetchDashboardSummary(
     // langsung dibuat bertahap 'update'/'lengkap' (migration 0017).
     if (l.parent_id) continue;
     const regu = l.regu;
-    if (regu?.wilayah_key) {
-      const key = regu.wilayah_key.trim().toLowerCase();
-      perWilayah.set(key, (perWilayah.get(key) ?? 0) + 1);
-    } else if (regu?.unit_key) {
-      const key = regu.unit_key.trim().toLowerCase();
-      perUnit.set(key, (perUnit.get(key) ?? 0) + 1);
+    const unitKey = (regu?.unit_key ?? "").trim().toLowerCase();
+    const wilayahKey = (regu?.wilayah_key ?? "").trim().toLowerCase();
+    if (wilayahKey) {
+      perWilayah.set(wilayahKey, (perWilayah.get(wilayahKey) ?? 0) + 1);
+    }
+    // Fungsi dihitung dari SEMUA pelapor ber-unit_key: satuan Polres
+    // (pelapor-level-2, wilayah kosong) DAN unit di Polsek (pelapor-level-1,
+    // mis. spkt di Jatiluhur). Sebelumnya laporan unit Polsek tidak masuk
+    // grafik fungsi sama sekali → "Monitoring Fungsi" Kapolsek selalu kosong.
+    if (unitKey) {
+      perUnit.set(unitKey, (perUnit.get(unitKey) ?? 0) + 1);
     }
   }
   return {
@@ -646,17 +699,22 @@ export async function fetchLokasiPelapor(): Promise<LokasiPelapor[]> {
     )
     .order("diupdate_pada", { ascending: false })
     .limit(500);
-  if (error)
-    throw describeSupabaseError(error, "Gagal memuat posisi pelapor");
+  if (error) throw describeSupabaseError(error, "Gagal memuat posisi pelapor");
 
-  return ((data ?? []) as Array<{
-    regu_id: string;
-    latitude: number;
-    longitude: number;
-    accuracy_m: number | null;
-    diupdate_pada: string;
-    regu?: { nama_regu?: string; unit_key?: string | null; wilayah_key?: string | null } | null;
-  }>).map((row) => ({
+  return (
+    (data ?? []) as Array<{
+      regu_id: string;
+      latitude: number;
+      longitude: number;
+      accuracy_m: number | null;
+      diupdate_pada: string;
+      regu?: {
+        nama_regu?: string;
+        unit_key?: string | null;
+        wilayah_key?: string | null;
+      } | null;
+    }>
+  ).map((row) => ({
     regu_id: row.regu_id,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -724,7 +782,10 @@ export function subscribePosisi(cb: () => void): () => void {
  * di-update (badge "Versi lama" di Manajemen Personel).
  * Gagal diam-diam: heartbeat tidak boleh mengganggu pemakaian app.
  */
-export async function laporkanVersiApp(reguId: string, versi: string): Promise<void> {
+export async function laporkanVersiApp(
+  reguId: string,
+  versi: string,
+): Promise<void> {
   const client = requireClient();
   const { error } = await client
     .from("regu")

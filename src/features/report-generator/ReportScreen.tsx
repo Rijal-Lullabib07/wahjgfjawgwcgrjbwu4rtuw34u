@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { KategoriLaporan, Laporan, TahapLaporan } from "../../types";
+import type {
+  KategoriLaporan,
+  Laporan,
+  SessionUser,
+  TahapLaporan,
+} from "../../types";
 import { fetchLaporan, fetchReguList } from "../../lib/supabase/api";
 import { formatWaktu } from "../../lib/cycle";
 import { exportPdf } from "./exportPdf";
@@ -43,8 +48,14 @@ function presetRange(
   return { from, to };
 }
 
+interface Props {
+  /** Scope pemantau — diteruskan ke fetchLaporan agar hasil hanya
+   *  laporan dalam cakupan (RLS tetap lapisan utama). */
+  session?: SessionUser | null;
+}
+
 /** Generator laporan: filter rentang + kategori, export PDF/Excel. */
-export default function ReportScreen() {
+export default function ReportScreen({ session }: Props) {
   const [preset, setPreset] = useState<Preset>("harian");
   const [custom, setCustom] = useState({ from: "", to: "" });
   const [reguId, setReguId] = useState<string>("all"); // 'all' = gabungan
@@ -68,6 +79,7 @@ export default function ReportScreen() {
         reguId: reguId === "all" ? undefined : reguId,
         kategori: kategori === "all" ? undefined : kategori,
         limit: 2000,
+        session,
       }),
   });
 
