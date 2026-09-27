@@ -3,6 +3,7 @@ import type { KategoriLaporan, Laporan, TahapLaporan } from "../../types";
 import { TAHAP_LABEL } from "../../types";
 import { fetchOpenThreads } from "../../lib/supabase/api";
 import { formatWaktu } from "../../lib/cycle";
+import { salinTeks } from "../../lib/clipboard";
 import LaporanThreadDetail from "./LaporanThreadDetail";
 
 interface ParentPilihan {
@@ -31,6 +32,41 @@ const TAHAP_BADGE: Record<TahapLaporan, string> = {
   update: "bg-amber-500/15 text-amber-300",
   lengkap: "bg-emerald-500/15 text-emerald-300",
 };
+
+/** Tombol salin narasi (teks laporan resmi) ke clipboard — API modern + fallback lama. */
+function SalinNarasiButton({ narasi }: { narasi: string }) {
+  const [status, setStatus] = useState<"idle" | "ok" | "gagal">("idle");
+
+  const salin = async () => {
+    const ok = await salinTeks(narasi);
+    setStatus(ok ? "ok" : "gagal");
+    window.setTimeout(() => setStatus("idle"), 2000);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation(); // jangan buka detail kartu
+        void salin();
+      }}
+      className={
+        "rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition " +
+        (status === "ok"
+          ? "border-emerald-500/40 text-emerald-300"
+          : status === "gagal"
+            ? "border-red-500/40 text-red-300"
+            : "border-navy-600 text-slate-300 hover:border-sky-400/40 hover:text-sky-300")
+      }
+    >
+      {status === "ok"
+        ? "Tersalin ✓"
+        : status === "gagal"
+          ? "Gagal salin"
+          : "📋 Salin narasi"}
+    </button>
+  );
+}
 
 /**
  * Daftar rangkaian laporan milik pelapor: laporan awal yang masih
@@ -243,6 +279,11 @@ export default function ThreadList({
                     {t.perihal}
                   </p>
                 )}
+                {t.catatan && (
+                  <div className="mt-2">
+                    <SalinNarasiButton narasi={t.catatan} />
+                  </div>
+                )}
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <span className="text-[11px] text-slate-500">
                     {t.child_count > 0
@@ -315,6 +356,7 @@ export default function ThreadList({
                   {t.perihal}
                 </p>
               )}
+              {t.catatan && <SalinNarasiButton narasi={t.catatan} />}
               <div className="mt-2 text-[11px] font-semibold text-sky-300">
                 👁 Lihat laporan formal
               </div>

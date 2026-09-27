@@ -14,6 +14,7 @@ import {
   formatWaktu,
 } from "../../lib/cycle";
 import { reguOrigin } from "../../lib/regu";
+import { salinTeks } from "../../lib/clipboard";
 import { exportThreadPdf } from "./exportThreadPdf";
 import PlaceBadge from "../../components/PlaceBadge";
 
@@ -59,6 +60,38 @@ function UnduhButton({ storagePath }: { storagePath: string }) {
   );
 }
 
+/** Tombol salin narasi (uraian) satu tahap ke clipboard — API modern + fallback lama. */
+function SalinNarasiButton({ narasi }: { narasi: string }) {
+  const [status, setStatus] = useState<"idle" | "ok" | "gagal">("idle");
+
+  const salin = async () => {
+    const ok = await salinTeks(narasi);
+    setStatus(ok ? "ok" : "gagal");
+    window.setTimeout(() => setStatus("idle"), 2000);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void salin()}
+      className={
+        "shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition " +
+        (status === "ok"
+          ? "border-emerald-500/40 text-emerald-300"
+          : status === "gagal"
+            ? "border-red-500/40 text-red-300"
+            : "border-white/10 text-slate-400 hover:border-sky-400/40 hover:text-sky-300")
+      }
+    >
+      {status === "ok"
+        ? "Tersalin ✓"
+        : status === "gagal"
+          ? "Gagal salin"
+          : "📋 Salin narasi"}
+    </button>
+  );
+}
+
 /** Satu entri rangkaian (tahap) dengan foto & video. */
 function TahapSection({ laporan, nomor }: { laporan: Laporan; nomor: string }) {
   return (
@@ -79,8 +112,11 @@ function TahapSection({ laporan, nomor }: { laporan: Laporan; nomor: string }) {
 
       {laporan.catatan && (
         <div className="mt-3 rounded-xl border border-white/5 bg-navy-950/50 px-3 py-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-            Uraian
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              Uraian
+            </div>
+            <SalinNarasiButton narasi={laporan.catatan} />
           </div>
           <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-200">
             {laporan.catatan}
