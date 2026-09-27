@@ -11,4 +11,3 @@ export const supabase: SupabaseClient | null =
         realtime: { params: { eventsPerSecond: 10 } },
       })
     : null;
-(window as any).supabase = supabase;
