@@ -183,6 +183,83 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
     setCaptureError(null);
   }, [kategori]);
 
+  /** Buang SEMUA dokumentasi (foto & video) + cabut URL preview-nya agar
+   *  memori perangkat tidak bocor. Dipakai saat ganti kategori: dokumentasi
+   *  galeri tidak memiliki watermark GPS/waktu live sehingga rawan
+   *  dipindah-tempelkan — hanya sah untuk laporan kejadian, jadi TIDAK BOLEH
+   *  terbawa ke laporan kegiatan (anti kecurangan). */
+  const buangSemuaMedia = () => {
+    setShots((current) => {
+      current.forEach((s) => URL.revokeObjectURL(s.url));
+      return [];
+    });
+    setVideoShot((v) => {
+      if (v) URL.revokeObjectURL(v.url);
+      return null;
+    });
+  };
+
+  /** Batalkan perekaman yang sedang berjalan TANPA menjadikannya klip:
+   *  stop() polos justru menghasilkan videoShot lewat onstop — maka flag
+   *  rekamDibuangRef dipasang dulu supaya chunk dibuang di onstop. */
+  const batalkanRekam = () => {
+    if (!recording) return;
+    rekamDibuangRef.current = true;
+    recorderRef.current?.stop();
+  };
+
+  /** Pilih kategori = MULAI DARI AWAL, sinkron sebelum render ulang.
+   *  Anti kecurangan: unggah galeri hanya sah di kejadian (dokumentasi dari
+   *  masyarakat tanpa rekam ulang). Saat pindah kategori, SELURUHNYA direset:
+   *  form (perihal, isi, jenis, tahap) maupun foto & video — dokumentasi
+   *  galeri tidak boleh nyangkut ke laporan kegiatan yang wajib kamera
+   *  langsung ber-watermark GPS. Kamera dinyalakan ulang dari sini (bukan
+   *  efek) agar frame <video> tidak hilang-muncul blip satu render. */
+  const pilihKategori = (next: KategoriLaporan) => {
+    if (next === kategori) return;
+    batalkanRekam();
+    setKategori(next);
+    setMediaSource("kamera");
+    setMediaMode("foto");
+    // Reset form...
+    setPerihal("");
+    setIsi("");
+    setJenisId("");
+    setJenisQuery("");
+    setJenisOpen(false);
+    setJenisCustomMode(false);
+    setJenisCustomNama("");
+    setTahap("awal");
+    setNrpList(nrpBersih.length > 0 ? nrpBersih : [""]);
+    setCaptureError(null);
+    setError(null);
+    // ...dan reset seluruh dokumentasi (foto & video hilang semua).
+    buangSemuaMedia();
+    void camera.start(camera.facing, false);
+  };
+
+  /** Ganti sumber media (kamera ⇄ galeri) sinkron sebelum render. Galeri
+   *  hanya untuk kejadian — guard ini juga menahan klik ganda yang lolos
+   *  saat efek [kategori] belum sempat jalan. Matikan perekaman saat pindah
+   *  sumber supaya REK + preview video tidak nyangkut di mode galeri.
+   *  Kamera dimatikan di sini (bukan efek) supaya frame <video> tidak
+   *  hilang-muncul — stream berhenti duluan sebelum galeri dirender. */
+  const pilihSumber = (next: "kamera" | "galeri") => {
+    if (next === mediaSource) return;
+    if (next === "galeri" && kategori !== "kejadian") return;
+    batalkanRekam();
+    setMediaSource(next);
+    if (next === "galeri") {
+      setMediaMode("foto");
+      camera.stop();
+      fileInputRef.current?.click();
+    } else {
+      setCaptureError(null);
+      setMediaMode("foto");
+      void camera.start(camera.facing, false);
+    }
+  };
+
   const jenisTerpilih = useMemo(
     () => jenisList.find((j) => j.id === jenisId) ?? null,
     [jenisList, jenisId],
@@ -249,6 +326,9 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   const flashRef = useRef<HTMLDivElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordStartRef = useRef(0);
+  /** Flag: perekaman sedang DIBATALKAN (bukan dihentikan normal) — onstop
+   *  recorder membaca ini untuk membuang chunk, klip tidak pernah jadi. */
+  const rekamDibuangRef = useRef(false);
 
   useEffect(() => {
     void camera.start();
@@ -273,7 +353,9 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
     if (next === "video" && videoShot) return;
     setCaptureError(null);
     setMediaMode(next);
-    await camera.start(camera.facing, next === "video");
+    // Jangan nyalakan ulang kamera saat perekaman — restart stream akan
+    // memotong klip yang sedang berjalan.
+    if (!recording) await camera.start(camera.facing, next === "video");
   };
 
   const takePhoto = async () => {
@@ -305,23 +387,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
     } finally {
       setCapturing(false);
     }
-  };
-
-  /** Ganti sumber media. Galeri = matikan kamera + buka pemilih file
-   *  (dipanggil dalam gesture klik → pemilih file boleh terbuka). */
-  const pilihSumber = async (next: "kamera" | "galeri") => {
-    setCaptureError(null);
-    setMediaSource(next);
-    if (next === "galeri") {
-      camera.stop();
-      fileInputRef.current?.click();
-    } else {
-      setMediaMode("foto");
-      await camera.start(camera.facing, false);
-    }
-  };
-
-  /** Durasi video galeri dari metadata (detik) — 0 bila tak terbaca. */
+  };  /** Durasi video galeri dari metadata (detik) — 0 bila tak terbaca. */
   const probeVideoDuration = (file: File): Promise<number> =>
     new Promise((resolve) => {
       const url = URL.createObjectURL(file);
@@ -343,11 +409,32 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
    *  durasi maks 60 detik & ukuran maks 50 MB. */
   const handleGaleriFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    // Antisipasi ganda: pemilih file hanya boleh mengisi laporan kejadian.
+    // Bila user ganti kategori di sela pemilih file terbuka, tolak hasilnya
+    // agar foto/video tidak lolos masuk laporan kegiatan.
+    if (kategori !== "kejadian") {
+      setCaptureError(
+        "Unggah galeri hanya untuk laporan kejadian — pakai kamera langsung.",
+      );
+      return;
+    }
     setCaptureError(null);
     const list = Array.from(files);
+    const mediaCount = list.filter(
+      (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
+    ).length;
+    if (mediaCount === 0) {
+      setCaptureError("Pilih file foto (image) atau video — format lain tidak didukung.");
+      return;
+    }
     const sisaFoto = Math.max(0, 4 - shots.length);
     const fotoFiles = list.filter((f) => f.type.startsWith("image/")).slice(0, sisaFoto);
     const videoFile = list.find((f) => f.type.startsWith("video/"));
+    if (videoFile && videoShot) {
+      // Video sudah ada → jangan timpa diam-diam; foto tetap diproses,
+      // videonya saja yang dilewati.
+      setCaptureError("Video sudah ada — hapus dulu bila ingin mengganti.");
+    }
 
     for (const f of fotoFiles) {
       try {
@@ -367,7 +454,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       setCaptureError("Maksimal 4 foto per laporan.");
     }
 
-    if (videoFile) {
+    if (videoFile && !videoShot) {
       if (videoFile.size > 50 * 1024 * 1024) {
         setCaptureError("Ukuran video galeri melebihi 50 MB — potong/kompres dulu di galeri HP.");
         return;
@@ -421,15 +508,24 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
     }
     recorderRef.current = recorder;
     recordStartRef.current = Date.now();
+    // Rekaman baru = mulai bersih: flag pembatalan lama tidak boleh ikut
+    // membuang chunk rekaman ini di onstop.
+    rekamDibuangRef.current = false;
     setRecording(true);
     recorder.ondataavailable = (event) => {
       if (event.data.size) chunks.push(event.data);
     };
     recorder.onstop = () => {
+      recorderRef.current = null;
+      setRecording(false);
+      // Perekaman dibatalkan (ganti kategori / pindah sumber) → chunk
+      // dibuang, klip tidak pernah dibuat.
+      if (rekamDibuangRef.current) {
+        rekamDibuangRef.current = false;
+        return;
+      }
       if (chunks.length === 0) {
         setCaptureError("Video kosong. Coba rekam kembali.");
-        recorderRef.current = null;
-        setRecording(false);
         return;
       }
       const blob = new Blob(chunks, {
@@ -444,8 +540,6 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
           Math.round((Date.now() - recordStartRef.current) / 1000),
         ),
       });
-      recorderRef.current = null;
-      setRecording(false);
     };
     recorder.onerror = () => {
       setCaptureError("Perekaman gagal. Periksa izin kamera lalu coba lagi.");
@@ -564,7 +658,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => setKategori(opt.key)}
+                onClick={() => pilihKategori(opt.key)}
                 className={
                   "rounded-2xl border p-4 text-left transition " +
                   (kategori === opt.key
@@ -831,19 +925,20 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
         {/* Sumber media — unggah manual hanya untuk kejadian: laporan bisa
             berasal dari masyarakat (foto/video WhatsApp dsb.), jadi anggota
-            tidak selalu bisa merekam ulang secara realtime. */}
+            tidak selalu bisa merekam ulang secara realtime. Tombol galeri
+            BUKAN perutean antar form — hanya sumber berkas dokumentasi. */}
         {kategori === "kejadian" && (
           <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#0b172b] p-1.5">
             <button
               type="button"
-              onClick={() => void pilihSumber("kamera")}
+              onClick={() => pilihSumber("kamera")}
               className={mediaSource === "kamera" ? "btn-primary py-2" : "btn-secondary py-2"}
             >
               📷 Kamera langsung
             </button>
             <button
               type="button"
-              onClick={() => void pilihSumber("galeri")}
+              onClick={() => pilihSumber("galeri")}
               className={mediaSource === "galeri" ? "btn-primary py-2" : "btn-secondary py-2"}
             >
               📁 Unggah galeri
