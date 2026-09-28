@@ -37,6 +37,11 @@ import {
   videoUrl,
 } from "../../lib/supabase/api";
 import PlaceBadge from "../../components/PlaceBadge";
+import {
+  cariPersonelBatch,
+  ringkasPersonel,
+  type PersonelPolri,
+} from "../../lib/personel";
 import type { TahapLaporan } from "../../types";
 
 const TAHAP_LABEL: Record<TahapLaporan, string> = {
@@ -245,7 +250,13 @@ function CopyNoteButton({ note }: { note: string }) {
   );
 }
 
-function LaporanCard({ item }: { item: FolderLaporanRow }) {
+function LaporanCard({
+  item,
+  personelMap,
+}: {
+  item: FolderLaporanRow;
+  personelMap: Map<string, PersonelPolri>;
+}) {
   return (
     <div className="card border-white/10 bg-[#122947]/80 shadow-[0_14px_35px_rgba(2,12,25,0.18)]">
       <div className="flex items-start justify-between gap-3">
@@ -256,6 +267,16 @@ function LaporanCard({ item }: { item: FolderLaporanRow }) {
           <div className="mt-0.5 text-xs text-slate-400">
             {formatWaktuWib(item.timestamp_kirim)}
           </div>
+          {ringkasPersonel(item.nrp_pelapor, personelMap) && (
+            <div
+              className="mt-0.5 text-xs text-slate-400"
+              title={Array.isArray(item.nrp_pelapor)
+                ? item.nrp_pelapor.join(", ")
+                : (item.nrp_pelapor ?? undefined)}
+            >
+              {ringkasPersonel(item.nrp_pelapor, personelMap)}
+            </div>
+          )}
         </div>
         <SyncBadge status={item.status_sync} />
       </div>
@@ -429,6 +450,34 @@ export default function MonitoringScreen({
   const scope = session.accessLevel ?? "all";
   const wilayahScope = session.scopeKey ?? null;
 
+  // Direktori personel (LAPBUL) — untuk pencocokan NRP pada kartu laporan.
+  const [personelMap, setPersonelMap] = useState<Map<string, PersonelPolri>>(
+    new Map(),
+  );
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const nrpList = Array.from(
+        new Set(
+          (detailRows ?? []).flatMap((row) =>
+            (row.nrp_pelapor ?? [])
+              .map((n) => String(n).trim())
+              .filter(Boolean),
+          ),
+        ),
+      );
+      if (nrpList.length === 0) {
+        if (active) setPersonelMap(new Map());
+        return;
+      }
+      const map = await cariPersonelBatch(nrpList);
+      if (active) setPersonelMap(map);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [detailRows]);
+
   const load = useCallback(async () => {
     try {
       setRows(await fetchFolderOverview());
@@ -539,7 +588,11 @@ export default function MonitoringScreen({
         )}
         <div className="space-y-3">
           {(detailRows ?? []).map((item) => (
-            <LaporanCard key={item.id} item={item} />
+            <LaporanCard
+              key={item.id}
+              item={item}
+              personelMap={personelMap}
+            />
           ))}
         </div>
       </div>

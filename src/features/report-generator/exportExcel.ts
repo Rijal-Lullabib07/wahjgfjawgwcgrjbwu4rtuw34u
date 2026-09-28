@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import type { Laporan } from "../../types";
 import type { ExportCtx } from "./exportPdf";
 import { reguDisplayName } from "../../lib/regu";
+import { cariPersonelBatch } from "../../lib/personel";
 
 /** Normalisasi relasi video/foto: bisa array, objek tunggal, atau null. */
 function asArray<T>(value: T[] | T | null | undefined): T[] {
@@ -15,10 +16,37 @@ export async function exportExcel(
   laporan: Laporan[],
   ctx: ExportCtx,
 ): Promise<void> {
-  const rows = laporan.map((l) => ({
+  // Pencocokan NRP → personel (LAPBUL) untuk kolom NRP.
+  const personelMap = await cariPersonelBatch(
+    laporan.flatMap((l) =>
+      (l.nrp_pelapor ?? "")
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  const rows = laporan.map((l) => {
+    const nrpList = (l.nrp_pelapor ?? "")
+      .split(",")
+      .map((n) => n.trim())
+      .filter(Boolean);
+    const nrpTampil =
+      nrpList.length === 0
+        ? ""
+        : nrpList
+            .map((nrp) => {
+              const p = personelMap.get(nrp);
+              return p
+                ? `${p.pangkat} — ${p.nama} — ${p.jabatan}`
+                : `NRP ${nrp}`;
+            })
+            .join("\n");
+
+    return {
     Waktu: new Date(l.timestamp_kirim).toLocaleString("id-ID"),
     Pelapor: l.regu ? reguDisplayName(l.regu) : l.regu_id,
-    NRP: l.nrp_pelapor ?? "",
+    NRP: nrpTampil,
     Keterangan: l.catatan ?? "",
     Latitude: l.latitude ?? "",
     Longitude: l.longitude ?? "",
@@ -52,7 +80,8 @@ export async function exportExcel(
       .join("; "),
     Video: asArray(l.videos).length > 0 ? "Tersedia" : "Tidak ada",
     Status_Sync: l.status_sync,
-  }));
+    };
+  });
 
   // Sheet rekap per regu
   const perRegu = new Map<string, { laporan: number; foto: number; video: number }>();

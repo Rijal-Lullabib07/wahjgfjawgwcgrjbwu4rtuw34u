@@ -713,18 +713,18 @@ $$;
 
 -- Buka isi folder: daftar laporan (beserta regu, foto, video).
 -- RLS tetap berlaku (invoker rights) — pemantau hanya melihat
--- laporan dalam cakupannya walau memanggil folder_key lain.
-create or replace function public.folder_laporan(p_folder_key text)
+-- laporan dalam cakupannya walau memanggil folder_key lain.create or replace function public.folder_laporan(p_folder_key text)
 returns table (
   id              uuid,
   regu_id         uuid,
   timestamp_kirim timestamptz,
   siklus_ke       int,
   latitude        double precision,
-  longitude       double precision,
+  longitude        double precision,
   status_sync     text,
   catatan         text,
   nama_regu       text,
+  nrp_pelapor     text[],
   fotos           jsonb,
   videos          jsonb
 )
@@ -742,6 +742,7 @@ as $$
     l.status_sync,
     l.catatan,
     r.nama_regu,
+    l.nrp_pelapor,
     coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', f.id,

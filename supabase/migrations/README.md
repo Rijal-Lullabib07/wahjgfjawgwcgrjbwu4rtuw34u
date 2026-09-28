@@ -36,6 +36,7 @@ pernah dijalankan.
 | 25 | `0025_posisi_scope_rls.sql` | RLS `posisi` mengikuti cakupan pemantau (`can_read_monitor_scope`) — sebelumnya `using (true)` sehingga Kapolsek/Kasat melihat posisi seluruh personel di peta | ✅ Aktif |
 | 26 | `0026_fix_regu_directory_rls.sql` | Drop policy `regu` warisan 0006 yang `using (true)` (daftar 107 regu bocor ke semua pemantau: dropdown "Semua Unit", PDF/Excel) + perbaiki `is_admin()` yang menganggap semua pemantau admin | ✅ Aktif |
 | 27 | `0027_jenis_custom_upload_manual.sql` | RPC `pakai_jenis_custom(kategori, nama)` — pelapor bisa mengetik jenis sendiri dari form Lapor (dicari/didaftarkan aman tanpa duplikat); pendukung unggah manual foto/video untuk laporan kejadian dari masyarakat | ✅ Aktif |
+| 28 | `0028_personel_dir.sql` | Tabel `personel_polri` (nrp, nama, pangkat, jabatan — sumber LAPBUL) + RLS read authenticated — pencocokan NRP di pemantau & validasi NRP real-time di form pelapor. Import data: `node scripts/import-personel.mjs <file.xlsx>` | ✅ Aktif |
 
 ## Yang dihapus (usang, tidak dipakai lagi)
 
@@ -43,7 +44,7 @@ pernah dijalankan.
 |------|--------------|
 | `0003_foto_quota.sql` (lama) | Trigger kuota 2 foto/siklus sudah di-drop oleh `0007_open_reporting.sql`, lalu diganti aturan baru (maks 4 foto/laporan) di `0008_media_limits.sql`. Menjalankannya justru memasang ulang trigger yang salah. |
 | `0009_scope_regu_directory.sql` (lama) | Fungsi `can_read_regu` + policy-nya sudah ditimpa penuh oleh migration normalize/fix-recursion/own-profile. |
-| `0023_direktori_personel.sql` (lama) | Fitur direktori personel (NRP→Nama) tidak jadi dipakai; pelaporan cukup memakai daftar NRP. |
+| `0023_direktori_personel.sql` (lama) | Fitur direktori personel (NRP→Nama) tidak jadi dipakai; digantikan `0028_personel_dir.sql` (tabel `personel_polri`). |
 
 ## Catatan penting
 

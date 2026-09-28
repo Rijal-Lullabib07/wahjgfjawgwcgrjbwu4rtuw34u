@@ -7,6 +7,7 @@ import type {
 } from "../../types";
 import { TAHAP_LABEL } from "../../types";
 import { fetchJenisLaporan } from "../../lib/supabase/api";
+import { cariPersonel } from "../../lib/personel";
 import { useCamera } from "./useCamera";
 import { useGeolocation } from "./useGeolocation";
 import { applyWatermark, compressGaleriFoto } from "./watermark";
@@ -162,6 +163,30 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   }, [nrpBersih]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Validasi real-time NRP: begitu NRP lengkap (≥6 digit), cari di direktori
+   * personel (LAPBUL via Supabase). Ketemu → tampil "PANGKAT Nama — Jabatan"
+   * (hijau = benar). Tidak ketemu → tampil peringatan kuning agar pelapor
+   * mengecek ulang ketikan — mencegah salah ketik NRP.
+   */
+  const [nrpCek, setNrpCek] = useState<Record<number, string>>({});
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const hasil: Record<number, string> = {};
+      for (let i = 0; i < nrpList.length; i++) {
+        const n = nrpList[i]?.trim() ?? "";
+        if (n.length < 6) continue;
+        const p = await cariPersonel(n);
+        hasil[i] = p ? `${p.pangkat} ${p.nama} — ${p.jabatan}` : "";
+      }
+      if (active) setNrpCek(hasil);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [nrpList]);
 
   const { data: jenisList = [] } = useQuery({
     queryKey: ["jenis-laporan", kategori],
@@ -829,8 +854,12 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
             NRP pelapor
           </label>
           <div className="mt-2 space-y-2">
-            {nrpList.map((n, i) => (
-              <div key={i} className="flex gap-2">
+            {nrpList.map((n, i) => {
+              const cek = nrpCek[i];
+              const nrpSiap = (n?.trim().length ?? 0) >= 6;
+              return (
+              <div key={i}>
+              <div className="flex gap-2">
                 <input
                   id={i === 0 ? "nrp-pelapor" : undefined}
                   className="input"
@@ -857,7 +886,23 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
                   </button>
                 )}
               </div>
-            ))}
+              {nrpSiap && cek !== undefined && (
+                <p
+                  className={
+                    "mt-1 text-[11px] font-semibold " +
+                    (cek
+                      ? "text-emerald-400"
+                      : "text-amber-400")
+                  }
+                >
+                  {cek
+                    ? `✓ ${cek}`
+                    : `NRP ${n} tidak ada di direktori — periksa ulang ketikan.`}
+                </p>
+              )}
+              </div>
+              );
+            })}
           </div>
           <button
             type="button"

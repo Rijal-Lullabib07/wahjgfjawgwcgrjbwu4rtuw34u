@@ -49,6 +49,8 @@ export interface FolderLaporanRow {
   longitude: number | null;
   status_sync: "pending" | "synced" | "failed";
   catatan: string | null;
+  /** Daftar NRP pelapor (laporan.nrp_pelapor text[] di DB). */
+  nrp_pelapor?: string[] | null;
   kategori?: "kegiatan" | "kejadian" | null;
   tahap?: "awal" | "update" | "lengkap" | null;
   perihal?: string | null;

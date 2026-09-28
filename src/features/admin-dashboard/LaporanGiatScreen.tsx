@@ -9,6 +9,10 @@ import {
   unduhFileStorage,
 } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
+import {
+  cariPersonelBatch,
+  ringkasPersonel,
+} from "../../lib/personel";
 import PlaceBadge from "../../components/PlaceBadge";
 import { exportPdf } from "../report-generator/exportPdf";
 import { exportExcel } from "../report-generator/exportExcel";
@@ -233,6 +237,28 @@ export default function LaporanGiatScreen({
         limit: 2000,
         session,
       }),
+  });
+
+  // Pencocokan NRP → personel (pangkat/nama/jabatan dari LAPBUL via
+  // tabel personel_polri Supabase). Cache in-memory; gagal = NRP polos.
+  const nrpSemua = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          laporan.flatMap((l) =>
+            (l.nrp_pelapor ?? "")
+              .split(",")
+              .map((n) => n.trim())
+              .filter(Boolean),
+          ),
+        ),
+      ),
+    [laporan],
+  );
+  const { data: personelMap = new Map() } = useQuery({
+    queryKey: ["personel-batch", nrpSemua],
+    queryFn: () => cariPersonelBatch(nrpSemua),
+    staleTime: Infinity,
   });
 
   const filtered = useMemo(() => {
@@ -479,7 +505,9 @@ export default function LaporanGiatScreen({
                     minute: "2-digit",
                   })}{" "}
                   WIB
-                  {l.nrp_pelapor ? ` · NRP ${l.nrp_pelapor}` : ""}
+                  {ringkasPersonel(l.nrp_pelapor, personelMap) && (
+                    <span className="block">{ringkasPersonel(l.nrp_pelapor, personelMap)}</span>
+                  )}
                 </div>
               </div>
               <span
@@ -590,7 +618,14 @@ export default function LaporanGiatScreen({
                       : l.regu_id}
                   </div>
                   <div className="text-xs text-slate-500">
-                    {l.nrp_pelapor ? `NRP ${l.nrp_pelapor} · ` : ""}
+                    {ringkasPersonel(l.nrp_pelapor, personelMap) && (
+                      <span
+                        title={l.nrp_pelapor ?? undefined}
+                        className="block"
+                      >
+                        {ringkasPersonel(l.nrp_pelapor, personelMap)}
+                      </span>
+                    )}
                     {l.regu?.wilayah_key
                       ? `Polsek ${l.regu.wilayah_key}`
                       : (l.regu?.unit_key ?? "")}
@@ -783,7 +818,11 @@ export default function LaporanGiatScreen({
               </b>
               {preview.nrp_pelapor && (
                 <span className="ml-2">
-                  · NRP <b className="text-slate-700">{preview.nrp_pelapor}</b>
+                  ·{" "}
+                  <b className="text-slate-700">
+                    {ringkasPersonel(preview.nrp_pelapor, personelMap) ||
+                      `NRP ${preview.nrp_pelapor}`}
+                  </b>
                 </span>
               )}
             </div>

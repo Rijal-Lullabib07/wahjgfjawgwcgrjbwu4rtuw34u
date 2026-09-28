@@ -4,6 +4,7 @@ import type { Laporan, Regu } from "../../types";
 import { formatTanggal, formatWaktu } from "../../lib/cycle";
 import { fotoUrl } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
+import { cariPersonelBatch } from "../../lib/personel";
 
 export interface ExportCtx {
   range: { from: Date; to: Date };
@@ -47,6 +48,31 @@ export async function exportPdf(
   laporan: Laporan[],
   ctx: ExportCtx,
 ): Promise<void> {
+  // Pencocokan NRP → personel (LAPBUL) untuk kolom NRP.
+  const personelMap = await cariPersonelBatch(
+    laporan.flatMap((l) =>
+      (l.nrp_pelapor ?? "")
+        .split(",")
+        .map((n) => n.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  /** Kolom NRP: tiap NRP dicocokkan "PANGKAT — Nama — Jabatan" (fallback NRP polos). */
+  const nrpCol = (l: Laporan): string => {
+    const nrpList = (l.nrp_pelapor ?? "")
+      .split(",")
+      .map((n) => n.trim())
+      .filter(Boolean);
+    if (nrpList.length === 0) return "—";
+    return nrpList
+      .map((nrp) => {
+        const p = personelMap.get(nrp);
+        return p ? `${p.pangkat} — ${p.nama} — ${p.jabatan}` : `NRP ${nrp}`;
+      })
+      .join("\n");
+  };
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const title =
     ctx.reguId === "all"
@@ -99,7 +125,7 @@ export async function exportPdf(
     body: laporan.map((l) => [
       new Date(l.timestamp_kirim).toLocaleString("id-ID"),
       l.regu ? reguDisplayName(l.regu) : l.regu_id,
-      l.nrp_pelapor ?? "—",
+      nrpCol(l),
       l.catatan ?? "",
       koordinatPresisi(l.latitude, l.longitude),
       String(l.fotos?.length ?? 0),
@@ -110,7 +136,7 @@ export async function exportPdf(
     columnStyles: {
       0: { cellWidth: 24 },
       1: { cellWidth: 30 },
-      2: { cellWidth: 18 },
+      2: { cellWidth: 30 },
       3: { cellWidth: 42 },
       4: { cellWidth: 26 },
       5: { cellWidth: 11 },
