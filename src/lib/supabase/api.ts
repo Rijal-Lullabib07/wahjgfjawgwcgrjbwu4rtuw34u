@@ -840,7 +840,9 @@ export async function fetchDashboardSummary(
     perUnit: [...perUnit.entries()]
       .map(([key, jumlah]) => ({
         key,
-        label: unitLabel(key),
+        // Label per fungsi memakai nama UNIT Polsek (Reskrim, bukan Satreskrim)
+        // — di bawah satuan/kapolsek yang melapor adalah unit.
+        label: unitPolsekLabel(key),
         jumlah,
       }))
       .sort((a, b) => b.jumlah - a.jumlah),
@@ -1020,6 +1022,7 @@ export function unitLabel(key: string): string {
     intelkam: "Satintelkam",
     reskrim: "Satreskrim",
     narkoba: "Satresnarkoba",
+    resnarkoba: "Satresnarkoba",
     binmas: "Satbinmas",
     samapta: "Satsamapta",
     pamobvit: "Pam Obvit Samapta",
@@ -1027,6 +1030,36 @@ export function unitLabel(key: string): string {
     polair: "Satpolairud",
     tahti: "Sattahti",
     spkt: "SPKT",
+  };
+
+  return (
+    map[key] ??
+    key
+      .split(/[-_ ]+/)
+      .filter(Boolean)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(" ")
+  );
+}
+
+/**
+ * Nama UNIT Polsek (bukan satuan Polres). Di bawah Kapolsek yang melapor
+ * adalah unit Polsek — Reskrim, bukan "Satreskrim". Dipakai untuk label
+ * agregasi per fungsi agar konteksnya selalu unit.
+ */
+export function unitPolsekLabel(key: string): string {
+  const map: Record<string, string> = {
+    spkt: "SPKT",
+    intelkam: "Intelkam",
+    reskrim: "Reskrim",
+    narkoba: "Resnarkoba",
+    resnarkoba: "Resnarkoba",
+    binmas: "Binmas",
+    samapta: "Samapta",
+    lantas: "Lantas",
+    polair: "Polair",
+    tahti: "Tahti",
+    pamobvit: "Pam Obvit",
   };
 
   return (
