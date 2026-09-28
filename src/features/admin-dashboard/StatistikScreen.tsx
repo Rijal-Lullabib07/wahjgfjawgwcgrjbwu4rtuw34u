@@ -1,11 +1,17 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   fetchDashboardSummary,
   unitLabel,
   wilayahLabel,
 } from "../../lib/supabase/api";
 import type { RingkasanKelompok } from "../../lib/supabase/api";
+import {
+  cariPersonelBatch,
+  personelFormat,
+  type PersonelPolri,
+} from "../../lib/personel";
 import type { Laporan, SessionUser } from "../../types";
 
 interface Props {
@@ -467,6 +473,45 @@ function RankJenis({ items }: { items: Array<[string, number]> }) {
   );
 }
 
+const MEDALI = ["🥇", "🥈", "🥉"];
+
+/** Ranking personel teraktif (top 10) — format PANGKAT Nama (Jabatan). */
+function RankPersonel({
+  items,
+}: {
+  items: Array<{ label: string; nrp: string; jumlah: number }>;
+}) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setOn(true), 100);
+    return () => window.clearTimeout(t);
+  }, []);
+  const max = Math.max(1, ...items.map((it) => it.jumlah));
+  return (
+    <div className="stx-rank">
+      {items.map((it, i) => (
+        <div className="stx-rk" key={it.nrp}>
+          <span className="stx-rk-no">{MEDALI[i] ?? i + 1}</span>
+          <span className="stx-rk-name" title={`${it.label} · NRP ${it.nrp}`}>
+            {it.label}
+          </span>
+          <b>{it.jumlah}</b>
+          <div className="stx-rk-track">
+            <i
+              className="stx-rk-fill"
+              style={{
+                width: on ? `${(it.jumlah / max) * 100}%` : "0%",
+                transitionDelay: `${i * 100}ms`,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+      {items.length === 0 && <p className="stx-empty">Belum ada data.</p>}
+    </div>
+  );
+}
+
 const HARI_SINGKAT = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
 /** Matriks intensitas laporan per hari-in-minggu × jam (Senin = baris awal). */
@@ -735,6 +780,51 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
     return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [data]);
 
+  // Semua NRP dalam periode → muat direktori personel sekali.
+  const nrpSemua = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (data?.rows ?? []).flatMap((l) =>
+            (l.nrp_pelapor ?? "")
+              .split(",")
+              .map((n) => n.trim())
+              .filter(Boolean),
+          ),
+        ),
+      ),
+    [data],
+  );
+  const { data: personelMap = new Map<string, PersonelPolri>() } = useQuery({
+    queryKey: ["personel-batch", nrpSemua],
+    queryFn: () => cariPersonelBatch(nrpSemua),
+    enabled: nrpSemua.length > 0,
+    staleTime: Infinity,
+  });
+
+  /**
+   * Personel teraktif: hitung PARTISIPASI — satu laporan dengan beberapa
+   * NRP dihitung untuk tiap personel yang tercantum. Mengikuti periode &
+   * cakupan pemantau (rows sudah terfilter RLS/scope di server).
+   */
+  const personelTop = useMemo<Array<{ label: string; nrp: string; jumlah: number }>>(() => {
+    const map = new Map<string, number>();
+    for (const l of data?.rows ?? []) {
+      for (const n of (l.nrp_pelapor ?? "").split(",")) {
+        const nrp = n.trim();
+        if (nrp) map.set(nrp, (map.get(nrp) ?? 0) + 1);
+      }
+    }
+    return [...map.entries()]
+      .map(([nrp, jumlah]) => ({
+        nrp,
+        jumlah,
+        label: personelFormat(personelMap.get(nrp)) || `NRP ${nrp}`,
+      }))
+      .sort((a, b) => b.jumlah - a.jumlah)
+      .slice(0, 10);
+  }, [data, personelMap]);
+
   const spanDays = Math.max(
     1,
     Math.round((range.to.getTime() - range.from.getTime()) / 86_400_000),
@@ -974,6 +1064,17 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
                 Peringkat berdasarkan jumlah
               </p>
               <RankJenis key={periodKey} items={jenisTop} />
+            </section>
+
+            {/* Personel teraktif — partisipasi laporan per NRP (LAPBUL) */}
+            <section className="card lg:col-span-6">
+              <h2 className="font-bold text-slate-800">
+                Personel Teraktif
+              </h2>
+              <p className="stx-muted mb-3 text-[11px]">
+                Anggota paling aktif melaporkan (ikut mencatat dalam laporan)
+              </p>
+              <RankPersonel key={periodKey} items={personelTop} />
             </section>
 
             {/* Heatmap jam ramai */}
