@@ -100,9 +100,19 @@ async function fetchWithAuth(
   let response = await request(token);
 
   if (response.status === 401) {
-    const freshToken = await refreshAccessToken();
+    try {
+      const freshToken = await refreshAccessToken();
 
-    response = await request(freshToken);
+      response = await request(freshToken);
+    } catch {
+      const client = requireClient();
+
+      await client.auth.signOut({
+        scope: "local",
+      });
+
+      throw new Error("Session login berakhir. Silakan login kembali.");
+    }
   }
 
   return response;
@@ -244,7 +254,13 @@ export async function loginAdmin(
 export async function logout(): Promise<void> {
   const client = requireClient();
 
-  await client.auth.signOut();
+  const { error } = await client.auth.signOut({
+    scope: "local",
+  });
+
+  if (error) {
+    console.debug("Logout local:", error.message);
+  }
 }
 
 // ---------- Regu ----------
