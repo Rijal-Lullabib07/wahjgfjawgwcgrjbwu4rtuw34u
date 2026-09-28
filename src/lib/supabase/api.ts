@@ -14,7 +14,7 @@ import {
 import { supabase } from "./client";
 
 /**
- * Adapter data — SEMUA lewat Supabase (Postgres + Auth + Storage + Realtime).
+ * Adapter data — Auth/master data via Supabase; domain laporan via backend lokal.
  * Ringkasan dashboard punya mode demo opt-in untuk kebutuhan presentasi.
  */
 
@@ -250,161 +250,157 @@ export async function fetchLaporan(filter: {
       })
     : [];
 
-  // Mode demo tetap boleh dipakai tanpa konfigurasi Supabase. Jika Supabase
-  // tersedia, data sintetis digabung dengan laporan nyata agar laporan
-  // pelapor tetap masuk ke pemantau.
-  if (!supabase) {
-    if (isDashboardDemo) return demoRows.slice(0, filter.limit ?? 500);
-    requireClient();
+  const client = requireClient();
+
+  const { data: sessionData, error: sessionError } =
+    await client.auth.getSession();
+
+  if (sessionError) {
+    throw new Error(`Gagal membaca session login: ${sessionError.message}`);
   }
 
-  const client = requireClient();
-  let query = client
-    .from("laporan")
-    .select(
-      "*, regu:regu_id(*), jenis:jenis_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
-    )
-    .order("timestamp_kirim", { ascending: false })
-    .limit(filter.limit ?? 500);
-  if (filter.reguId) query = query.eq("regu_id", filter.reguId);
-  if (filter.kategori) query = query.eq("kategori", filter.kategori);
-  if (filter.from)
-    query = query.gte("timestamp_kirim", filter.from.toISOString());
-  if (filter.to) query = query.lte("timestamp_kirim", filter.to.toISOString());
-  const { data, error } = await query;
-  if (error) throw describeSupabaseError(error, "Gagal memuat laporan");
-  // `laporan_video` punya unique(laporan_id) → PostgREST menganggap relasi
-  // satu-ke-satu dan mengembalikan OBJEK (atau null), bukan array. Normalisasi
-  // agar pemakaian `(l.videos ?? []).map(...)` tidak meledak.
-  const normalized = (data ?? []).map((row) => {
-    const r = row as Laporan;
-    // Kolom nrp_pelapor di DB sudah text[] (migration 0021) — rapikan jadi
-    // teks "NRP1, NRP2" agar UI & export versi ini tetap tampil normal.
-    const nrpDb = r.nrp_pelapor as unknown;
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    throw new Error("Session login tidak tersedia.");
+  }
+
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
+  const params = new URLSearchParams();
+
+  if (filter.reguId) params.set("reguId", filter.reguId);
+  if (filter.kategori) params.set("kategori", filter.kategori);
+  if (filter.from) params.set("from", filter.from.toISOString());
+  if (filter.to) params.set("to", filter.to.toISOString());
+
+  params.set("limit", String(filter.limit ?? 500));
+
+  const response = await fetch(`${apiUrl}/api/laporan?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  let result: {
+    ok?: boolean;
+    data?: Laporan[];
+    error?: string;
+  };
+
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(
+      `Server lokal memberi respons tidak valid (${response.status}).`,
+    );
+  }
+
+  if (!response.ok || !result.ok) {
+    throw new Error(
+      result.error ??
+        `Gagal memuat laporan dari server lokal (${response.status}).`,
+    );
+  }
+
+  const localRows = result.data ?? [];
+
+  const reguIds = Array.from(
+    new Set(localRows.map((row) => row.regu_id).filter(Boolean)),
+  );
+
+  const jenisIds = Array.from(
+    new Set(
+      localRows
+        .map((row) => row.jenis_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const reguMap = new Map<string, Regu>();
+
+  if (reguIds.length > 0) {
+    const { data: reguRows, error: reguError } = await client
+      .from("regu")
+      .select("*")
+      .in("id", reguIds);
+
+    if (reguError) {
+      throw describeSupabaseError(reguError, "Gagal memuat data pelapor");
+    }
+
+    for (const regu of reguRows ?? []) {
+      reguMap.set(regu.id, regu as Regu);
+    }
+  }
+
+  const jenisMap = new Map<string, JenisLaporan>();
+
+  if (jenisIds.length > 0) {
+    const { data: jenisRows, error: jenisError } = await client
+      .from("jenis_laporan")
+      .select("*")
+      .in("id", jenisIds);
+
+    if (jenisError) {
+      throw describeSupabaseError(jenisError, "Gagal memuat jenis laporan");
+    }
+
+    for (const jenis of jenisRows ?? []) {
+      jenisMap.set(jenis.id, jenis as JenisLaporan);
+    }
+  }
+
+  const normalized = localRows.map((row) => {
+    const nrpDb = row.nrp_pelapor as unknown;
+
     const nrpText = Array.isArray(nrpDb)
       ? nrpDb.filter(Boolean).join(", ") || null
       : ((nrpDb as string | null) ?? null);
+
     return {
-      ...r,
+      ...row,
       nrp_pelapor: nrpText,
-      fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
-      videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
+      regu: reguMap.get(row.regu_id) ?? row.regu ?? null,
+      jenis: row.jenis_id
+        ? (jenisMap.get(row.jenis_id) ?? row.jenis ?? null)
+        : null,
+      fotos: Array.isArray(row.fotos)
+        ? row.fotos
+        : row.fotos
+          ? [row.fotos]
+          : [],
+      videos: Array.isArray(row.videos)
+        ? row.videos
+        : row.videos
+          ? [row.videos]
+          : [],
     } as Laporan;
   });
 
   const limit = filter.limit ?? 500;
+
   const sortByNewest = (a: Laporan, b: Laporan) =>
     new Date(b.timestamp_kirim).getTime() -
     new Date(a.timestamp_kirim).getTime();
 
-  // Jangan biarkan ratusan baris demo menghabiskan kuota hasil dan
-  // menyingkirkan laporan pelapor nyata. Semua baris real yang sudah diambil
-  // dari Supabase diprioritaskan; demo hanya mengisi sisa kuota tampilan.
   if (isDashboardDemo) {
     const realRows = [...normalized].sort(sortByNewest);
+
     const demoRowsForDisplay = [...demoRows]
       .sort(sortByNewest)
       .slice(0, Math.max(0, limit - realRows.length));
+
     return [...realRows, ...demoRowsForDisplay].sort(sortByNewest);
   }
 
   return normalized.sort(sortByNewest).slice(0, limit);
-  /*
-    const from = filter.from ?? new Date(Date.now() - 7 * 86_400_000);
-    const to = filter.to ?? new Date();
-    const rows = createDemoLaporan(from, to).filter((row) => {
-      if (filter.reguId && row.regu_id !== filter.reguId) return false;
-      if (filter.kategori && row.kategori !== filter.kategori) return false;
-      if (filter.from && new Date(row.timestamp_kirim) < filter.from) return false;
-      if (filter.to && new Date(row.timestamp_kirim) > filter.to) return false;
-      return true;
-    });
-    return rows.slice(0, filter.limit ?? 500);
-  }
-
-  const client = requireClient();
-  let query = client
-    .from("laporan")
-    .select(
-      "*, regu:regu_id(*), jenis:jenis_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
-    )
-    .order("timestamp_kirim", { ascending: false })
-    .limit(filter.limit ?? 500);
-  if (filter.reguId) query = query.eq("regu_id", filter.reguId);
-  if (filter.kategori) query = query.eq("kategori", filter.kategori);
-  if (filter.from)
-    query = query.gte("timestamp_kirim", filter.from.toISOString());
-  if (filter.to) query = query.lte("timestamp_kirim", filter.to.toISOString());
-  const { data, error } = await query;
-  if (error) throw describeSupabaseError(error, "Gagal memuat laporan");
-  // `laporan_video` punya unique(laporan_id) → PostgREST menganggap relasi
-  // satu-ke-satu dan mengembalikan OBJEK (atau null), bukan array. Normalisasi
-  // agar pemakaian `(l.videos ?? []).map(...)` tidak meledak.
-  const normalized = (data ?? []).map((row) => {
-    const r = row as Laporan;
-    // Kolom nrp_pelapor di DB sudah text[] (migration 0021) — rapikan jadi
-    // teks "NRP1, NRP2" agar UI & export versi ini tetap tampil normal.
-    const nrpDb = r.nrp_pelapor as unknown;
-    const nrpText = Array.isArray(nrpDb)
-      ? nrpDb.filter(Boolean).join(", ") || null
-      : ((nrpDb as string | null) ?? null);
-    return {
-      ...r,
-      nrp_pelapor: nrpText,
-      fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
-      videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
-    } as Laporan;
-  });
-  return normalized;
-  */
 }
 
-/** Upload satu foto ke Supabase Storage, kembalikan storage_path. */
-async function uploadFoto(
-  reguId: string,
-  laporanId: string,
-  urutan: 1 | 2 | 3 | 4,
-  blob: Blob,
-): Promise<string> {
-  const client = requireClient();
-  const path = `${reguId}/${laporanId}/foto/foto-${urutan}.jpg`;
-  const { error } = await client.storage
-    .from("laporan-foto")
-    .upload(path, blob, { contentType: "image/jpeg", upsert: true });
-  if (error) throw error;
-  return path;
-}
-
-async function uploadVideo(
-  reguId: string,
-  laporanId: string,
-  blob: Blob,
-): Promise<string> {
-  const client = requireClient();
-  // Ekstensi mengikuti tipe blob: rekaman kamera = webm; video galeri
-  // (input manual kejadian dari masyarakat) biasanya mp4/webm-mov.
-  const ext = blob.type.includes("mp4")
-    ? "mp4"
-    : blob.type.includes("quicktime")
-      ? "mov"
-      : blob.type.includes("webm")
-        ? "webm"
-        : "webm";
-  const path = `${reguId}/${laporanId}/video/video-1.${ext}`;
-  const { error } = await client.storage
-    .from("laporan-foto")
-    .upload(path, blob, {
-      contentType: blob.type || "video/webm",
-      upsert: true,
-    });
-  if (error) throw error;
-  return path;
-}
-
-/**
- * Kirim laporan lengkap: insert row laporan, upload foto ke Storage,
- * insert metadata laporan_foto. Mengembalikan id laporan.
- */
 export async function submitLaporan(
   q: QueuedLaporan,
   blobs: Blob[],
@@ -412,109 +408,131 @@ export async function submitLaporan(
 ): Promise<string> {
   const client = requireClient();
 
-  // Daftar NRP pelapor (migration 0021: kolom DB text[]) — buang kosong &
-  // duplikat, pertahankan urutan input. Antrian offline versi lama menyimpan
-  // satu NRP di q.nrp — ikutkan agar tidak hilang saat sync.
+  const { data: sessionData, error: sessionError } =
+    await client.auth.getSession();
+
+  if (sessionError) {
+    throw new Error(`Gagal membaca session login: ${sessionError.message}`);
+  }
+
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    throw new Error("Session login tidak tersedia.");
+  }
+
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
   const nrpLama = (q as { nrp?: string | null }).nrp?.trim() ?? "";
+
   const nrpList = Array.from(
     new Set(
       [...(q.nrpList ?? []), nrpLama].map((n) => n.trim()).filter(Boolean),
     ),
   );
-  // Jenis custom (ketikan pelapor sendiri, bukan pilihan master): cari
-  // atau daftarkan lewat RPC sebelum insert laporan (migration 0027).
+
   let jenisIdFinal: string | null = q.jenisId ?? null;
+
   const jenisCustomNama = q.jenisCustom?.trim() ?? "";
+
   if (!jenisIdFinal && jenisCustomNama) {
     jenisIdFinal = await pakaiJenisCustom(q.kategori, jenisCustomNama);
   }
 
-  const insertLaporan = async (
-    nrpValue: string[] | string | null,
-  ): Promise<{ id: string }> => {
-    const { data, error } = await client
-      .from("laporan")
-      .insert({
-        regu_id: q.reguId,
-        timestamp_kirim: q.timestampKirim,
-        siklus_ke: q.siklusKe,
-        latitude: q.latitude,
-        longitude: q.longitude,
-        status_sync: "synced",
-        catatan: q.catatan ?? null,
-        kategori: q.kategori,
-        jenis_id: jenisIdFinal,
-        tahap: q.tahap,
-        parent_id: q.parentId ?? null,
-        perihal: q.perihal ?? null,
-        nrp_pelapor: nrpValue,
-      })
-      .select("id")
-      .single();
-    if (error) {
-      throw new Error(`Gagal membuat laporan: ${error.message}`);
-    }
-    return data;
+  const metadata = {
+    reguId: q.reguId,
+    timestampKirim: q.timestampKirim,
+    siklusKe: q.siklusKe,
+    latitude: q.latitude,
+    longitude: q.longitude,
+    catatan: q.catatan ?? null,
+    kategori: q.kategori,
+    jenisId: jenisIdFinal,
+    tahap: q.tahap,
+    parentId: q.parentId ?? null,
+    perihal: q.perihal ?? null,
+    nrpList: nrpList.length > 0 ? nrpList : null,
+
+    fotos: (q.fotos ?? []).map((foto) => ({
+      watermarkLat: foto.watermarkLat ?? null,
+      watermarkLng: foto.watermarkLng ?? null,
+      watermarkTimestamp: foto.watermarkTimestamp ?? null,
+      urutan: foto.urutan,
+    })),
+
+    videos: (q.videos ?? []).map((video) => ({
+      watermarkLat: video.watermarkLat ?? null,
+      watermarkLng: video.watermarkLng ?? null,
+      watermarkTimestamp: video.watermarkTimestamp ?? null,
+      durationSeconds: video.durationSeconds ?? null,
+    })),
   };
 
-  let laporan: { id: string };
-  try {
-    // Kolom nrp_pelapor sudah text[] (migration 0021) — kirim seluruh daftar.
-    laporan = await insertLaporan(nrpList.length > 0 ? nrpList : null);
-  } catch (firstErr) {
-    // Fallback: bila DB masih skema lama (kolom text), gabungkan daftar jadi
-    // satu string — hanya untuk error konversi tipe, bukan error lain.
-    const msg = firstErr instanceof Error ? firstErr.message : "";
-    if (nrpList.length === 0 || !/array|invalid input syntax|22P02/i.test(msg))
-      throw firstErr;
-    laporan = await insertLaporan(nrpList.join(", "));
+  const formData = new FormData();
+
+  formData.append("metadata", JSON.stringify(metadata));
+
+  for (let i = 0; i < blobs.length; i++) {
+    const blob = blobs[i];
+
+    if (!blob || blob.size === 0) {
+      throw new Error(`Data foto ${i + 1} tidak tersedia.`);
+    }
+
+    formData.append("foto", blob, `foto-${i + 1}.jpg`);
   }
 
-  for (let i = 0; i < q.fotos.length; i++) {
-    const f = q.fotos[i];
-    let path: string;
-    try {
-      path = await uploadFoto(q.reguId, laporan.id, f.urutan, blobs[i]);
-    } catch (uploadError) {
-      const message =
-        uploadError instanceof Error
-          ? uploadError.message
-          : String(uploadError);
-      throw new Error(`Gagal upload foto ${f.urutan} ke Storage: ${message}`);
-    }
-    const { error: fotoErr } = await client.from("laporan_foto").insert({
-      laporan_id: laporan.id,
-      storage_path: path,
-      watermark_lat: f.watermarkLat,
-      watermark_lng: f.watermarkLng,
-      watermark_timestamp: f.watermarkTimestamp,
-      urutan_foto: f.urutan,
-    });
-    if (fotoErr) {
-      throw new Error(
-        `Gagal menyimpan metadata foto ${f.urutan}: ${fotoErr.message}`,
-      );
-    }
-  }
-  for (let i = 0; i < (q.videos ?? []).length; i++) {
-    const video = q.videos[i];
-    const videoBlob = videoBlobs[i];
-    if (!videoBlob || videoBlob.size === 0) {
+  for (let i = 0; i < videoBlobs.length; i++) {
+    const blob = videoBlobs[i];
+
+    if (!blob || blob.size === 0) {
       throw new Error("Data video tidak tersedia untuk dikirim.");
     }
-    const path = await uploadVideo(q.reguId, laporan.id, videoBlob);
-    const { error: videoErr } = await client.from("laporan_video").insert({
-      laporan_id: laporan.id,
-      storage_path: path,
-      watermark_lat: video.watermarkLat,
-      watermark_lng: video.watermarkLng,
-      watermark_timestamp: video.watermarkTimestamp,
-      duration_seconds: video.durationSeconds,
-    });
-    if (videoErr)
-      throw new Error(`Gagal menyimpan metadata video: ${videoErr.message}`);
+
+    let ext = "webm";
+
+    if (blob.type.includes("mp4")) {
+      ext = "mp4";
+    } else if (blob.type.includes("quicktime")) {
+      ext = "mov";
+    }
+
+    formData.append("video", blob, `video-${i + 1}.${ext}`);
   }
-  return laporan.id;
+
+  const response = await fetch(`${apiUrl}/api/laporan`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  let result: {
+    ok?: boolean;
+    id?: string;
+    error?: string;
+  };
+
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(
+      `Server lokal memberi respons tidak valid (${response.status}).`,
+    );
+  }
+
+  if (!response.ok || !result.ok || !result.id) {
+    throw new Error(
+      result.error ?? `Gagal mengirim laporan (${response.status}).`,
+    );
+  }
+
+  return result.id;
 }
 
 /**
@@ -524,26 +542,62 @@ export async function submitLaporan(
  */
 export async function fetchLaporanThread(rootId: string): Promise<Laporan[]> {
   const client = requireClient();
-  const { data, error } = await client
-    .from("laporan")
-    .select(
-      "*, regu:regu_id(*), jenis:jenis_id(*), fotos:laporan_foto(*), videos:laporan_video(*)",
-    )
-    .or(`id.eq.${rootId},parent_id.eq.${rootId}`)
-    .order("timestamp_kirim", { ascending: true });
-  if (error)
-    throw describeSupabaseError(error, "Gagal memuat rangkaian laporan");
-  return (data ?? []).map((row) => {
-    const r = row as Laporan;
-    const nrpDb = r.nrp_pelapor as unknown;
+
+  const { data: sessionData, error: sessionError } =
+    await client.auth.getSession();
+
+  if (sessionError) {
+    throw new Error(`Gagal membaca session login: ${sessionError.message}`);
+  }
+
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    throw new Error("Session login tidak tersedia.");
+  }
+
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
+  const response = await fetch(`${apiUrl}/api/laporan/${rootId}/thread`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    throw new Error(
+      result.error ?? `Gagal memuat rangkaian laporan (${response.status}).`,
+    );
+  }
+
+  const rows = (result.data ?? []) as Laporan[];
+
+  return rows.map((row) => {
+    const nrpDb = row.nrp_pelapor as unknown;
+
     const nrpText = Array.isArray(nrpDb)
       ? nrpDb.filter(Boolean).join(", ") || null
       : ((nrpDb as string | null) ?? null);
+
     return {
-      ...r,
+      ...row,
       nrp_pelapor: nrpText,
-      fotos: Array.isArray(r.fotos) ? r.fotos : r.fotos ? [r.fotos] : [],
-      videos: Array.isArray(r.videos) ? r.videos : r.videos ? [r.videos] : [],
+      fotos: Array.isArray(row.fotos)
+        ? row.fotos
+        : row.fotos
+          ? [row.fotos]
+          : [],
+      videos: Array.isArray(row.videos)
+        ? row.videos
+        : row.videos
+          ? [row.videos]
+          : [],
     } as Laporan;
   });
 }
@@ -561,44 +615,44 @@ export async function fetchOpenThreads(
   limit = 50,
 ): Promise<Array<Laporan & { child_count: number }>> {
   const client = requireClient();
-  // PostgREST tidak mendukung agregat count embedded, dan embed by nama FK
-  // (laporan_parent_id_fkey) gagal bila constraint-nya tidak ada di cache
-  // skema (PGRST200). Ambil induk + turunan terpisah, hitung di klien.
-  const { data, error } = await client
-    .from("laporan")
-    .select("*, jenis:jenis_id(*)")
-    .eq("regu_id", reguId)
-    .is("parent_id", null)
-    .order("timestamp_kirim", { ascending: false })
-    .limit(limit);
-  if (error)
-    throw describeSupabaseError(error, "Gagal memuat laporan berjalan");
-  const roots = (data ?? []) as Laporan[];
 
-  const childCounts = new Map<string, number>();
-  const rootIds = roots.map((r) => r.id);
-  if (rootIds.length > 0) {
-    const { data: children, error: childErr } = await client
-      .from("laporan")
-      .select("id, parent_id")
-      .in("parent_id", rootIds);
-    if (!childErr && children) {
-      for (const c of children as Array<{
-        id: string;
-        parent_id: string | null;
-      }>) {
-        if (c.parent_id) {
-          childCounts.set(c.parent_id, (childCounts.get(c.parent_id) ?? 0) + 1);
-        }
-      }
-    }
-    // Gagal hitung turunan tidak boleh menggagalkan daftar — biarkan 0.
+  const { data: sessionData, error: sessionError } =
+    await client.auth.getSession();
+
+  if (sessionError) {
+    throw new Error(`Gagal membaca session login: ${sessionError.message}`);
   }
 
-  return roots.map((r) => ({
-    ...r,
-    child_count: childCounts.get(r.id) ?? 0,
-  }));
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    throw new Error("Session login tidak tersedia.");
+  }
+
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
+  const response = await fetch(
+    `${apiUrl}/api/laporan/open/${encodeURIComponent(reguId)}?limit=${limit}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    throw new Error(
+      result.error ?? `Gagal memuat laporan berjalan (${response.status}).`,
+    );
+  }
+
+  return (result.data ?? []) as Array<Laporan & { child_count: number }>;
 }
 
 /** Ringkasan per wilayah/unit untuk dashboard & statistik. */
@@ -852,11 +906,21 @@ export function unitLabel(key: string): string {
 
 /** URL publik foto dari Storage. */
 export function fotoUrl(storagePath: string): string {
-  const client = requireClient();
-  const { data } = client.storage
-    .from("laporan-foto")
-    .getPublicUrl(storagePath);
-  return data.publicUrl;
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
+  if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+    return storagePath;
+  }
+
+  if (storagePath.startsWith("/")) {
+    return `${apiUrl}${storagePath}`;
+  }
+
+  return `${apiUrl}/${storagePath}`;
 }
 
 /**
@@ -871,20 +935,43 @@ export async function unduhFileStorage(
   storagePath: string,
   namaFile: string,
 ): Promise<void> {
-  const client = requireClient();
-  const { data } = client.storage
-    .from("laporan-foto")
-    .getPublicUrl(storagePath, { download: true });
-  const res = await fetch(data.publicUrl);
-  if (!res.ok) throw new Error(`Gagal mengambil file (HTTP ${res.status}).`);
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
+  let fileUrl: string;
+
+  if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+    fileUrl = storagePath;
+  } else if (storagePath.startsWith("/")) {
+    fileUrl = `${apiUrl}${storagePath}`;
+  } else {
+    fileUrl = `${apiUrl}/${storagePath}`;
+  }
+
+  const res = await fetch(fileUrl);
+
+  if (!res.ok) {
+    throw new Error(`Gagal mengambil file (HTTP ${res.status}).`);
+  }
+
   const blob = await res.blob();
+
   const objUrl = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
+
   a.href = objUrl;
   a.download = namaFile;
+
   document.body.appendChild(a);
+
   a.click();
+
   a.remove();
+
   window.setTimeout(() => URL.revokeObjectURL(objUrl), 30_000);
 }
 
@@ -899,20 +986,32 @@ export function namaFileUnduhan(storagePath: string): string {
 
 /** URL publik video dari Storage. */
 export function videoUrl(storagePath: string): string {
-  const client = requireClient();
-  const { data } = client.storage
-    .from("laporan-foto")
-    .getPublicUrl(storagePath);
-  return data.publicUrl;
+  const apiUrl = import.meta.env.VITE_LOCAL_API_URL;
+
+  if (!apiUrl) {
+    throw new Error("VITE_LOCAL_API_URL belum dikonfigurasi.");
+  }
+
+  if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) {
+    return storagePath;
+  }
+
+  if (storagePath.startsWith("/")) {
+    return `${apiUrl}${storagePath}`;
+  }
+
+  return `${apiUrl}/${storagePath}`;
 }
 
 // ---------- Realtime ----------
 
-/** Subscribe perubahan tabel laporan & laporan_foto via Supabase Realtime.
- *  `cb` dipanggil untuk semua perubahan (refresh data);
- *  `onInsert` dipanggil khusus saat laporan BARU masuk (payload barisnya)
- *  — dipakai popup "Laporan baru". Realtime menghormati RLS, jadi
- *  pemantau hanya menerima laporan dalam cakupannya. */
+/**
+ * Subscribe perubahan laporan lokal via polling backend.
+ *
+ * Polling hanya dijalankan untuk akun pemantau.
+ * Akun pelapor (@regu.siplap.id) tidak melakukan polling global karena
+ * endpoint GET /api/laporan tanpa reguId memang tidak diizinkan untuk pelapor.
+ */
 export function subscribeLaporan(
   cb: () => void,
   onInsert?: (row: {
@@ -922,49 +1021,83 @@ export function subscribeLaporan(
     catatan: string | null;
   }) => void,
 ): () => void {
-  const client = requireClient();
-  // Nama channel harus UNIK per langganan: `client.channel(nama)` mengembalikan
-  // instance yang sama jika nama sudah dipakai, dan menambah callback
-  // `postgres_changes` ke channel yang sudah di-subscribe akan throw.
-  // AdminApp, MonitoringScreen, dan ReguApp bisa subscribe bersamaan.
-  const channel = client
-    .channel(`laporan-changes:${Math.random().toString(36).slice(2)}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "laporan" },
-      (payload) => {
+  let stopped = false;
+  let initialized = false;
+  let lastSeenId: string | null = null;
+
+  const poll = async () => {
+    if (stopped) return;
+
+    try {
+      const client = requireClient();
+
+      const { data: sessionData, error: sessionError } =
+        await client.auth.getSession();
+
+      if (sessionError) {
+        console.debug("subscribeLaporan session:", sessionError.message);
+        return;
+      }
+
+      const email = sessionData.session?.user?.email?.toLowerCase() ?? "";
+
+      // Akun pelapor tidak boleh melakukan GET laporan global.
+      // Submit, open thread, dan thread milik pelapor tetap berjalan normal.
+      if (email.endsWith("@regu.siplap.id")) {
+        initialized = true;
+        lastSeenId = null;
+        return;
+      }
+
+      // Belum login / session sudah hilang.
+      if (!sessionData.session) {
+        initialized = false;
+        lastSeenId = null;
+        return;
+      }
+
+      const rows = await fetchLaporan({
+        limit: 1,
+      });
+
+      const newest = rows[0];
+
+      if (!initialized) {
+        lastSeenId = newest?.id ?? null;
+        initialized = true;
+        return;
+      }
+
+      if (newest && newest.id !== lastSeenId) {
+        lastSeenId = newest.id;
+
         cb();
-        if (!onInsert) return;
-        const newRow = payload.new as
-          | {
-              id?: string;
-              regu_id?: string;
-              timestamp_kirim?: string;
-              catatan?: string | null;
-            }
-          | undefined;
-        if (newRow?.id && newRow?.regu_id) {
+
+        if (onInsert) {
           onInsert({
-            id: newRow.id,
-            regu_id: newRow.regu_id,
-            timestamp_kirim: newRow.timestamp_kirim ?? new Date().toISOString(),
-            catatan: newRow.catatan ?? null,
+            id: newest.id,
+            regu_id: newest.regu_id,
+            timestamp_kirim: newest.timestamp_kirim,
+            catatan: newest.catatan ?? null,
           });
         }
-      },
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "laporan_foto" },
-      () => cb(),
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "laporan_video" },
-      () => cb(),
-    )
-    .subscribe();
+      }
+    } catch (error) {
+      console.debug(
+        "subscribeLaporan polling:",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  };
+
+  void poll();
+
+  const intervalId = window.setInterval(() => {
+    void poll();
+  }, 10_000);
+
   return () => {
-    void client.removeChannel(channel);
+    stopped = true;
+    window.clearInterval(intervalId);
   };
 }
