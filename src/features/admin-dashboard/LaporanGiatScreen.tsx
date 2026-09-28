@@ -12,6 +12,7 @@ import { reguDisplayName } from "../../lib/regu";
 import {
   cariPersonelBatch,
   ringkasPersonel,
+  personelFormat,
 } from "../../lib/personel";
 import PlaceBadge from "../../components/PlaceBadge";
 import { exportPdf } from "../report-generator/exportPdf";
@@ -271,6 +272,17 @@ export default function LaporanGiatScreen({
     if (query) {
       const terms = query.split(/\s+/).filter(Boolean);
       rows = rows.filter((l) => {
+        // Pencocokan personel ikut dicari: ketik "febri", "akbp", atau
+        // jabatan "kapolres" menemukan laporan yang NRP-nya dicocokkan
+        // ke personel tersebut (bukan hanya NRP polos).
+        const personelTeks = (l.nrp_pelapor ?? "")
+          .split(",")
+          .map((n) => {
+            const p = personelMap.get(n.trim());
+            return p ? `${n.trim()} ${personelFormat(p)}` : "";
+          })
+          .filter(Boolean)
+          .join(" ");
         const searchable = [
           l.regu ? reguDisplayName(l.regu) : l.regu_id,
           l.regu?.unit_key ?? "",
@@ -278,6 +290,7 @@ export default function LaporanGiatScreen({
           l.perihal,
           l.catatan,
           l.nrp_pelapor ?? "",
+          personelTeks,
           l.jenis?.nama ?? "",
           l.kategori,
           l.tahap,
@@ -292,7 +305,7 @@ export default function LaporanGiatScreen({
     }
     if (sort === "terlama") rows = [...rows].reverse();
     return rows;
-  }, [laporan, search, sort]);
+  }, [laporan, search, sort, personelMap]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pages - 1);
