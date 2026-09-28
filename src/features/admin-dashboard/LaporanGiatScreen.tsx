@@ -261,6 +261,10 @@ export default function LaporanGiatScreen({
     staleTime: Infinity,
   });
 
+  /** Teks pencocokan untuk modal preview — tampilkan semua personel. */
+  const personelLengkap = (nrpText: string | null | undefined): string =>
+    ringkasPersonel(nrpText, personelMap, Number.MAX_SAFE_INTEGER);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("id-ID");
     let rows = laporan;
@@ -620,7 +624,7 @@ export default function LaporanGiatScreen({
                   <div className="text-xs text-slate-500">
                     {ringkasPersonel(l.nrp_pelapor, personelMap) && (
                       <span
-                        title={l.nrp_pelapor ?? undefined}
+                        title={personelLengkap(l.nrp_pelapor) || undefined}
                         className="block"
                       >
                         {ringkasPersonel(l.nrp_pelapor, personelMap)}
@@ -820,7 +824,7 @@ export default function LaporanGiatScreen({
                 <span className="ml-2">
                   ·{" "}
                   <b className="text-slate-700">
-                    {ringkasPersonel(preview.nrp_pelapor, personelMap) ||
+                    {personelLengkap(preview.nrp_pelapor) ||
                       `NRP ${preview.nrp_pelapor}`}
                   </b>
                 </span>

@@ -13,10 +13,15 @@ export interface PersonelPolri {
   jabatan: string;
 }
 
-/** Tampilan personel: "PANGKAT — Nama — Jabatan". */
-export function personelLabel(p: PersonelPolri | null | undefined): string {
+/** Tampilan satu personel: "PANGKAT Nama (Jabatan)". */
+export function personelFormat(p: PersonelPolri | null | undefined): string {
   if (!p) return "";
-  return `${p.pangkat} — ${p.nama} — ${p.jabatan}`;
+  return `${p.pangkat} ${p.nama} (${p.jabatan})`;
+}
+
+/** Alias lama — format sama dengan personelFormat. */
+export function personelLabel(p: PersonelPolri | null | undefined): string {
+  return personelFormat(p);
 }
 
 /** Tampilan personel ringkas: "PANGKAT Nama". */
@@ -26,15 +31,17 @@ export function personelLabelSingkat(p: PersonelPolri | null | undefined): strin
 }
 
 /**
- * Bangun teks pencocokan NRP → personel untuk satu laporan.
- *  - 1–2 personel : ditampilkan lengkap "PANGKAT — Nama — Jabatan"
- *  - >2 personel  : 2 pertama lengkap + "… +N personel" (detail di modal)
+ * Bangun teks pencocokan NRP → personel untuk satu laporan:
+ *   AKBP Febri Nurzam (Kapolres) - KOMPOL Yudi (Wakapolres) - dst…
+ *  - ≤ maxTampil personel : ditampilkan semua
+ *  - > maxTampil          : maxTampil pertama + "… +N personel"
  * NRP yang tidak ada di direktori tetap tampil polos "NRP xxx".
  * Menerima nrp_pelapor bentuk apa pun (string "a, b" atau string[] dari RPC).
  */
 export function ringkasPersonel(
   nrpText: string | string[] | null | undefined,
   map: Map<string, PersonelPolri>,
+  maxTampil = 2,
 ): string {
   const nrpList = (
     Array.isArray(nrpText)
@@ -46,10 +53,10 @@ export function ringkasPersonel(
   if (nrpList.length === 0) return "";
   const labels = nrpList.map((nrp) => {
     const p = map.get(nrp);
-    return p ? `${p.pangkat} — ${p.nama} — ${p.jabatan}` : `NRP ${nrp}`;
+    return p ? personelFormat(p) : `NRP ${nrp}`;
   });
-  if (labels.length <= 2) return labels.join(" · ");
-  return `${labels[0]} · ${labels[1]} · … +${labels.length - 2} personel`;
+  if (labels.length <= maxTampil) return labels.join(" - ");
+  return `${labels.slice(0, maxTampil).join(" - ")} - … +${labels.length - maxTampil} personel`;
 }
 
 // ---------- Cache in-memory (1 sesi browser) ----------

@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import type { Laporan } from "../../types";
 import type { ExportCtx } from "./exportPdf";
 import { reguDisplayName } from "../../lib/regu";
-import { cariPersonelBatch } from "../../lib/personel";
+import { cariPersonelBatch, personelFormat } from "../../lib/personel";
 
 /** Normalisasi relasi video/foto: bisa array, objek tunggal, atau null. */
 function asArray<T>(value: T[] | T | null | undefined): T[] {
@@ -35,12 +35,7 @@ export async function exportExcel(
       nrpList.length === 0
         ? ""
         : nrpList
-            .map((nrp) => {
-              const p = personelMap.get(nrp);
-              return p
-                ? `${p.pangkat} — ${p.nama} — ${p.jabatan}`
-                : `NRP ${nrp}`;
-            })
+            .map((nrp) => personelFormat(personelMap.get(nrp)) || `NRP ${nrp}`)
             .join("\n");
 
     return {

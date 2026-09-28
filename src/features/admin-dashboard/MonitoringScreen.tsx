@@ -40,6 +40,7 @@ import PlaceBadge from "../../components/PlaceBadge";
 import {
   cariPersonelBatch,
   ringkasPersonel,
+  personelFormat,
   type PersonelPolri,
 } from "../../lib/personel";
 import type { TahapLaporan } from "../../types";
@@ -271,7 +272,9 @@ function LaporanCard({
             <div
               className="mt-0.5 text-xs text-slate-400"
               title={Array.isArray(item.nrp_pelapor)
-                ? item.nrp_pelapor.join(", ")
+                ? item.nrp_pelapor
+                    .map((n) => personelFormat(personelMap.get(String(n).trim())) || `NRP ${n}`)
+                    .join(" - ")
                 : (item.nrp_pelapor ?? undefined)}
             >
               {ringkasPersonel(item.nrp_pelapor, personelMap)}

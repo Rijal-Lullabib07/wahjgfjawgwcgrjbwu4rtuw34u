@@ -4,7 +4,7 @@ import type { Laporan, Regu } from "../../types";
 import { formatTanggal, formatWaktu } from "../../lib/cycle";
 import { fotoUrl } from "../../lib/supabase/api";
 import { reguDisplayName } from "../../lib/regu";
-import { cariPersonelBatch } from "../../lib/personel";
+import { cariPersonelBatch, personelFormat } from "../../lib/personel";
 
 export interface ExportCtx {
   range: { from: Date; to: Date };
@@ -58,7 +58,7 @@ export async function exportPdf(
     ),
   );
 
-  /** Kolom NRP: tiap NRP dicocokkan "PANGKAT — Nama — Jabatan" (fallback NRP polos). */
+  /** Kolom NRP: tiap NRP dicocokkan "PANGKAT Nama (Jabatan)" (fallback NRP polos). */
   const nrpCol = (l: Laporan): string => {
     const nrpList = (l.nrp_pelapor ?? "")
       .split(",")
@@ -66,10 +66,7 @@ export async function exportPdf(
       .filter(Boolean);
     if (nrpList.length === 0) return "—";
     return nrpList
-      .map((nrp) => {
-        const p = personelMap.get(nrp);
-        return p ? `${p.pangkat} — ${p.nama} — ${p.jabatan}` : `NRP ${nrp}`;
-      })
+      .map((nrp) => personelFormat(personelMap.get(nrp)) || `NRP ${nrp}`)
       .join("\n");
   };
 
