@@ -1,23 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SessionUser } from "../../types";
 import ManagementScreen from "./ManagementScreen";
 import BerandaScreen from "./BerandaScreen";
 import LaporanGiatScreen from "./LaporanGiatScreen";
 import StatistikScreen from "./StatistikScreen";
 import PetaScreen from "./PetaScreen";
-import ReportPopup, { type ReportPopupData } from "./ReportPopup";
 import { subscribeLaporan } from "../../lib/supabase/api";
-import { supabase } from "../../lib/supabase/client";
-import { folderKeyForRegu } from "../../lib/folders";
-import { playAlertSound, vibrateDevice } from "../../lib/notify";
 import PolresLogo from "../../components/PolresLogo";
-import {
-  describePushBlocker,
-  enablePush,
-  getPushBlocker,
-  notificationPermission,
-  syncPushSubscription,
-} from "../../lib/push/subscribe";
 
 interface Props {
   session: SessionUser;
@@ -62,60 +51,14 @@ function isKapolresUser(session: SessionUser): boolean {
 }
 const MOBILE_MENU: Tab[] = ["beranda", "laporan", "statistik"];
 
-/** Tombol "Aktifkan notifikasi" untuk pemantau (sekali saja, lalu aktif). */
-function NotificationButton({ session }: { session: SessionUser }) {
-  const [perm, setPerm] = useState(notificationPermission());
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const isMonitor = session.role === "admin" || session.role === "pimpinan";
-
-  useEffect(() => {
-    if (!isMonitor || perm !== "granted") return;
-    void syncPushSubscription(undefined);
-  }, [isMonitor, perm]);
-
-  if (!isMonitor || perm === "granted" || perm === "unsupported") return null;
-
-  const blocker = getPushBlocker();
-  const hint = msg ?? (blocker ? describePushBlocker(blocker) : null);
-  return (
-    <div className="relative flex items-center">
-      <button
-        onClick={async () => {
-          setBusy(true);
-          setMsg(null);
-          try {
-            await enablePush(undefined);
-            setPerm(notificationPermission());
-          } catch (e) {
-            setMsg(e instanceof Error ? e.message : String(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-        disabled={busy}
-        aria-label="Aktifkan notifikasi"
-        title="Aktifkan notifikasi"
-        className="rounded-xl border border-blue-200 bg-blue-50 px-2.5 py-2 text-base leading-none text-blue-700 transition hover:bg-blue-100 disabled:opacity-50 sm:px-3"
-      >
-        {busy ? "⏳" : "🔔"}
-      </button>
-      {/* Pesan/blocker ditampilkan sebagai popover supaya tidak mendorong
-          tombol lain saat layar sempit. */}
-      {hint && (
-        <span className="header-hint absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border px-3 py-2 text-[11px] font-medium leading-snug">
-          {hint}
-        </span>
-      )}
-    </div>
-  );
-}
-
 /**
  * Dashboard pemantau: sidebar kiri (desktop) + bottom nav (HP),
  * tema terang sesuai mockup. Halaman: Beranda (summary), Laporan Giat,
  * Statistik, Peta Kegiatan, Rekap & Unduh, Manajemen Data.
+ *
+ * CATATAN: fitur notifikasi pemantau (popup "laporan baru", bunyi/getar,
+ * dan tombol 🔔 push) sudah DIHAPUS sesuai permintaan — pemantau cukup
+ * membuka dashboard; daftar laporan tetap refresh otomatis (realtime).
  */
 export default function AdminApp({ session, onLogout }: Props) {
   const [tab, setTab] = useState<Tab>("beranda");
@@ -125,85 +68,14 @@ export default function AdminApp({ session, onLogout }: Props) {
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [popup, setPopup] = useState<ReportPopupData | null>(null);
-  const shownIds = useRef(new Set<string>());
-
-  const handleInsert = useCallback(
-    async (row: {
-      id: string;
-      regu_id: string;
-      timestamp_kirim: string;
-      catatan: string | null;
-    }) => {
-      if (shownIds.current.has(row.id)) return;
-      shownIds.current.add(row.id);
-      if (!supabase) return;
-
-      const { data: regu } = await supabase
-        .from("regu")
-        .select("nama_regu, unit_key, wilayah_key")
-        .eq("id", row.regu_id)
-        .maybeSingle();
-
-      const waktu = new Date(row.timestamp_kirim).toLocaleString("id-ID", {
-        timeZone: "Asia/Jakarta",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      setPopup({
-        title: regu?.nama_regu ?? "Laporan baru",
-        body: `${waktu} WIB${
-          row.catatan ? ` — ${row.catatan.slice(0, 80)}` : ""
-        }`,
-        folderKey: folderKeyForRegu(regu?.unit_key, regu?.wilayah_key),
-        laporanId: row.id,
-      });
-      playAlertSound();
-      vibrateDevice();
-    },
-    [],
-  );
 
   useEffect(() => {
-    const unsubscribe = subscribeLaporan(
-      () => setRefreshKey((k) => k + 1),
-      (row) => void handleInsert(row),
-    );
-
-    const onMessage = (event: MessageEvent) => {
-      const data = event.data as
-        | {
-            type?: string;
-            data?: {
-              title?: string;
-              body?: string;
-              folderKey?: string;
-              laporanId?: string;
-            };
-          }
-        | undefined;
-      if (data?.type !== "SIPLAP_LAPORAN_PUSH") return;
-      const laporanId = data.data?.laporanId;
-      if (laporanId) {
-        if (shownIds.current.has(laporanId)) return;
-        shownIds.current.add(laporanId);
-      }
-      setPopup({
-        title: data.data?.title ?? "Laporan baru masuk",
-        body: data.data?.body ?? "",
-        folderKey: data.data?.folderKey ?? null,
-        laporanId,
-      });
-      playAlertSound();
-      vibrateDevice();
-    };
-    navigator.serviceWorker?.addEventListener("message", onMessage);
-
+    // Realtime refresh daftar laporan — TANPA popup/bunyi/getar lagi.
+    const unsubscribe = subscribeLaporan(() => setRefreshKey((k) => k + 1));
     return () => {
       unsubscribe();
-      navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
-  }, [handleInsert]);
+  }, []);
 
   const kapolres = isKapolresUser(session);
   const roleLabel = session.role === "admin" ? "Admin" : "Pimpinan";
@@ -216,11 +88,6 @@ export default function AdminApp({ session, onLogout }: Props) {
       ),
     [session.role, kapolres],
   );
-
-  const openFromPopup = () => {
-    setPopup(null);
-    setTab("laporan");
-  };
 
   const toggleTheme = () => {
     setTheme((current) => {
@@ -349,10 +216,7 @@ export default function AdminApp({ session, onLogout }: Props) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-              <NotificationButton session={session} />
-              {/* Chip akses: ikon + nama role (mobile) / ikon + "Akses <role>"
-                  (sm ke atas) — ditulis manual tanpa class .badge karena rule
-                  .dash .badge memaksa inline-flex dan menimpa utility `hidden`. */}
+              {/* Notifikasi pemantau dihapus — chip akses & tema saja. */}
               <span
                 className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-50 py-1.5 pl-2 pr-2.5 text-[11px] font-semibold text-blue-700 sm:text-xs"
                 title={"Akses " + roleLabel}
@@ -413,12 +277,6 @@ export default function AdminApp({ session, onLogout }: Props) {
             ))}
         </nav>
       </div>
-
-      <ReportPopup
-        popup={popup}
-        onOpen={openFromPopup}
-        onClose={() => setPopup(null)}
-      />
     </div>
   );
 }

@@ -33,6 +33,63 @@ const TAHAP_BADGE: Record<TahapLaporan, string> = {
   lengkap: "bg-emerald-500/15 text-emerald-300",
 };
 
+// ---------- Kata kunci pencarian waktu ----------
+
+const NAMA_HARI = [
+  "minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu",
+];
+const NAMA_BULAN_PANJANG = [
+  "januari", "februari", "maret", "april", "mei", "juni",
+  "juli", "agustus", "september", "oktober", "november", "desember",
+];
+const NAMA_BULAN_PENDEK = [
+  "jan", "feb", "mar", "apr", "mei", "jun",
+  "jul", "agu", "sep", "okt", "nov", "des",
+];
+
+/**
+ * Semua variasi penulisan waktu untuk pencarian: jam ("16.32", "16:32",
+ * "1632"), tanggal ("29 september 2026", "29/9", "29-9-2026"), nama hari,
+ * dan periode ("pagi", "siang", "sore", "malam", "subuh", "dini hari").
+ * Semua huruf kecil — query pencarian juga di-lowercase sebelum dicocokkan.
+ */
+function waktuSearchTerms(iso: string): string[] {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return [];
+  const terms: string[] = [];
+
+  // Jam: 16.32 / 16:32 / 1632
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  terms.push(`${hh}.${mm}`, `${hh}:${mm}`, `${hh}${mm}`);
+
+  // Tanggal: berbagai format
+  const tanggal = d.getDate();
+  const bulan = d.getMonth() + 1;
+  const tahun = d.getFullYear();
+  const bPanjang = NAMA_BULAN_PANJANG[d.getMonth()];
+  const bPendek = NAMA_BULAN_PENDEK[d.getMonth()];
+  terms.push(
+    `${tanggal} ${bPanjang} ${tahun}`,
+    `${tanggal} ${bPendek} ${tahun}`,
+    `${tanggal}/${bulan}/${tahun}`,
+    `${tanggal}-${bulan}-${tahun}`,
+    `${tanggal}/${bulan}`,
+    `${tanggal}-${bulan}`,
+  );
+
+  // Hari & periode
+  terms.push(NAMA_HARI[d.getDay()]);
+  const h = d.getHours();
+  if (h >= 4 && h < 10) terms.push("pagi", "subuh");
+  else if (h >= 10 && h < 15) terms.push("siang");
+  else if (h >= 15 && h < 18) terms.push("sore");
+  else if (h >= 18) terms.push("malam");
+  else terms.push("dini hari");
+
+  return terms;
+}
+
 /** Tombol salin narasi (teks laporan resmi) ke clipboard — API modern + fallback lama. */
 function SalinNarasiButton({ narasi }: { narasi: string }) {
   const [status, setStatus] = useState<"idle" | "ok" | "gagal">("idle");
@@ -114,7 +171,10 @@ export default function ThreadList({
 
   /**
    * Hasil pencarian: semua kata kunci harus muncul di salah satu
-   * field laporan (jenis, kategori, perihal, waktu, status).
+   * field laporan. Cakupan LENGKAP: jenis/insiden, kategori, perihal,
+   * narasi lengkap, tahap, NRP pelapor, dan waktu dalam berbagai format
+   * (jam "16.32"/"16:32", tanggal "29 september"/"29/9", nama hari,
+   * periode "pagi/siang/sore/malam").
    *
    * PENTING: hook ini harus dipanggil SEBELUM early return
    * `if (openThreadId)` di bawah — jumlah hook harus selalu sama
@@ -131,8 +191,11 @@ export default function ThreadList({
         t.perihal ?? "",
         t.catatan ?? "",
         TAHAP_LABEL[t.tahap],
+        t.tahap,
+        t.nrp_pelapor ?? "",
         formatWaktu(t.timestamp_kirim),
         t.timestamp_kirim,
+        ...waktuSearchTerms(t.timestamp_kirim),
       ]
         .filter((v) => v !== null && v !== undefined && v !== "")
         .join(" ")
@@ -193,7 +256,7 @@ export default function ThreadList({
           <input
             type="search"
             className="input"
-            placeholder="Cari jenis, perihal, kategori, atau waktu…"
+            placeholder="Cari jam, tanggal, insiden, narasi, NRP…"
             value={cari}
             onChange={(e) => setCari(e.target.value)}
           />

@@ -13,6 +13,27 @@ export interface PersonelPolri {
   jabatan: string;
 }
 
+/**
+ * Koreksi jabatan MANUAL (sisi tampilan saja — database TIDAK diubah).
+ * Sumber LAPBUL masih mencantumkan jabatan lama; daftar ini menimpanya
+ * saat data ditampilkan. Hapus entri di sini bila file LAPBUL/DB sudah
+ * diperbarui lewat import ulang.
+ */
+const KOREKSI_JABATAN: Record<string, string> = {
+  // AIPDA Didi Suryadi — benar: Banit Binmas (bukan Banit Samapta)
+  "74020484": "BANIT BINMAS",
+  // AIPDA RE Deden Tajudin — benar: Bhabinkamtibmas (bukan Banit Samapta/Bhabinkamtibmas)
+  "77121038": "BHABINKAMTIBMAS",
+  // Brigadir Giri (Giri Rukmantara, S.H.) — benar: Bhabinkamtibmas
+  "97010046": "BHABINKAMTIBMAS",
+};
+
+/** Terapkan koreksi jabatan manual ke satu baris personel. */
+function terapkanKoreksi(p: PersonelPolri): PersonelPolri {
+  const koreksi = KOREKSI_JABATAN[p.nrp];
+  return koreksi && p.jabatan !== koreksi ? { ...p, jabatan: koreksi } : p;
+}
+
 /** Tampilan satu personel: "PANGKAT Nama (Jabatan)". */
 export function personelFormat(p: PersonelPolri | null | undefined): string {
   if (!p) return "";
@@ -84,7 +105,7 @@ async function loadCache(): Promise<Map<string, PersonelPolri>> {
           return map;
         }
         for (const row of (data ?? []) as PersonelPolri[]) {
-          map.set(row.nrp, row);
+          map.set(row.nrp, terapkanKoreksi(row));
         }
       } catch (e) {
         console.warn("personel_polri gagal dimuat:", e);

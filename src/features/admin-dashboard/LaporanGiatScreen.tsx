@@ -770,14 +770,14 @@ export default function LaporanGiatScreen({
         </div>
       </section>
 
-      {/* Preview modal */}
+      {/* Preview modal — muncul dari ATAS (revisi: sebelumnya dari bawah) */}
       {preview && (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-6"
+          className="fixed inset-0 z-40 flex items-start justify-center bg-slate-900/50 p-0 sm:p-6"
           onClick={() => setPreview(null)}
         >
           <div
-            className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+            className="anim-drop max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-b-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">

@@ -105,19 +105,10 @@ async function handlePush(data: PushData): Promise<void> {
   const isLaporan = data.tag === 'siplap-laporan';
 
   if (isLaporan) {
-    // Kalau app sedang TERBUKA (ada window visible), TAHAN notifikasi sistem
-    // supaya tidak dobel dengan popup in-app — teruskan isi push ke halaman.
-    const clientList = await self.clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true,
-    });
-    const visibleClient = clientList.find(
-      (client) => (client as WindowClient).visibilityState === 'visible',
-    );
-    if (visibleClient) {
-      visibleClient.postMessage({ type: 'SIPLAP_LAPORAN_PUSH', data });
-      return;
-    }
+    // Notifikasi push "laporan baru" (untuk pemantau) DIHAPUS: push dari
+    // server diabaikan diam-diam tanpa menampilkan notifikasi sistem.
+    // Pengingat lokal pelapor (siplap-reminder) tetap berjalan normal.
+    return;
   }
 
   const opts: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {

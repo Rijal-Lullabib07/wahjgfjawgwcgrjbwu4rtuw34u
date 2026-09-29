@@ -66,6 +66,20 @@ select {
     transform: translateY(0);
   }
 }
+/* Modal/sheet yang muncul dari ATAS layar (preview laporan pemantau). */
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-drop {
+  animation: drop-in 0.45s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
 @keyframes pulse-dot {
   0%,
   100% {
@@ -82,6 +96,9 @@ select {
 }
 @media (prefers-reduced-motion: reduce) {
   .anim-rise {
+    animation: none;
+  }
+  .anim-drop {
     animation: none;
   }
   .dash-bottom-nav button,
@@ -1091,6 +1108,8 @@ select {
 .stx-feed {
   display: grid;
   gap: 0.6rem;
+  /* minmax(0, 1fr): teks panjang tidak boleh memaksa kolom melebihi kartu */
+  grid-template-columns: minmax(0, 1fr);
 }
 .stx-feed-item {
   display: flex;
@@ -1100,6 +1119,9 @@ select {
   background: rgba(140, 170, 255, 0.07);
   padding: 0.6rem 0.75rem;
   font-size: 0.8rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   animation: stx-in 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 .stx-feed-item small { display: block; color: #8b9bc8; font-size: 0.7rem; }
