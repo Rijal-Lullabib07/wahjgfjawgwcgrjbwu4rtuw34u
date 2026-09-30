@@ -340,7 +340,8 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         hour: "2-digit",
         minute: "2-digit",
       }) + " WIB";
-    return `*Perihal : ${p}*\n${hari}, ${tanggal} pukul ${waktu}\n${body}\nDemikian laporan kami sampaikan, terimakasih.`;
+    // Jarak antar bagian: enter 2x (baris kosong di antaranya).
+    return `*Perihal : ${p}*\n\n${hari}, ${tanggal} pukul ${waktu}\n\n${body}\n\nDemikian laporan kami sampaikan, terimakasih.`;
   }, [tanggal, perihal, isi]);
 
   // ---------- Media (opsional, sama seperti capture lama) ----------
@@ -934,9 +935,9 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         </div>
 
         <div>
-          <div className="eyebrow">Perihal laporan pada tgl {tanggal}</div>
-          <div className="mono mt-2 rounded-xl border border-white/10 bg-navy-950/60 px-3 py-2 text-xs text-gold-300">
-            Lapor. Pada tanggal {tanggal}, izin melaporkan…
+          <div className="eyebrow">
+            Isi Perihal <span className="text-red-400" aria-hidden="true">*</span>
+            <span className="ml-1 font-normal normal-case text-slate-500">(wajib)</span>
           </div>
           <input
             className="input mt-2"
@@ -944,12 +945,13 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
             onChange={(e) => setPerihal(e.target.value)}
             placeholder="Tulis perihal, mis. Patroli dialogis di pasar baru"
             maxLength={180}
+            required
           />
         </div>
 
         <div>
           <span className="mb-1.5 block text-sm font-medium text-slate-300">
-            Isi laporan
+            Isi laporan <span className="text-red-400" aria-hidden="true">*</span>
           </span>
           <textarea
             className="input min-h-36 resize-y"
