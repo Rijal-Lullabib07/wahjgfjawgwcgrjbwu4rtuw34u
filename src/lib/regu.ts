@@ -28,6 +28,9 @@ const unitNames: Record<string, string> = {
   polair: "Satpolairud",
   tahti: "Sattahti",
   spkt: "SPKT",
+  sium: "Sium",
+  propam: "Propam",
+  humas: "Humas",
 };
 
 function titleFromKey(key: string): string {

@@ -475,23 +475,40 @@ function RankJenis({ items }: { items: Array<[string, number]> }) {
 
 const MEDALI = ["🥇", "🥈", "🥉"];
 
-/** Ranking personel teraktif (top 10) — format PANGKAT Nama (Jabatan). */
+/** Ranking personel teraktif (top 30, paginated) — format PANGKAT Nama (Jabatan). */
+const PERSONEL_PER_HALAMAN = 10;
+
 function RankPersonel({
   items,
 }: {
   items: Array<{ label: string; nrp: string; jumlah: number }>;
 }) {
   const [on, setOn] = useState(false);
+  const [page, setPage] = useState(0);
   useEffect(() => {
     const t = window.setTimeout(() => setOn(true), 100);
     return () => window.clearTimeout(t);
   }, []);
+  // Reset ke halaman 1 saat periode/cakupan berubah (items terganti).
+  useEffect(() => {
+    setPage(0);
+  }, [items]);
+
+  const totalHalaman = Math.max(1, Math.ceil(items.length / PERSONEL_PER_HALAMAN));
+  const halaman = Math.min(page, totalHalaman - 1);
   const max = Math.max(1, ...items.map((it) => it.jumlah));
+  const visible = items.slice(
+    halaman * PERSONEL_PER_HALAMAN,
+    (halaman + 1) * PERSONEL_PER_HALAMAN,
+  );
+
   return (
     <div className="stx-rank">
-      {items.map((it, i) => (
+      {visible.map((it, i) => (
         <div className="stx-rk" key={it.nrp}>
-          <span className="stx-rk-no">{MEDALI[i] ?? i + 1}</span>
+          <span className="stx-rk-no">
+            {halaman === 0 && i < 3 ? MEDALI[i] : halaman * PERSONEL_PER_HALAMAN + i + 1}
+          </span>
           <span className="stx-rk-name" title={`${it.label} · NRP ${it.nrp}`}>
             {it.label}
           </span>
@@ -508,6 +525,40 @@ function RankPersonel({
         </div>
       ))}
       {items.length === 0 && <p className="stx-empty">Belum ada data.</p>}
+
+      {totalHalaman > 1 && (
+        <div className="stx-pager" role="navigation" aria-label="Halaman personel">
+          <button
+            type="button"
+            className="stx-pager-btn"
+            onClick={() => setPage(Math.max(0, halaman - 1))}
+            disabled={halaman === 0}
+            aria-label="Halaman sebelumnya"
+          >
+            ‹
+          </button>
+          {Array.from({ length: totalHalaman }, (_, p) => (
+            <button
+              type="button"
+              key={p}
+              className={`stx-pager-btn${p === halaman ? " stx-pager-aktif" : ""}`}
+              onClick={() => setPage(p)}
+              aria-current={p === halaman ? "page" : undefined}
+            >
+              {p + 1}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="stx-pager-btn"
+            onClick={() => setPage(Math.min(totalHalaman - 1, halaman + 1))}
+            disabled={halaman === totalHalaman - 1}
+            aria-label="Halaman berikutnya"
+          >
+            ›
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -822,7 +873,7 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
         label: personelFormat(personelMap.get(nrp)) || `NRP ${nrp}`,
       }))
       .sort((a, b) => b.jumlah - a.jumlah)
-      .slice(0, 10);
+      .slice(0, 30); // 30 teratas (1 halaman) — sisanya via pagination
   }, [data, personelMap]);
 
   const spanDays = Math.max(

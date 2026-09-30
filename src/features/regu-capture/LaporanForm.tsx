@@ -321,10 +321,26 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
   );
 
   const tanggal = tanggalOtomatis();
+  /**
+   * Teks laporan resmi (format revisi 2026):
+   *   *Perihal : {perihal}*
+   *   {hari}, {tanggal bulan tahun} pukul {waktu WIB}
+   *   {isi laporan}
+   *   Demikian laporan kami sampaikan, terimakasih.
+   * Hari/jam diambil saat teks disusun (mengikuti pengetikan terakhir),
+   * bukan saat form dibuka.
+   */
   const teksLaporan = useMemo(() => {
+    const now = new Date();
     const p = perihal.trim() || "(perihal belum diisi)";
     const body = isi.trim() || "(isi laporan belum diisi)";
-    return `Lapor. Pada tanggal ${tanggal}, izin melaporkan ${p}. Isi: ${body}. Demikian laporan kami sampaikan, terimakasih.`;
+    const hari = now.toLocaleDateString("id-ID", { weekday: "long" });
+    const waktu =
+      now.toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }) + " WIB";
+    return `*Perihal : ${p}*\n${hari}, ${tanggal} pukul ${waktu}\n${body}\nDemikian laporan kami sampaikan, terimakasih.`;
   }, [tanggal, perihal, isi]);
 
   // ---------- Media (opsional, sama seperti capture lama) ----------

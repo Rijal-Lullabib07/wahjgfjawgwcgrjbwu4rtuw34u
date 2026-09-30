@@ -97,6 +97,9 @@ const satuanUnits = [
   ["lantas", "Satlantas"],
   ["polair", "Satpolairud"],
   ["tahti", "Sattahti"],
+  ["sium", "Satsium"],
+  ["propam", "Sipropam"],
+  ["humas", "Sathumas"],
 ] as const;
 
 const satuanUnitCounts: Record<(typeof satuanUnits)[number][0], number> = {
@@ -108,6 +111,9 @@ const satuanUnitCounts: Record<(typeof satuanUnits)[number][0], number> = {
   lantas: 5,
   polair: 2,
   tahti: 1,
+  sium: 1,
+  propam: 1,
+  humas: 1,
 };
 
 const satuanLabels: Record<string, string> = {
@@ -120,9 +126,13 @@ const satuanLabels: Record<string, string> = {
   polair: "Polair",
   tahti: "Tahti",
   spkt: "SPKT",
+  sium: "Sium",
+  propam: "Propam",
+  humas: "Humas",
 };
 
 // Presensi unit per Polsek (struktur v2): semua unit seragam 14 Polsek.
+// 2026: + sium / propam / humas (9 unit per Polsek).
 const allWilayah = wilayahList.map(([w]) => w);
 const unitPresence: Record<string, string[]> = {
   spkt: [...allWilayah],
@@ -131,12 +141,16 @@ const unitPresence: Record<string, string[]> = {
   binmas: [...allWilayah],
   samapta: [...allWilayah],
   lantas: [...allWilayah],
+  sium: [...allWilayah],
+  propam: [...allWilayah],
+  humas: [...allWilayah],
 };
 
 export const jawaraStructure = {
-  /** 132 = 25 pemantau (3 all-access + 8 kasat + 14 kapolsek) + 107 pelapor
-   *  (23 satuan + 84 Polsek). Semua akun lama dihapus & dibuat ulang. */
-  totalAccounts: 132,
+  /** 180 = 28 pemantau (3 all-access + 11 kasat + 14 kapolsek) + 152 pelapor
+   *  (26 satuan + 126 Polsek). 2026: +42 unit Polsek (sium/propam/humas)
+   *  dan +6 akun kasat/satuan sium-propam-humas. Incremental saja. */
+  totalAccounts: 180,
   allAccessMonitors: 3,
   allAccessNames: [
     "KAPOLRES PURWAKARTA",
@@ -152,6 +166,9 @@ export const jawaraStructure = {
     "KASAT LANTAS",
     "KASAT POLAIR",
     "KASAT TAHTI",
+    "KASAT SIUM",
+    "KASI PROPAM",
+    "KASAT HUMAS",
   ],
   polsekMonitors: wilayahList.map(
     ([, nama]) => `KAPOLSEK ${nama.toUpperCase()}`,
@@ -167,7 +184,7 @@ export const jawaraStructure = {
   })),
   polsekReporters: wilayahList.map(([wilayah, nama]) => ({
     name: `POLSEK ${nama.toUpperCase()}`,
-    count: 6,
+    count: 9,
     items: Object.keys(unitPresence).map(
       (unit) =>
         `${satuanLabels[unit] ?? unit} — unit.${unit}.${wilayah}`,
@@ -188,7 +205,7 @@ export const jawaraTotals = {
   polsekReporters: jawaraStructure.polsekReporters.reduce(
     (sum, item) => sum + item.count,
     0,
-  ), // 84
+  ), // 126
 };
 
 const unitTerms: Record<string, string[]> = {

@@ -1086,6 +1086,60 @@ select {
   background: linear-gradient(90deg, #3ed8ff, #9b8cff);
   transition: width 1.2s cubic-bezier(0.2, 0.9, 0.2, 1);
 }
+/* Pager ranking personel (top 30, 10 per halaman) */
+.stx-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.stx-pager-btn {
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(140, 170, 255, 0.18);
+  background: rgba(140, 170, 255, 0.07);
+  color: #aebadb;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.stx-pager-btn:hover:not(:disabled) {
+  color: #e6ecff;
+  border-color: rgba(140, 170, 255, 0.4);
+}
+.stx-pager-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.stx-pager-aktif {
+  background: linear-gradient(135deg, #ffcf5c, #f5a623);
+  border-color: transparent;
+  color: #1a1200;
+}
+.stx-pager-aktif:hover:not(:disabled) {
+  color: #1a1200;
+}
+.dash-light .stx-pager-btn {
+  border-color: #dbe4ef;
+  background: #fff;
+  color: #526b87;
+}
+.dash-light .stx-pager-btn:hover:not(:disabled) {
+  color: #172b46;
+  border-color: #b9c8dd;
+}
+.dash-light .stx-pager-aktif {
+  background: linear-gradient(135deg, #ffcf5c, #f5a623);
+  border-color: transparent;
+  color: #1a1200;
+}
 /* Heatmap jam */
 .stx-heat {
   display: grid;

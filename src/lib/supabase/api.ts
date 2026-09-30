@@ -1046,6 +1046,9 @@ export function unitLabel(key: string): string {
     polair: "Satpolairud",
     tahti: "Sattahti",
     spkt: "SPKT",
+    sium: "Sium",
+    propam: "Propam",
+    humas: "Humas",
   };
 
   return (
@@ -1076,6 +1079,9 @@ export function unitPolsekLabel(key: string): string {
     polair: "Polair",
     tahti: "Tahti",
     pamobvit: "Pam Obvit",
+    sium: "Sium",
+    propam: "Propam",
+    humas: "Humas",
   };
 
   return (
