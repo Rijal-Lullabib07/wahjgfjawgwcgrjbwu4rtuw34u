@@ -417,7 +417,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         lat: geo.lat,
         lng: geo.lng,
         timestamp: ts,
-        label: "SALAM PRESISI · Pelaporan Giat",
+        label: "Salam Jawara - Pelaporan Giat",
         place: geo.place
           ? geo.place.detail
             ? `${geo.place.name} — ${geo.place.detail}`
@@ -483,7 +483,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         const ts = new Date();
         const { blob } = await compressGaleriFoto(f, {
           timestamp: ts,
-          label: "SALAM PRESISI · Pelaporan Giat",
+          label: "Salam Jawara - Pelaporan Giat",
         });
         setShots((s) =>
           s.length >= 4 ? s : [...s, { url: URL.createObjectURL(blob), ts, blob }],
