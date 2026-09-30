@@ -481,7 +481,7 @@ const PERSONEL_PER_HALAMAN = 10;
 function RankPersonel({
   items,
 }: {
-  items: Array<{ label: string; nrp: string; jumlah: number }>;
+  items: Array<{ label: string; nrp: string; jumlah: number; wilayah: string | null }>;
 }) {
   const [on, setOn] = useState(false);
   const [page, setPage] = useState(0);
@@ -509,8 +509,9 @@ function RankPersonel({
           <span className="stx-rk-no">
             {halaman === 0 && i < 3 ? MEDALI[i] : halaman * PERSONEL_PER_HALAMAN + i + 1}
           </span>
-          <span className="stx-rk-name" title={`${it.label} · NRP ${it.nrp}`}>
+          <span className="stx-rk-name" title={`${it.label}${it.wilayah ? ` · ${it.wilayah}` : ""} · NRP ${it.nrp}`}>
             {it.label}
+            {it.wilayah && <small className="stx-rk-sub"> · {it.wilayah}</small>}
           </span>
           <b>{it.jumlah}</b>
           <div className="stx-rk-track">
@@ -857,21 +858,47 @@ export default function StatistikScreen({ refreshKey, session }: Props) {
    * Personel teraktif: hitung PARTISIPASI — satu laporan dengan beberapa
    * NRP dihitung untuk tiap personel yang tercantum. Mengikuti periode &
    * cakupan pemantau (rows sudah terfilter RLS/scope di server).
+   * Wilayah Polsek personel = mode wilayah_key laporan tempat dia
+   * mencatat (direktori LAPBUL tidak memuat kolom Polsek).
    */
-  const personelTop = useMemo<Array<{ label: string; nrp: string; jumlah: number }>>(() => {
-    const map = new Map<string, number>();
+  const personelTop = useMemo<Array<{ label: string; nrp: string; jumlah: number; wilayah: string | null }>>(() => {
+    const jumlahMap = new Map<string, number>();
+    const wilayahCount = new Map<string, Map<string, number>>();
     for (const l of data?.rows ?? []) {
+      const wkey = l.regu?.wilayah_key
+        ? wilayahLabel(l.regu.wilayah_key)
+        : null;
       for (const n of (l.nrp_pelapor ?? "").split(",")) {
         const nrp = n.trim();
-        if (nrp) map.set(nrp, (map.get(nrp) ?? 0) + 1);
+        if (!nrp) continue;
+        jumlahMap.set(nrp, (jumlahMap.get(nrp) ?? 0) + 1);
+        if (wkey) {
+          const inner = wilayahCount.get(nrp) ?? new Map<string, number>();
+          inner.set(wkey, (inner.get(wkey) ?? 0) + 1);
+          wilayahCount.set(nrp, inner);
+        }
       }
     }
-    return [...map.entries()]
-      .map(([nrp, jumlah]) => ({
-        nrp,
-        jumlah,
-        label: personelFormat(personelMap.get(nrp)) || `NRP ${nrp}`,
-      }))
+    return [...jumlahMap.entries()]
+      .map(([nrp, jumlah]) => {
+        const inner = wilayahCount.get(nrp);
+        let wilayah: string | null = null;
+        if (inner) {
+          let best = 0;
+          for (const [w, c] of inner) {
+            if (c > best) {
+              best = c;
+              wilayah = w;
+            }
+          }
+        }
+        return {
+          nrp,
+          jumlah,
+          wilayah,
+          label: personelFormat(personelMap.get(nrp)) || `NRP ${nrp}`,
+        };
+      })
       .sort((a, b) => b.jumlah - a.jumlah)
       .slice(0, 30); // 30 teratas (1 halaman) — sisanya via pagination
   }, [data, personelMap]);

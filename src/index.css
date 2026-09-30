@@ -1071,6 +1071,12 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.stx-rk-sub {
+  color: #8b9bc8;
+  font-weight: 500;
+  font-size: 0.72rem;
+}
+.dash-light .stx-rk-sub { color: #71859d; }
 .stx-rk b { color: #f8fafc; }
 .stx-rk-track {
   grid-column: 2 / 4;

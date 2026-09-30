@@ -628,6 +628,12 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       setError("Isi laporan wajib diisi.");
       return;
     }
+    if (shots.length === 0 && !videoShot) {
+      setError(
+        "Dokumentasi wajib — sertakan minimal 1 foto atau 1 video.",
+      );
+      return;
+    }
     if (mode === "baru" && !jenisCustomMode && !jenisTerpilih) {
       setError("Pilih jenis laporan terlebih dahulu.");
       return;
@@ -764,14 +770,12 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       {/* ---------- 3) Pilih jenis (selection + pencarian) ---------- */}
       {mode === "baru" && (
         <section className="relative">
-          <span className="mb-1.5 block text-sm font-medium text-slate-300">
-            {kategori === "kegiatan"
-              ? "Pilih jenis kegiatan (program kerja)"
-              : "Pilih jenis kejadian (temuan)"}
-          </span>
+          <div className="eyebrow">
+            Pilih jenis {kategori === "kegiatan" ? "kegiatan (program kerja)" : "kejadian (temuan)"} <span className="text-red-400" aria-hidden="true">*</span>
+          </div>
           <input
             type="text"
-            className="input"
+            className="input mt-2"
             placeholder={
               jenisCustomMode
                 ? "Tulis jenis sendiri, mis. Kegiatan Masyarakat"
@@ -868,7 +872,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
       <section className="card space-y-4">
         <div>
           <label className="eyebrow" htmlFor="nrp-pelapor">
-            NRP pelapor
+            NRP pelapor <span className="text-red-400" aria-hidden="true">*</span>
           </label>
           <div className="mt-2 space-y-2">
             {nrpList.map((n, i) => {
@@ -952,6 +956,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         <div>
           <span className="mb-1.5 block text-sm font-medium text-slate-300">
             Isi laporan <span className="text-red-400" aria-hidden="true">*</span>
+            <span className="ml-1 text-[11px] font-normal text-slate-500">(wajib)</span>
           </span>
           <textarea
             className="input min-h-36 resize-y"
@@ -977,10 +982,13 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         </div>
       </section>
 
-      {/* ---------- 4) Media opsional ---------- */}
+      {/* ---------- 4) Media wajib minimal 1 ---------- */}
       <section className="card">
         <div className="flex items-center justify-between">
-          <div className="eyebrow">Dokumentasi (opsional)</div>
+          <div className="eyebrow">
+            Dokumentasi <span className="text-red-400" aria-hidden="true">*</span>
+            <span className="ml-1 font-normal normal-case text-slate-500">(wajib — min. 1 foto / video)</span>
+          </div>
           <span className="text-[11px] text-slate-500">
             Maks 4 foto · 1 video
           </span>
@@ -1252,7 +1260,13 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
       <button
         onClick={() => void handleSubmit()}
-        disabled={sending || !perihal.trim() || !isi.trim() || nrpBersih.length === 0}
+        disabled={
+          sending ||
+          !perihal.trim() ||
+          !isi.trim() ||
+          nrpBersih.length === 0 ||
+          (shots.length === 0 && !videoShot)
+        }
         className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-gold-300/70 bg-gradient-to-r from-gold-400 via-amber-300 to-gold-400 px-5 py-4 text-base font-extrabold text-navy-950 shadow-[0_10px_28px_rgba(245,185,66,0.22)] transition hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-950/10 text-lg">
