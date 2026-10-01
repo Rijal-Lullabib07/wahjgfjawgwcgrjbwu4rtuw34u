@@ -11,6 +11,12 @@ export interface PersonelPolri {
   nama: string;
   pangkat: string;
   jabatan: string;
+  /** Fungsi personel (LAPBUL — DATA PERSONEL FIX): RESKRIM, SAMAPTA, dst. */
+  fungsi?: string | null;
+  /** Satuan personel (LAPBUL — DATA PERSONEL FIX): POLRES/POLSEK <nama>. */
+  satuan?: string | null;
+  /** Status kepegawaian (LAPBUL — DATA PERSONEL FIX): AKTIF, dst. */
+  status?: string | null;
 }
 
 /**
@@ -34,10 +40,15 @@ function terapkanKoreksi(p: PersonelPolri): PersonelPolri {
   return koreksi && p.jabatan !== koreksi ? { ...p, jabatan: koreksi } : p;
 }
 
-/** Tampilan satu personel: "PANGKAT Nama (Jabatan)". */
+/**
+ * Tampilan satu personel: "PANGKAT Nama (Jabatan)" — bila personel punya
+ * FUNGSI (DATA PERSONEL FIX): "PANGKAT Nama (Jabatan) — FUNGSI".
+ */
 export function personelFormat(p: PersonelPolri | null | undefined): string {
   if (!p) return "";
-  return `${p.pangkat} ${p.nama} (${p.jabatan})`;
+  const dasar = `${p.pangkat} ${p.nama} (${p.jabatan})`;
+  const fungsi = p.fungsi?.trim();
+  return fungsi ? `${dasar} — ${fungsi}` : dasar;
 }
 
 /** Alias lama — format sama dengan personelFormat. */
@@ -49,6 +60,16 @@ export function personelLabel(p: PersonelPolri | null | undefined): string {
 export function personelLabelSingkat(p: PersonelPolri | null | undefined): string {
   if (!p) return "";
   return `${p.pangkat} ${p.nama}`;
+}
+
+/**
+ * Tampilan validasi NRP di form pelapor:
+ * "PANGKAT Nama — Jabatan — FUNGSI" (FUNGSI dilewati bila kosong).
+ */
+export function personelFormatValidasi(p: PersonelPolri | null | undefined): string {
+  if (!p) return "";
+  const fungsi = p.fungsi?.trim();
+  return fungsi ? `${p.pangkat} ${p.nama} — ${p.jabatan} — ${fungsi}` : `${p.pangkat} ${p.nama} — ${p.jabatan}`;
 }
 
 /**
@@ -99,7 +120,7 @@ async function loadCache(): Promise<Map<string, PersonelPolri>> {
       try {
         const { data, error } = await supabase
           .from("personel_polri")
-          .select("nrp, nama, pangkat, jabatan");
+          .select("nrp, nama, pangkat, jabatan, fungsi, satuan, status");
         if (error) {
           console.warn("personel_polri gagal dimuat:", error.message);
           return map;

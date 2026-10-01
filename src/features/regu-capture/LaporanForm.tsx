@@ -7,7 +7,7 @@ import type {
 } from "../../types";
 import { TAHAP_LABEL } from "../../types";
 import { fetchJenisLaporan } from "../../lib/supabase/api";
-import { cariPersonel } from "../../lib/personel";
+import { cariPersonel, personelFormatValidasi } from "../../lib/personel";
 import { useCamera } from "./useCamera";
 import { useGeolocation } from "./useGeolocation";
 import { applyWatermark, compressGaleriFoto } from "./watermark";
@@ -166,9 +166,10 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
 
   /**
    * Validasi real-time NRP: begitu NRP lengkap (≥6 digit), cari di direktori
-   * personel (LAPBUL via Supabase). Ketemu → tampil "PANGKAT Nama — Jabatan"
-   * (hijau = benar). Tidak ketemu → tampil peringatan kuning agar pelapor
-   * mengecek ulang ketikan — mencegah salah ketik NRP.
+   * personel (LAPBUL via Supabase). Ketemu → tampil
+   * "PANGKAT Nama — Jabatan — FUNGSI" (hijau = benar). Tidak ketemu → tampil
+   * peringatan kuning agar pelapor mengecek ulang ketikan — mencegah salah
+   * ketik NRP.
    */
   const [nrpCek, setNrpCek] = useState<Record<number, string>>({});
   useEffect(() => {
@@ -179,7 +180,7 @@ export default function LaporanForm({ mode, parent, onSubmit }: Props) {
         const n = nrpList[i]?.trim() ?? "";
         if (n.length < 6) continue;
         const p = await cariPersonel(n);
-        hasil[i] = p ? `${p.pangkat} ${p.nama} — ${p.jabatan}` : "";
+        hasil[i] = p ? personelFormatValidasi(p) : "";
       }
       if (active) setNrpCek(hasil);
     })();

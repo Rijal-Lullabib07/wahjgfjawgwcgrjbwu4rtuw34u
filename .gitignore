@@ -11,6 +11,7 @@ jawara-credentials-*.csv
 siplap-v2-credentials-*.csv
 unit-polsek-2026-credentials.csv
 kasat-sium-propam-humas-2026-credentials.csv
+kapolsek-lapor-2026-credentials.csv
 pw*.md
 tmp-*
 .DS_Store

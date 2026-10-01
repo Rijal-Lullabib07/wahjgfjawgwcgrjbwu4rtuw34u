@@ -68,6 +68,12 @@ export default function AdminApp({ session, onLogout }: Props) {
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Jam realtime di header (jam:menit:detik, WIB) — detik bergerak tiap saat.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     // Realtime refresh daftar laporan — TANPA popup/bunyi/getar lagi.
@@ -78,7 +84,12 @@ export default function AdminApp({ session, onLogout }: Props) {
   }, []);
 
   const kapolres = isKapolresUser(session);
-  const roleLabel = session.role === "admin" ? "Admin" : "Pimpinan";
+  const jamText =
+    String(now.getHours()).padStart(2, "0") +
+    ":" +
+    String(now.getMinutes()).padStart(2, "0") +
+    ":" +
+    String(now.getSeconds()).padStart(2, "0");
   const menu = useMemo(
     () =>
       MENU.filter(
@@ -137,17 +148,11 @@ export default function AdminApp({ session, onLogout }: Props) {
           (sidebarOpen ? "translate-x-0" : "-translate-x-full")
         }
       >
-        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-          <div className="sidebar-logo-panel shrink-0">
-            <PolresLogo className="h-11 w-32" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-900">
-              POLRES PURWAKARTA
-            </div>
-            <div className="mt-0.5 text-[10px] leading-snug text-slate-500">
-              Sistem Pelaporan Giat
-            </div>
+        <div className="sidebar-brand flex flex-col gap-1.5 border-b border-slate-100 px-5 pb-3.5 pt-4">
+          <PolresLogo className="h-24 w-full" />
+          <div>
+            <div className="sidebar-brand-name text-slate-900">POLRES PURWAKARTA</div>
+            <div className="sidebar-brand-sub text-slate-500">Sistem Pelaporan Giat</div>
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -216,18 +221,21 @@ export default function AdminApp({ session, onLogout }: Props) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-              {/* Notifikasi pemantau dihapus — chip akses & tema saja. */}
+              {/* Chip akses diganti jam realtime + indikator LIVE. */}
               <span
-                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-50 py-1.5 pl-2 pr-2.5 text-[11px] font-semibold text-blue-700 sm:text-xs"
-                title={"Akses " + roleLabel}
-                aria-label={"Akses " + roleLabel}
+                className="header-clock inline-flex items-center gap-2 whitespace-nowrap rounded-full bg-blue-50 py-1.5 pl-2.5 pr-3 text-[11px] font-bold text-blue-700 sm:text-sm"
+                title="Waktu server (WIB)"
+                aria-label={"Jam realtime " + jamText}
               >
-                <span aria-hidden="true">🛡️</span>
-                <span className="hidden sm:inline" aria-hidden="true">
-                  Akses {roleLabel}
+                <span aria-hidden="true" className="text-xs sm:text-base">
+                  🕒
                 </span>
-                <span className="sm:hidden" aria-hidden="true">
-                  {roleLabel}
+                <span className="header-clock-time tabular-nums tracking-tight">
+                  {jamText}
+                </span>
+                <span className="header-live hidden items-center gap-1 sm:inline-flex">
+                  <span className="header-live-dot" aria-hidden="true" />
+                  REALTIME
                 </span>
               </span>
               <button

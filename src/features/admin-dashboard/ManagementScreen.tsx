@@ -66,8 +66,7 @@ interface AdminRow {
 
 /** PostgREST error → pesan Indonesia yang bisa dibaca. */
 function pesanError(e: unknown, fallback: string): string {
-  const raw =
-    e instanceof Error ? e.message : typeof e === "string" ? e : "";
+  const raw = e instanceof Error ? e.message : typeof e === "string" ? e : "";
   // Edge function belum dideploy → 404.
   if (raw.includes("404") || raw.includes("Not Found")) {
     return "Edge function belum dideploy: jalankan `supabase functions deploy manage-personel`, lalu refresh halaman.";
@@ -78,7 +77,9 @@ function pesanError(e: unknown, fallback: string): string {
   try {
     const parsed = JSON.parse(raw) as { message?: string; hint?: string };
     if (parsed?.message) {
-      return parsed.hint ? `${parsed.message} (${parsed.hint})` : parsed.message;
+      return parsed.hint
+        ? `${parsed.message} (${parsed.hint})`
+        : parsed.message;
     }
   } catch {
     /* bukan JSON */
@@ -138,11 +139,15 @@ function PinReveal({
       <p className="mt-1 text-xs text-emerald-700">{pesan}</p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-white px-3 py-2">
-          <div className="text-[11px] font-semibold text-slate-500">{labelKode}</div>
+          <div className="text-[11px] font-semibold text-slate-500">
+            {labelKode}
+          </div>
           <code className="text-sm font-bold text-slate-800">{kode}</code>
         </div>
         <div className="rounded-xl bg-white px-3 py-2">
-          <div className="text-[11px] font-semibold text-slate-500">{labelKredensial}</div>
+          <div className="text-[11px] font-semibold text-slate-500">
+            {labelKredensial}
+          </div>
           <code className="text-sm font-bold text-emerald-700">{pin}</code>
         </div>
       </div>
@@ -209,7 +214,10 @@ function StatusVersiBadge({
     );
   }
   return (
-    <span className="badge bg-emerald-50 text-emerald-700" title="App versi terbaru">
+    <span
+      className="badge bg-emerald-50 text-emerald-700"
+      title="App versi terbaru"
+    >
       ✓ terbaru
     </span>
   );
@@ -413,7 +421,9 @@ function EditPemantauModal({
       return;
     }
     if (password.trim() && password.trim().length < 6) {
-      setError("Password baru minimal 6 karakter (kosongkan bila tidak diubah).");
+      setError(
+        "Password baru minimal 6 karakter (kosongkan bila tidak diubah).",
+      );
       return;
     }
     setError(null);
@@ -494,7 +504,8 @@ function EditPemantauModal({
           </span>
         </label>
 
-        {username.trim().toLowerCase() !== (row.username ?? "").toLowerCase() && (
+        {username.trim().toLowerCase() !==
+          (row.username ?? "").toLowerCase() && (
           <p className="mt-2 text-[11px] text-amber-600">
             ⚠️ Username berubah — pemantau harus login dengan username baru ini.
           </p>
@@ -552,7 +563,8 @@ export default function ManagementScreen() {
   const versiTerbaru = useMemo<string | null>(() => {
     const hitung = new Map<string, number>();
     for (const r of pelapor ?? []) {
-      if (r.app_version) hitung.set(r.app_version, (hitung.get(r.app_version) ?? 0) + 1);
+      if (r.app_version)
+        hitung.set(r.app_version, (hitung.get(r.app_version) ?? 0) + 1);
     }
     if (hitung.size === 0) return null;
     // Versi dengan laporan TERBANYAK = versi deploy terkini (yang belum
@@ -611,13 +623,16 @@ export default function ManagementScreen() {
   }, [load]);
 
   /** Simpan hasil modal edit personel (nama, jabatan, username, PIN, status). */
-  const simpanEdit = async (row: ReguRow, nilai: {
-    nama: string;
-    jabatan: string;
-    kodeLogin: string;
-    pin: string;
-    aktif: boolean;
-  }) => {
+  const simpanEdit = async (
+    row: ReguRow,
+    nilai: {
+      nama: string;
+      jabatan: string;
+      kodeLogin: string;
+      pin: string;
+      aktif: boolean;
+    },
+  ) => {
     setError(null);
     setBusyId(row.id);
     try {
@@ -632,7 +647,8 @@ export default function ManagementScreen() {
       });
       if (nilai.pin) {
         setPinBaru({
-          kode: (hasil as { kode_login?: string }).kode_login ?? nilai.kodeLogin,
+          kode:
+            (hasil as { kode_login?: string }).kode_login ?? nilai.kodeLogin,
           pin: (hasil as { pin?: string }).pin ?? nilai.pin,
           judul: "✅ Perubahan tersimpan — PIN baru personel ini",
         });
@@ -694,7 +710,12 @@ export default function ManagementScreen() {
       if (err) throw err;
       await load();
     } catch (e) {
-      setError(pesanError(e, "Gagal mengubah status. Pastikan migration 0015 sudah dijalankan."));
+      setError(
+        pesanError(
+          e,
+          "Gagal mengubah status. Pastikan migration 0015 sudah dijalankan.",
+        ),
+      );
     } finally {
       setBusyId(null);
     }
@@ -743,12 +764,15 @@ export default function ManagementScreen() {
   };
 
   /** Simpan hasil modal edit pemantau (nama, username, password, status). */
-  const simpanEditPemantau = async (row: AdminRow, nilai: {
-    nama: string;
-    username: string;
-    password: string;
-    aktif: boolean;
-  }) => {
+  const simpanEditPemantau = async (
+    row: AdminRow,
+    nilai: {
+      nama: string;
+      username: string;
+      password: string;
+      aktif: boolean;
+    },
+  ) => {
     setError(null);
     setBusyId(row.id);
     try {
@@ -813,10 +837,16 @@ export default function ManagementScreen() {
         judul: "✅ Password diperbarui — catat password sekarang",
         labelKode: "Username",
         labelKredensial: "Password",
-        pesan: "Password hanya ditampilkan sekali ini. Bagikan ke pemantau bersama username-nya.",
+        pesan:
+          "Password hanya ditampilkan sekali ini. Bagikan ke pemantau bersama username-nya.",
       });
     } catch (e) {
-      setError(pesanError(e, "Gagal reset password. Pastikan edge function manage-personel sudah dideploy."));
+      setError(
+        pesanError(
+          e,
+          "Gagal reset password. Pastikan edge function manage-personel sudah dideploy.",
+        ),
+      );
     } finally {
       setBusyId(null);
     }
@@ -845,7 +875,10 @@ export default function ManagementScreen() {
     setBusyId(row.id);
     setError(null);
     try {
-      await callManagePersonel({ action: "hapus_pemantau", admin_user_id: row.id });
+      await callManagePersonel({
+        action: "hapus_pemantau",
+        admin_user_id: row.id,
+      });
       await load();
     } catch (e) {
       setError(
@@ -860,7 +893,9 @@ export default function ManagementScreen() {
   };
 
   const resetPin = async (row: ReguRow) => {
-    const pin = window.prompt(`PIN baru untuk ${row.kode_login}: (minimal 4 karakter)`);
+    const pin = window.prompt(
+      `PIN baru untuk ${row.kode_login}: (minimal 4 karakter)`,
+    );
     if (pin === null) return;
     if (pin.trim().length < 4) {
       setError("PIN minimal 4 karakter.");
@@ -880,7 +915,12 @@ export default function ManagementScreen() {
         judul: "✅ PIN diperbarui — catat PIN sekarang",
       });
     } catch (e) {
-      setError(pesanError(e, "Gagal reset PIN. Pastikan edge function manage-personel sudah dideploy."));
+      setError(
+        pesanError(
+          e,
+          "Gagal reset PIN. Pastikan edge function manage-personel sudah dideploy.",
+        ),
+      );
     } finally {
       setBusyId(null);
     }
@@ -975,10 +1015,25 @@ export default function ManagementScreen() {
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
             <span className="font-bold text-slate-700">Status update app:</span>
             <span className="text-emerald-700">
-              ✓ {pelapor.filter((r) => r.app_version && r.app_version === versiTerbaru).length} versi terbaru
+              ✓{" "}
+              {
+                pelapor.filter(
+                  (r) => r.app_version && r.app_version === versiTerbaru,
+                ).length
+              }{" "}
+              versi terbaru
             </span>
             <span className="text-red-600">
-              ⬆ {pelapor.filter((r) => r.app_version && versiTerbaru && r.app_version !== versiTerbaru).length} perlu update
+              ⬆{" "}
+              {
+                pelapor.filter(
+                  (r) =>
+                    r.app_version &&
+                    versiTerbaru &&
+                    r.app_version !== versiTerbaru,
+                ).length
+              }{" "}
+              perlu update
             </span>
             <span className="text-slate-400">
               ? {pelapor.filter((r) => !r.app_version).length} belum lapor
@@ -999,7 +1054,8 @@ export default function ManagementScreen() {
           <span className="badge bg-sky-50 text-sky-700">
             {q
               ? `${pelaporTersaring.length}/${pelapor?.length ?? 0}`
-              : (pelapor?.length ?? "…")} akun
+              : (pelapor?.length ?? "…")}{" "}
+            akun
           </span>
         </div>
         <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">
@@ -1071,7 +1127,8 @@ export default function ManagementScreen() {
           <span className="badge bg-amber-50 text-amber-700">
             {q
               ? `${pemantauTersaring.length}/${pemantau?.length ?? 0}`
-              : (pemantau?.length ?? "…")} akun
+              : (pemantau?.length ?? "…")}{" "}
+            akun
           </span>
         </div>
         <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">

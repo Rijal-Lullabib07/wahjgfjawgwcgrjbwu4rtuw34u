@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "icons": "node scripts/generate-icons.mjs",
+    "logo:optimize": "node scripts/optimize-logo.mjs",
     "provision:jawara": "node scripts/provision-jawara-accounts.mjs",
     "provision:siplap-v2": "node scripts/provision-siplap-v2.mjs",
+    "provision:kapolsek-lapor": "node scripts/provision-kapolsek-lapor-2026.mjs",
     "dev": "npm run icons && vite",
     "build": "npm run icons && tsc --noEmit && vite build",
     "preview": "vite preview",
